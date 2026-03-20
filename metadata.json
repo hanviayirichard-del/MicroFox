@@ -1,0 +1,8 @@
+{
+  "name": "Copy of MicroFoX",
+  "description": "Application de gestion de microfinance avec suivi des agents, membres, tontines et comptabilité.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}

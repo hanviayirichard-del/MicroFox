@@ -1,0 +1,164 @@
+
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Save, CheckSquare, Square } from 'lucide-react';
+
+const ROLES = [
+  'administrateur',
+  'directeur',
+  'gestionnaire de crédit',
+  'caissier',
+  'contrôleur',
+  'auditeur',
+  'agent commercial'
+];
+
+const ALL_TABS = [
+  'Tableau de Bord',
+  'Carte Géographique',
+  'Membres',
+  'Rapport Adhésions',
+  'Alerte Doublons',
+  'Réclamations Clients',
+  'Demande de crédit',
+  'Déblocage de crédit',
+  'Crédit actif',
+  'Autres opérations crédit',
+  'Tontine Journalière',
+  'Demande de retrait tontine',
+  'Vérification de retrait tontine',
+  'Versements Agents',
+  'Vente Livrets',
+  'Gestion Caisse',
+  'CAISSE PRINCIPALE',
+  'Coffre & Banque',
+  'Dépenses administratives',
+  'Stocks Livrets',
+  'Frais & Parts Sociales',
+  'Gestion Crédits',
+  'Commissions',
+  'Journal Global',
+  'Reçu de caisse',
+  'Comptabilité & États',
+  'États Réglementaires',
+  'Etats des écarts',
+  'Écarts de Caisse',
+  'Rapports Financiers',
+  'Pièces à imprimer',
+  'Contrôle Terrain',
+  'Corrections d\'opération',
+  'Conformité (Ratios & LAB)',
+  'Audit & Accès Sécurité',
+  'Gestion des Utilisateurs',
+  'Conseils & Formation',
+  'Configuration'
+];
+
+const Permissions: React.FC = () => {
+  const [selectedRole, setSelectedRole] = useState(ROLES[1]); // Default to second role as admin has all
+  const [permissions, setPermissions] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    const saved = localStorage.getItem('microfox_permissions');
+    if (saved) {
+      setPermissions(JSON.parse(saved));
+    } else {
+      // Initialize with current hardcoded defaults if none exist
+      const defaults: Record<string, string[]> = {
+        'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Demande de crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Gestion Crédits', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation'],
+        'caissier': ['Membres', 'Déblocage de crédit', 'Crédit actif', 'Tontine Journalière', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Dépenses administratives', 'Frais & Parts Sociales', 'Gestion Crédits', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers'],
+        'contrôleur': ['Carte Géographique', 'Contrôle Terrain'],
+        'auditeur': ['Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine'],
+        'agent commercial': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Etats des écarts'],
+        'gestionnaire de crédit': ['Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Crédit actif', 'Autres opérations crédit']
+      };
+      setPermissions(defaults);
+      localStorage.setItem('microfox_permissions', JSON.stringify(defaults));
+    }
+  }, []);
+
+  const togglePermission = (tab: string) => {
+    const rolePerms = permissions[selectedRole] || [];
+    const newPerms = rolePerms.includes(tab)
+      ? rolePerms.filter(t => t !== tab)
+      : [...rolePerms, tab];
+    
+    const updated = { ...permissions, [selectedRole]: newPerms };
+    setPermissions(updated);
+  };
+
+  const handleSave = () => {
+    localStorage.setItem('microfox_permissions', JSON.stringify(permissions));
+    alert("Permissions enregistrées avec succès.");
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 pb-20">
+      <div className="flex items-start gap-4">
+        <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
+          <ShieldCheck size={32} />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-black text-[#121c32] uppercase tracking-tight">Gestion des Permissions</h1>
+          <p className="text-gray-500 font-medium">Configurez les onglets visibles pour chaque rôle utilisateur.</p>
+        </div>
+      </div>
+
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-8">
+        <div className="space-y-4">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Sélectionner un Rôle</label>
+          <div className="flex flex-wrap gap-2">
+            {ROLES.filter(r => r !== 'administrateur').map(role => (
+              <button
+                key={role}
+                onClick={() => setSelectedRole(role)}
+                className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                  selectedRole === role 
+                    ? 'bg-[#121c32] text-white shadow-lg' 
+                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                }`}
+              >
+                {role}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Onglets Disponibles</label>
+            <button 
+              onClick={handleSave}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
+            >
+              <Save size={16} />
+              Enregistrer
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {ALL_TABS.map(tab => {
+              const isChecked = (permissions[selectedRole] || []).includes(tab);
+              return (
+                <button
+                  key={tab}
+                  onClick={() => togglePermission(tab)}
+                  className={`flex items-center gap-3 p-4 rounded-2xl border transition-all text-left ${
+                    isChecked 
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                      : 'bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-200'
+                  }`}
+                >
+                  {isChecked ? <CheckSquare size={20} className="text-emerald-600" /> : <Square size={20} />}
+                  <span className="text-xs font-bold uppercase tracking-tight">{tab}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Permissions;
