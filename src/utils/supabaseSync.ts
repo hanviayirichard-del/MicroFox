@@ -1,8 +1,8 @@
 import { supabase } from '../supabase';
 
-export const syncToSupabase = async (key: string, value: string) => {
+export const syncToSupabase = async (key: string, value: string): Promise<boolean> => {
   try {
-    if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return;
+    if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
     const { error } = await supabase
       .from('storage')
@@ -12,9 +12,14 @@ export const syncToSupabase = async (key: string, value: string) => {
         updated_at: new Date().toISOString() 
       }, { onConflict: 'key' });
       
-    if (error) console.error('Error syncing to Supabase:', error);
+    if (error) {
+      console.error('Error syncing to Supabase:', error);
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error('Supabase sync failed:', e);
+    return false;
   }
 };
 

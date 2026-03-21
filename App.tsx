@@ -60,8 +60,45 @@ const App: React.FC = () => {
     
     const syncPromise = (async () => {
       try {
-        const { pullFromSupabase } = await import('./src/utils/supabaseSync');
+        const { pullFromSupabase, syncToSupabase } = await import('./src/utils/supabaseSync');
         
+        // Push local changes first to avoid overwriting them
+        if (nativeGetItem('microfox_pending_sync') === 'true') {
+          const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+          let pushSuccess = true;
+          
+          // Push global data
+          const usersData = nativeGetItem('microfox_users');
+          if (usersData) {
+            const ok = await syncToSupabase('microfox_users', usersData);
+            if (!ok) pushSuccess = false;
+          }
+          
+          // Push all tenant-specific data
+          if (pushSuccess) {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith(prefix)) {
+                const value = nativeGetItem(key);
+                if (value) {
+                  const ok = await syncToSupabase(key, value);
+                  if (!ok) {
+                    pushSuccess = false;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          if (!pushSuccess) {
+            throw new Error('La synchronisation vers le serveur a échoué. Vos modifications locales n\'ont pas pu être sauvegardées. Veuillez vérifier votre connexion.');
+          }
+          
+          // Clear pending sync flag only if all pushed successfully
+          nativeRemoveItem('microfox_pending_sync');
+        }
+
         // Pull global data (users)
         await pullFromSupabase('microfox_users', nativeSetItem);
         
@@ -165,6 +202,10 @@ const App: React.FC = () => {
             });
           }
         });
+        // Mark as pending sync for UI feedback
+        if (key !== 'microfox_pending_sync') {
+          nativeSetItem('microfox_pending_sync', 'true');
+        }
       } else {
         nativeRemoveItem(key);
       }
