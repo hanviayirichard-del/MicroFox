@@ -41,61 +41,66 @@ import MicrofinanceLogin from './components/MicrofinanceLogin';
 import CashGaps from './components/CashGaps';
 import { User } from './types';
 import { recordAuditLog } from './utils/audit';
-
-// Multi-tenant storage isolation
-const setupStorageIsolation = (mfCode: string) => {
-  const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-  
-  const originalGetItem = localStorage.getItem.bind(localStorage);
-  const originalSetItem = localStorage.setItem.bind(localStorage);
-  const originalRemoveItem = localStorage.removeItem.bind(localStorage);
-
-  localStorage.getItem = (key: string) => {
-    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
-      return originalGetItem(prefix + key);
-    }
-    return originalGetItem(key);
-  };
-
-  localStorage.setItem = (key: string, value: string) => {
-    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
-      const fullKey = prefix + key;
-      originalSetItem(fullKey, value);
-      // Sync to Supabase in background
-      import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
-    } else {
-      originalSetItem(key, value);
-    }
-  };
-
-  localStorage.removeItem = (key: string) => {
-    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
-      const fullKey = prefix + key;
-      originalRemoveItem(fullKey);
-      // Remove from Supabase in background
-      import('./src/supabase').then(m => {
-        if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-          m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
-            if (error) console.error('Error removing from Supabase:', error);
-          });
-        }
-      });
-    } else {
-      originalRemoveItem(key);
-    }
-  };
-
-  // Pull from Supabase on load
-  import('./src/utils/supabaseSync').then(m => m.pullFromSupabase(prefix, originalSetItem));
-};
-
-// Apply isolation on initial load if MF code exists
-const mfCodeOnLoad = localStorage.getItem('microfox_current_mf');
-if (mfCodeOnLoad) {
-  setupStorageIsolation(mfCodeOnLoad);
-}
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Multi-tenant storage isolation
+  const setupStorageIsolation = async (mfCode: string) => {
+    const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+    
+    const originalGetItem = localStorage.getItem.bind(localStorage);
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+    localStorage.getItem = (key: string) => {
+      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
+        return originalGetItem(prefix + key);
+      }
+      return originalGetItem(key);
+    };
+
+    localStorage.setItem = (key: string, value: string) => {
+      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
+        const fullKey = prefix + key;
+        originalSetItem(fullKey, value);
+        // Sync to Supabase in background
+        import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
+      } else {
+        originalSetItem(key, value);
+      }
+    };
+
+    localStorage.removeItem = (key: string) => {
+      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
+        const fullKey = prefix + key;
+        originalRemoveItem(fullKey);
+        // Remove from Supabase in background
+        import('./src/supabase').then(m => {
+          if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
+            m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
+              if (error) console.error('Error removing from Supabase:', error);
+            });
+          }
+        });
+      } else {
+        originalRemoveItem(key);
+      }
+    };
+
+    // Pull from Supabase on load
+    setIsSyncing(true);
+    try {
+      const { pullFromSupabase } = await import('./src/utils/supabaseSync');
+      await pullFromSupabase(prefix, originalSetItem);
+    } catch (error) {
+      console.error('Error pulling from Supabase:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const [activeSection, setActiveSection] = useState<string>('Guide Pratique');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(window.innerWidth >= 1024);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -122,6 +127,12 @@ const App: React.FC = () => {
         setIsSidebarOpen(true);
       }
     };
+
+    // Apply isolation on initial load if MF code exists
+    const mfCodeOnLoad = localStorage.getItem('microfox_current_mf');
+    if (mfCodeOnLoad) {
+      setupStorageIsolation(mfCodeOnLoad);
+    }
     
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (localStorage.getItem('microfox_pending_sync') === 'true') {
@@ -328,6 +339,16 @@ const App: React.FC = () => {
     
     window.location.href = window.location.origin;
   };
+
+  if (isSyncing) {
+    return (
+      <div className="h-screen bg-[#0a1226] flex flex-col items-center justify-center text-white p-6 text-center">
+        <Loader2 className="w-12 h-12 text-[#00c896] animate-spin mb-4" />
+        <h2 className="text-xl font-black uppercase tracking-widest mb-2">Synchronisation</h2>
+        <p className="text-gray-400 text-sm max-w-xs">Veuillez patienter pendant que nous récupérons vos données depuis le serveur sécurisé...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <MicrofinanceLogin onLogin={handleLogin} />;

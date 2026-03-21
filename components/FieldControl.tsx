@@ -72,6 +72,11 @@ const FieldControl: React.FC = () => {
     const bookletVal = parseFloat(bookletBalance) || 0;
     const difference = selectedTontine.balance - bookletVal;
 
+    if (difference !== 0 && !observations.trim()) {
+      alert("La raison de la différence (Observations) est obligatoire en cas d'écart.");
+      return;
+    }
+
     const newReport: FieldControlReport = {
       id: `fcr_${Date.now()}`,
       date: new Date().toISOString(),

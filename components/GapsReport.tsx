@@ -411,7 +411,7 @@ const GapsReport: React.FC = () => {
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Décaissé</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Écart</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Statut</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Observation</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest w-1/4">Observation</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
@@ -480,9 +480,9 @@ const GapsReport: React.FC = () => {
                     </td>
                     <td className="px-6 py-5">
                       {item.observation ? (
-                        <div className="flex items-start gap-2 max-w-[150px]">
+                        <div className="flex items-start gap-2">
                           <FileText size={14} className="text-gray-300 shrink-0 mt-0.5" />
-                          <p className="text-[10px] font-black text-gray-500 uppercase leading-relaxed line-clamp-4">{item.observation}</p>
+                          <p className="text-[10px] font-black text-gray-500 uppercase leading-relaxed break-words">{item.observation}</p>
                         </div>
                       ) : (
                         <span className="text-[10px] text-gray-300 italic">N/A</span>

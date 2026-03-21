@@ -813,7 +813,7 @@ const TontineVerification: React.FC = () => {
                         )}
                       </div>
                       {item.report && (
-                        <p className="text-[10px] font-black text-gray-700 uppercase tracking-tight">
+                        <p className="text-[11px] font-black text-gray-700 uppercase tracking-tight break-words">
                           <span className="text-[#121c32]">Raison:</span> {item.report}
                         </p>
                       )}
