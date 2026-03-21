@@ -100,11 +100,11 @@ const App: React.FC = () => {
         }
 
         // Pull global data (users)
-        await pullFromSupabase('microfox_users', nativeSetItem);
+        await pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
         
         // Pull tenant data
         const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-        await pullFromSupabase(prefix, nativeSetItem);
+        await pullFromSupabase(prefix, nativeSetItem, nativeGetItem);
         
         setSyncVersion(v => v + 1);
         return 'success';
@@ -218,7 +218,7 @@ const App: React.FC = () => {
     } else {
       // Pull only global data if not logged in (background)
       import('./src/utils/supabaseSync').then(m => {
-        m.pullFromSupabase('microfox_users', nativeSetItem);
+        m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
       }).catch(err => console.error('Failed to load sync module:', err));
     }
 
