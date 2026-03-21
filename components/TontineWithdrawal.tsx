@@ -15,7 +15,7 @@ const TontineWithdrawal: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
 
   // Logique de calcul du solde net (Disponible = Cotisé - Commission)
-  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string) => {
+  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = []) => {
     if (dailyMise <= 0) dailyMise = 500;
     
     const tontineDeposits = (history || [])
@@ -30,9 +30,16 @@ const TontineWithdrawal: React.FC = () => {
       .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && h.description?.toLowerCase().includes('livret') !== true)
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    const allWithdrawals = (history || [])
-      .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert'))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Merge history withdrawals with pending withdrawals to correctly split cycles
+    const allWithdrawals = [
+      ...(history || []).filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert')),
+      ...(pendingWithdrawals || []).map(p => ({
+        ...p,
+        type: 'retrait',
+        account: 'tontine',
+        description: p.reason || `Retrait Tontine - ${p.amount} F`
+      }))
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const accountWithdrawalsAmount = allWithdrawals.reduce((sum, h) => sum + h.amount, 0);
 
@@ -325,62 +332,67 @@ const TontineWithdrawal: React.FC = () => {
     const validated = savedValidated ? JSON.parse(savedValidated) : [];
     const allRequests = [...pending, ...validated];
 
-    const tontiniers = allMembers.filter((m: any) => {
-      const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
-      if (!hasTontine) return false;
-      
-      // Filtrage par zone pour l'agent commercial
-      if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-        return m.zone === currentUser.zoneCollecte || m.zoneCollecte === currentUser.zoneCollecte;
-      }
-      return true;
-    }).map((m: any) => {
-      const acc = m.tontineAccounts[0];
-      const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id);
-      
-      // Extraction des indices de cycles déjà présents dans des demandes
-      const clientRequests = allRequests.filter(r => r.clientId === m.id);
-      const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
-      clientRequests.forEach(r => {
-        const matches = r.reason.match(/Cycles: ([\d, ]+)/);
-        if (matches) {
-          matches[1].split(',').forEach(s => {
-            const num = parseInt(s.trim());
-            if (!isNaN(num)) requestedCycleIndices.push({idx: num, date: r.date, amount: r.amount, status: r.status});
-          });
-        }
-      });
-
-      // Calcul du montant total des demandes EN ATTENTE pour ce client
-      const pendingAmount = clientRequests
-        .filter(r => r.status === 'En attente')
-        .reduce((sum, r) => sum + r.amount, 0);
-
-      // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
-      const updatedCycleDetails = stats.cycleDetails.map(c => {
-        const request = requestedCycleIndices.find(r => r.idx === c.index);
-        // On ne bloque le cycle que s'il y a une demande EN ATTENTE.
-        // Les demandes VALIDÉES sont gérées par getTontineStats via l'historique.
-        const isPending = request?.status === 'En attente';
+      const tontiniers = allMembers.filter((m: any) => {
+        const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
+        if (!hasTontine) return false;
         
+        // Filtrage par zone pour l'agent commercial
+        if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
+          return m.zone === currentUser.zoneCollecte || m.zoneCollecte === currentUser.zoneCollecte;
+        }
+        return true;
+      }).map((m: any) => {
+        const acc = m.tontineAccounts[0];
+        
+        // Extraction des demandes en attente pour ce client spécifique
+        const clientPending = pending.filter((r: any) => r.clientId === m.id);
+        
+        // On passe les demandes en attente à getTontineStats pour qu'il puisse scinder les cycles
+        const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientPending);
+        
+        // Extraction des indices de cycles déjà présents dans des demandes
+        const clientRequests = allRequests.filter(r => r.clientId === m.id);
+        const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
+        clientRequests.forEach(r => {
+          const matches = r.reason.match(/Cycles: ([\d, ]+)/);
+          if (matches) {
+            matches[1].split(',').forEach(s => {
+              const num = parseInt(s.trim());
+              if (!isNaN(num)) requestedCycleIndices.push({idx: num, date: r.date, amount: r.amount, status: r.status});
+            });
+          }
+        });
+
+        // Calcul du montant total des demandes EN ATTENTE pour ce client
+        const pendingAmount = clientPending
+          .filter(r => r.status === 'En attente')
+          .reduce((sum, r) => sum + r.amount, 0);
+
+        // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
+        const updatedCycleDetails = stats.cycleDetails.map(c => {
+          const request = requestedCycleIndices.find(r => r.idx === c.index);
+          // On ne bloque le cycle que s'il y a une demande EN ATTENTE.
+          // Les demandes VALIDÉES sont gérées par getTontineStats via l'historique (une fois ajoutées).
+          const isPending = request?.status === 'En attente';
+          
+          return {
+            ...c,
+            isRetire: c.isRetire || isPending,
+            montantRetire: c.montantRetire || (request ? request.amount : 0),
+            dateRetrait: c.dateRetrait || (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
+          };
+        });
+
         return {
-          ...c,
-          isRetire: c.isRetire || isPending,
-          montantRetire: c.montantRetire || (request ? request.amount : 0),
-          dateRetrait: c.dateRetrait || (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
+          ...m,
+          availableTontine: Math.max(0, stats.netBalance - pendingAmount),
+          cycles: stats.cycles,
+          currentCycleCases: stats.currentCycleCases,
+          currentCycleDates: stats.currentCycleDates,
+          cycleDetails: updatedCycleDetails,
+          accountNumber: acc.number
         };
       });
-
-      return {
-        ...m,
-        availableTontine: Math.max(0, stats.netBalance - pendingAmount),
-        cycles: stats.cycles,
-        currentCycleCases: stats.currentCycleCases,
-        currentCycleDates: stats.currentCycleDates,
-        cycleDetails: updatedCycleDetails,
-        accountNumber: acc.number
-      };
-    });
     setClients(tontiniers);
 
     setPendingRequests(pending);

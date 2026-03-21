@@ -1833,6 +1833,18 @@ const Members: React.FC = () => {
     return initialClients;
   });
 
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadPending = () => {
+      const saved = localStorage.getItem('microfox_pending_withdrawals');
+      if (saved) setPendingWithdrawals(JSON.parse(saved));
+    };
+    window.addEventListener('storage', loadPending);
+    loadPending();
+    return () => window.removeEventListener('storage', loadPending);
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<string | null>('1');
   const selectedClient = clients.find(c => c.id === selectedClientId);
@@ -1916,16 +1928,25 @@ const Members: React.FC = () => {
     );
   });
 
-  const getTontineStats = (grossBalance: number, dailyMise: number, history: Transaction[], accountId: string) => {
+  const getTontineStats = (grossBalance: number, dailyMise: number, history: Transaction[], accountId: string, pendingWithdrawals: any[] = []) => {
     if (dailyMise <= 0) dailyMise = 500; 
     
     const accountHistory = (history || [])
       .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    const allWithdrawals = (history || [])
-      .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert'))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // On fusionne l'historique réel avec les demandes en attente pour le calcul des cycles
+    const allWithdrawals = [
+      ...(history || [])
+        .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert')),
+      ...pendingWithdrawals.map(pw => ({
+        ...pw,
+        type: 'retrait',
+        date: pw.date || new Date().toISOString(),
+        amount: pw.amount,
+        description: `Retrait en attente: ${pw.reason || ''}`
+      }))
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const accountWithdrawalsAmount = allWithdrawals.reduce((sum, h) => sum + h.amount, 0);
 
@@ -2180,10 +2201,11 @@ const Members: React.FC = () => {
   };
 
   const getClientTotalNetTontine = (client: ClientAccount) => {
+    const clientPending = pendingWithdrawals.filter(r => r.clientId === client.id);
     return client.tontineAccounts
       .filter(acc => !acc.isInvisible || currentUser?.role === 'administrateur')
       .reduce((total, acc) => {
-        const stats = getTontineStats(acc.balance, acc.dailyMise, client.history, acc.id);
+        const stats = getTontineStats(acc.balance, acc.dailyMise, client.history, acc.id, clientPending);
         return total + stats.netBalance;
       }, 0);
   };
@@ -2680,7 +2702,8 @@ const Members: React.FC = () => {
   };
 
   const activeTontine = selectedClient?.tontineAccounts.find(a => a.id === selectedTontineId);
-  const activeTontineStats = activeTontine && selectedClient ? getTontineStats(activeTontine.balance, activeTontine.dailyMise, selectedClient.history, activeTontine.id) : null;
+  const clientPending = selectedClient ? pendingWithdrawals.filter(r => r.clientId === selectedClient.id) : [];
+  const activeTontineStats = activeTontine && selectedClient ? getTontineStats(activeTontine.balance, activeTontine.dailyMise, selectedClient.history, activeTontine.id, clientPending) : null;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">

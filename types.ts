@@ -30,6 +30,7 @@ export interface User {
   zoneCollecte?: string;
   caisse?: string;
   isBlocked?: boolean;
+  isDeleted?: boolean;
 }
 
 export interface TontineAccount {

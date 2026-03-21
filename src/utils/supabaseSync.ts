@@ -16,7 +16,13 @@ const mergeObjects = (obj1: any, obj2: any): any => {
       if (item && typeof item === 'object' && item.id) {
         const existing = map.get(item.id);
         if (existing) {
-          map.set(item.id, mergeObjects(existing, item));
+          // Merge properties
+          const merged = mergeObjects(existing, item);
+          // CRITICAL: If either version is marked as deleted, the result MUST be marked as deleted
+          if (item.isDeleted === true || existing.isDeleted === true) {
+            merged.isDeleted = true;
+          }
+          map.set(item.id, merged);
         } else {
           map.set(item.id, item);
         }

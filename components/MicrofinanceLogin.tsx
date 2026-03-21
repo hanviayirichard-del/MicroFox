@@ -52,6 +52,10 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
     } else {
       // S'assurer que l'admin existant a les bonnes infos (migration)
       let changed = false;
+      if (users[adminIndex].isDeleted) {
+        users[adminIndex].isDeleted = false;
+        changed = true;
+      }
       if (users[adminIndex].motDePasse !== 'a6666') {
         users[adminIndex].motDePasse = 'a6666';
         changed = true;
@@ -79,6 +83,7 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
         const trimmedCodeMF = codeMF.trim().toUpperCase();
         
         const user = users.find(u => 
+          !u.isDeleted &&
           (u.identifiant || '').trim().toLowerCase() === trimmedIdentifiant.toLowerCase() && 
           u.motDePasse === motDePasse && 
           (u.codeMF || '').trim().toUpperCase() === trimmedCodeMF

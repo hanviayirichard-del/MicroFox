@@ -76,10 +76,17 @@ const UserManagement: React.FC = () => {
   };
 
   const handleDeleteUser = (id: string) => {
-    const updatedUsers = users.filter(u => u.id !== id);
+    const userToDelete = users.find(u => u.id === id);
+    if (!userToDelete) return;
+    
+    if (userToDelete.identifiant === 'RICHARD') {
+      return;
+    }
+
+    const updatedUsers = users.map(u => u.id === id ? { ...u, isDeleted: true } : u);
     setUsers(updatedUsers);
     localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
-    recordAuditLog('SUPPRESSION', 'UTILISATEURS', `Suppression de l'utilisateur ID: ${id}`);
+    recordAuditLog('SUPPRESSION', 'UTILISATEURS', `Suppression de l'utilisateur ${userToDelete.identifiant}`);
   };
 
   const handleToggleBlock = (id: string) => {
@@ -96,8 +103,10 @@ const UserManagement: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => 
-    u.identifiant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.microfinance.toLowerCase().includes(searchTerm.toLowerCase())
+    !u.isDeleted && (
+      u.identifiant.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.microfinance.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   return (

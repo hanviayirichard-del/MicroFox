@@ -31,7 +31,7 @@ const TontineVerification: React.FC = () => {
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
   const [errorModal, setErrorModal] = useState<string | null>(null);
 
-  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string) => {
+  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = []) => {
     if (dailyMise <= 0) dailyMise = 500;
     
     const tontineDeposits = (history || [])
@@ -46,9 +46,16 @@ const TontineVerification: React.FC = () => {
       .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && h.description?.toLowerCase().includes('livret') !== true)
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    const allWithdrawals = (history || [])
-      .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert'))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Merge history withdrawals with pending withdrawals to correctly split cycles
+    const allWithdrawals = [
+      ...(history || []).filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert')),
+      ...(pendingWithdrawals || []).map(p => ({
+        ...p,
+        type: 'retrait',
+        account: 'tontine',
+        description: p.reason || `Retrait Tontine - ${p.amount} F`
+      }))
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const accountWithdrawalsAmount = allWithdrawals.reduce((sum, h) => sum + h.amount, 0);
 
@@ -369,7 +376,8 @@ const TontineVerification: React.FC = () => {
       if (savedHistory) clientHistory = JSON.parse(savedHistory);
     }
 
-    const tontineStats = (activeTontineAccount && client) ? getTontineStats(activeTontineAccount.balance, activeTontineAccount.dailyMise, clientHistory, activeTontineAccount.id) : null;
+    const clientPending = pendingRequests.filter(r => r.clientId === request.clientId);
+    const tontineStats = (activeTontineAccount && client) ? getTontineStats(activeTontineAccount.balance, activeTontineAccount.dailyMise, clientHistory, activeTontineAccount.id, clientPending) : null;
     const disponible = tontineStats?.netBalance || 0;
     
     const referenceAmount = tontineStats?.netBalance !== undefined ? tontineStats.netBalance : request.amount;
@@ -448,6 +456,69 @@ const TontineVerification: React.FC = () => {
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updatedPending));
     setPendingRequests(updatedPending);
 
+    // Update member data and history to reflect the withdrawal
+    if (client) {
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      const allMembers = savedMembers ? JSON.parse(savedMembers) : [];
+      
+      const updatedMembers = allMembers.map((m: any) => {
+        if (m.id === client.id) {
+          const newHistoryEntry = {
+            id: `retrait_${Date.now()}`,
+            type: 'retrait',
+            account: 'tontine',
+            tontineAccountId: activeTontineAccount?.id,
+            amount: finalAmount,
+            date: new Date().toISOString(),
+            description: request.reason || `Retrait Tontine - ${finalAmount} F`
+          };
+
+          const updatedHistory = [newHistoryEntry, ...(m.history || [])];
+          
+          // Update balances
+          const updatedBalances = {
+            ...m.balances,
+            tontine: Math.max(0, (m.balances?.tontine || 0) - finalAmount)
+          };
+
+          const updatedTontineAccounts = (m.tontineAccounts || []).map((acc: any) => {
+            if (acc.id === activeTontineAccount?.id) {
+              return { ...acc, balance: Math.max(0, acc.balance - finalAmount) };
+            }
+            return acc;
+          });
+
+          return {
+            ...m,
+            history: updatedHistory,
+            balances: updatedBalances,
+            tontineAccounts: updatedTontineAccounts
+          };
+        }
+        return m;
+      });
+
+      localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
+      setMembers(updatedMembers);
+
+      // Also update separate history if it exists
+      const savedHist = localStorage.getItem(`microfox_history_${client.id}`);
+      if (savedHist) {
+        const hist = JSON.parse(savedHist);
+        const newHist = [{
+          id: `retrait_${Date.now()}`,
+          type: 'retrait',
+          account: 'tontine',
+          tontineAccountId: activeTontineAccount?.id,
+          amount: finalAmount,
+          date: new Date().toISOString(),
+          description: request.reason || `Retrait Tontine - ${finalAmount} F`
+        }, ...hist];
+        localStorage.setItem(`microfox_history_${client.id}`, JSON.stringify(newHist));
+      }
+    }
+
+    localStorage.setItem('microfox_pending_sync', 'true');
     window.dispatchEvent(new Event('storage'));
     setErrorModal(`Demande de ${finalAmount} F validée par le contrôle.`);
   };
@@ -531,7 +602,8 @@ const TontineVerification: React.FC = () => {
                     if (savedHistory) clientHistory = JSON.parse(savedHistory);
                   }
 
-                  const tontineStats = (activeTontineAccount && client) ? getTontineStats(activeTontineAccount.balance, activeTontineAccount.dailyMise, clientHistory, activeTontineAccount.id) : null;
+                  const clientPending = pendingRequests.filter(r => r.clientId === client.id);
+                  const tontineStats = (activeTontineAccount && client) ? getTontineStats(activeTontineAccount.balance, activeTontineAccount.dailyMise, clientHistory, activeTontineAccount.id, clientPending) : null;
                   const isExpanded = expandedRequestId === request.id;
                   
                   const referenceAmount = tontineStats?.netBalance !== undefined ? tontineStats.netBalance : request.amount;
