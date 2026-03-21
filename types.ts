@@ -14,6 +14,8 @@ export interface SidebarProps {
   activeId: string;
   onClose: () => void;
   onLogout: () => void;
+  onSync: () => Promise<void>;
+  isSyncing?: boolean;
 }
 
 export type UserRole = 'administrateur' | 'directeur' | 'gestionnaire de crédit' | 'caissier' | 'contrôleur' | 'auditeur' | 'agent commercial';

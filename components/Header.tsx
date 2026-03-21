@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Menu, Hexagon, LogOut } from 'lucide-react';
+import { Menu, Hexagon, LogOut, Loader2 } from 'lucide-react';
 import { User } from '../types';
 
 interface HeaderProps {
@@ -8,9 +8,10 @@ interface HeaderProps {
   onOpenSidebar: () => void;
   currentUser: User | null;
   onLogout: () => void;
+  isSyncing?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeSection, onOpenSidebar, currentUser, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ activeSection, onOpenSidebar, currentUser, onLogout, isSyncing }) => {
   return (
     <header className="bg-[#121c32] border-b border-gray-800 h-16 flex items-center justify-between px-6 shrink-0">
       <div className="flex items-center gap-4">
@@ -27,6 +28,12 @@ const Header: React.FC<HeaderProps> = ({ activeSection, onOpenSidebar, currentUs
         </div>
         <span className="text-gray-700">|</span>
         <span className="text-sm font-medium text-gray-300 uppercase tracking-wider">{activeSection}</span>
+        {isSyncing && (
+          <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-[#00c896]/10 rounded-full border border-[#00c896]/20">
+            <Loader2 size={14} className="text-[#00c896] animate-spin" />
+            <span className="text-[10px] font-bold text-[#00c896] uppercase tracking-tighter">Synchronisation...</span>
+          </div>
+        )}
       </div>
       
       <div className="flex items-center gap-6">

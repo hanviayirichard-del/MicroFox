@@ -43,62 +43,66 @@ import { User } from './types';
 import { recordAuditLog } from './utils/audit';
 import { Loader2 } from 'lucide-react';
 
+// Capture native storage methods at module load to avoid issues with overrides
+const nativeGetItem = localStorage.getItem.bind(localStorage);
+const nativeSetItem = localStorage.setItem.bind(localStorage);
+const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
+
 const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
+  const [syncVersion, setSyncVersion] = useState(0);
+  const mfCodeRef = React.useRef<string | null>(localStorage.getItem('microfox_current_mf'));
+
+  const pullData = async (mfCode: string) => {
+    setIsSyncing(true);
+    setIsBackgroundSyncing(false);
+    
+    const syncPromise = (async () => {
+      try {
+        const { pullFromSupabase } = await import('./src/utils/supabaseSync');
+        
+        // Pull global data (users)
+        await pullFromSupabase('microfox_users', nativeSetItem);
+        
+        // Pull tenant data
+        const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+        await pullFromSupabase(prefix, nativeSetItem);
+        
+        setSyncVersion(v => v + 1);
+        return 'success';
+      } catch (error) {
+        console.error('Background sync error:', error);
+        throw error;
+      } finally {
+        setIsBackgroundSyncing(false);
+      }
+    })();
+
+    const timeoutPromise = new Promise((resolve) => 
+      setTimeout(() => resolve('timeout'), 10000)
+    );
+
+    try {
+      const result = await Promise.race([syncPromise, timeoutPromise]);
+      
+      if (result === 'timeout') {
+        console.warn('Initial sync timed out, continuing in background');
+        setIsBackgroundSyncing(true);
+        setIsSyncing(false);
+      } else {
+        setIsSyncing(false);
+      }
+    } catch (error) {
+      console.error('Error during initial sync:', error);
+      setIsSyncing(false);
+    }
+  };
 
   // Multi-tenant storage isolation
   const setupStorageIsolation = async (mfCode: string) => {
-    const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-    
-    const originalGetItem = localStorage.getItem.bind(localStorage);
-    const originalSetItem = localStorage.setItem.bind(localStorage);
-    const originalRemoveItem = localStorage.removeItem.bind(localStorage);
-
-    localStorage.getItem = (key: string) => {
-      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
-        return originalGetItem(prefix + key);
-      }
-      return originalGetItem(key);
-    };
-
-    localStorage.setItem = (key: string, value: string) => {
-      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
-        const fullKey = prefix + key;
-        originalSetItem(fullKey, value);
-        // Sync to Supabase in background
-        import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
-      } else {
-        originalSetItem(key, value);
-      }
-    };
-
-    localStorage.removeItem = (key: string) => {
-      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
-        const fullKey = prefix + key;
-        originalRemoveItem(fullKey);
-        // Remove from Supabase in background
-        import('./src/supabase').then(m => {
-          if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-            m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
-              if (error) console.error('Error removing from Supabase:', error);
-            });
-          }
-        });
-      } else {
-        originalRemoveItem(key);
-      }
-    };
-
-    // Pull from Supabase on load
-    setIsSyncing(true);
-    try {
-      const { pullFromSupabase } = await import('./src/utils/supabaseSync');
-      await pullFromSupabase(prefix, originalSetItem);
-    } catch (error) {
-      console.error('Error pulling from Supabase:', error);
-    } finally {
-      setIsSyncing(false);
-    }
+    mfCodeRef.current = mfCode;
+    await pullData(mfCode);
   };
 
   const [activeSection, setActiveSection] = useState<string>('Guide Pratique');
@@ -116,6 +120,67 @@ const App: React.FC = () => {
   const currentMF = currentUser?.microfinance || null;
 
   useEffect(() => {
+    // Global storage overrides
+    localStorage.getItem = (key: string) => {
+      const mfCode = mfCodeRef.current;
+      if (mfCode && key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
+        const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+        return nativeGetItem(prefix + key);
+      }
+      return nativeGetItem(key);
+    };
+
+    localStorage.setItem = (key: string, value: string) => {
+      const mfCode = mfCodeRef.current;
+      const isGlobal = key === 'microfox_users';
+      
+      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+        const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+        const fullKey = isGlobal ? key : prefix + key;
+        nativeSetItem(fullKey, value);
+        // Sync to Supabase in background
+        import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
+        // Mark as pending sync for UI feedback
+        if (key !== 'microfox_pending_sync') {
+          nativeSetItem('microfox_pending_sync', 'true');
+        }
+      } else {
+        nativeSetItem(key, value);
+      }
+    };
+
+    localStorage.removeItem = (key: string) => {
+      const mfCode = mfCodeRef.current;
+      const isGlobal = key === 'microfox_users';
+
+      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+        const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+        const fullKey = isGlobal ? key : prefix + key;
+        nativeRemoveItem(fullKey);
+        // Remove from Supabase in background
+        import('./src/supabase').then(m => {
+          if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
+            m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
+              if (error) console.error('Error removing from Supabase:', error);
+            });
+          }
+        });
+      } else {
+        nativeRemoveItem(key);
+      }
+    };
+
+    // Initial data pull
+    const mfCodeOnLoad = localStorage.getItem('microfox_current_mf');
+    if (mfCodeOnLoad) {
+      setupStorageIsolation(mfCodeOnLoad);
+    } else {
+      // Pull only global data if not logged in (background)
+      import('./src/utils/supabaseSync').then(m => {
+        m.pullFromSupabase('microfox_users', nativeSetItem);
+      }).catch(err => console.error('Failed to load sync module:', err));
+    }
+
     if (!currentUser) return;
 
     if (localStorage.getItem('microfox_reset_v1') !== 'true') {
@@ -129,7 +194,6 @@ const App: React.FC = () => {
     };
 
     // Apply isolation on initial load if MF code exists
-    const mfCodeOnLoad = localStorage.getItem('microfox_current_mf');
     if (mfCodeOnLoad) {
       setupStorageIsolation(mfCodeOnLoad);
     }
@@ -333,11 +397,27 @@ const App: React.FC = () => {
     if (currentUser) {
       recordAuditLog('DECONNEXION', 'AUTHENTIFICATION', `Déconnexion de ${currentUser.identifiant}`);
     }
-    sessionStorage.removeItem('microfox_session_active');
-    localStorage.removeItem('microfox_current_mf');
-    localStorage.removeItem('microfox_current_user');
     
-    window.location.href = window.location.origin;
+    // Use native methods to ensure cleanup works even if overrides are broken
+    sessionStorage.removeItem('microfox_session_active');
+    nativeRemoveItem('microfox_current_mf');
+    nativeRemoveItem('microfox_current_user');
+    
+    // Explicitly reset state before reload
+    setIsSyncing(false);
+    setCurrentUser(null);
+    mfCodeRef.current = null;
+    
+    // Full reload to clear all state and overrides
+    window.location.reload();
+  };
+
+  const handleSync = async () => {
+    const mfCode = localStorage.getItem('microfox_current_mf');
+    if (mfCode) {
+      await setupStorageIsolation(mfCode);
+      setSyncVersion(v => v + 1);
+    }
   };
 
   if (isSyncing) {
@@ -374,6 +454,8 @@ const App: React.FC = () => {
           onSelect={handleSelectSection} 
           onClose={() => setIsSidebarOpen(false)} 
           onLogout={handleLogout}
+          onSync={handleSync}
+          isSyncing={isBackgroundSyncing}
         />
       </div>
       
@@ -383,8 +465,9 @@ const App: React.FC = () => {
           onOpenSidebar={() => setIsSidebarOpen(true)} 
           currentUser={currentUser}
           onLogout={handleLogout}
+          isSyncing={isBackgroundSyncing}
         />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 custom-scrollbar">
+        <main key={syncVersion} className="flex-1 overflow-y-auto p-4 lg:p-6 custom-scrollbar">
           {renderContent()}
         </main>
       </div>

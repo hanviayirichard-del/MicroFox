@@ -40,12 +40,12 @@ interface MenuCategory {
   items: MenuItem[];
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout, onSync, isSyncing }) => {
   const [hasPendingSync, setHasPendingSync] = useState(false);
 
   useEffect(() => {
     const checkSync = () => {
-      setHasPendingSync(localStorage.getItem('microfox_pending_sync') === 'true');
+      setHasPendingSync(localStorage.getItem('microfox_pending_sync') === 'true' || !!isSyncing);
     };
     checkSync();
     window.addEventListener('storage', checkSync);
@@ -54,25 +54,24 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       window.removeEventListener('storage', checkSync);
       clearInterval(interval);
     };
-  }, []);
+  }, [isSyncing]);
 
-  const handleSync = () => {
+  const handleSync = async () => {
     if (!navigator.onLine) {
       alert("Pas de connexion internet. Synchronisation impossible.");
       return;
     }
     
-    // Simulation de synchronisation
-    const btn = document.getElementById('sync-btn');
-    if (btn) btn.classList.add('animate-spin');
-    
-    setTimeout(() => {
+    try {
+      await onSync();
       localStorage.setItem('microfox_pending_sync', 'false');
       setHasPendingSync(false);
-      if (btn) btn.classList.remove('animate-spin');
       alert("Synchronisation terminée avec succès.");
       window.dispatchEvent(new Event('storage'));
-    }, 1500);
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert("Une erreur est survenue lors de la synchronisation.");
+    }
   };
 
   const categories: MenuCategory[] = [
@@ -303,7 +302,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
           onClick={handleSync}
           className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-lg active:scale-95 ${hasPendingSync ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white`}
         >
-          <CloudSync id="sync-btn" size={20} />
+          <CloudSync size={20} />
           Synchronisation
         </button>
 
