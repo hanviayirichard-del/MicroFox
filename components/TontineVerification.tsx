@@ -376,11 +376,11 @@ const TontineVerification: React.FC = () => {
       if (savedHistory) clientHistory = JSON.parse(savedHistory);
     }
 
-    const clientPending = pendingRequests.filter(r => r.clientId === request.clientId);
+    const clientPending = pendingRequests.filter(r => r.clientId === request.clientId && r.id !== request.id);
     const tontineStats = (activeTontineAccount && client) ? getTontineStats(activeTontineAccount.balance, activeTontineAccount.dailyMise, clientHistory, activeTontineAccount.id, clientPending) : null;
     const disponible = tontineStats?.netBalance || 0;
     
-    const referenceAmount = tontineStats?.netBalance !== undefined ? tontineStats.netBalance : request.amount;
+    const referenceAmount = request.amount;
     const finalAmount = disburse ? Number(disburse) : referenceAmount;
     const livretAmount = observed ? Number(observed) : 0;
 
@@ -602,11 +602,11 @@ const TontineVerification: React.FC = () => {
                     if (savedHistory) clientHistory = JSON.parse(savedHistory);
                   }
 
-                  const clientPending = pendingRequests.filter(r => r.clientId === client.id);
+                  const clientPending = pendingRequests.filter(r => r.clientId === client.id && r.id !== request.id);
                   const tontineStats = (activeTontineAccount && client) ? getTontineStats(activeTontineAccount.balance, activeTontineAccount.dailyMise, clientHistory, activeTontineAccount.id, clientPending) : null;
                   const isExpanded = expandedRequestId === request.id;
                   
-                  const referenceAmount = tontineStats?.netBalance !== undefined ? tontineStats.netBalance : request.amount;
+                  const referenceAmount = request.amount;
                   const currentDisburse = Number(disburse || referenceAmount);
                   const currentLivret = Number(observed || 0);
                   const gapValue = observed ? (referenceAmount - currentLivret) : (disburse ? (referenceAmount - currentDisburse) : 0);
