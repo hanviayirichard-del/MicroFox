@@ -197,7 +197,7 @@ const FinancialReports: React.FC = () => {
     // Load Validated Withdrawals for Gaps
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
     if (savedValidated) {
-      const allValidated = JSON.parse(savedValidated);
+      const allValidated = JSON.parse(savedValidated).filter((w: any) => !w.isDeleted);
       newData.validatedWithdrawals = allValidated.filter((v: any) => {
         const vDate = v.validationDate.split('T')[0];
         const dateMatch = vDate >= startDate && vDate <= endDate;

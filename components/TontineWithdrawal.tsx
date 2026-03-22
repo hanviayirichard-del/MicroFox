@@ -344,14 +344,11 @@ const TontineWithdrawal: React.FC = () => {
       }).map((m: any) => {
         const acc = m.tontineAccounts[0];
         
-        // Extraction des demandes en attente pour ce client spécifique
-        const clientPending = pending.filter((r: any) => r.clientId === m.id);
-        
-        // On passe les demandes en attente à getTontineStats pour qu'il puisse scinder les cycles
-        const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientPending);
+        // On passe toutes les demandes (en attente et validées) à getTontineStats pour qu'il puisse scinder les cycles
+        const clientRequests = allRequests.filter(r => r.clientId === m.id);
+        const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientRequests);
         
         // Extraction des indices de cycles déjà présents dans des demandes
-        const clientRequests = allRequests.filter(r => r.clientId === m.id);
         const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
         clientRequests.forEach(r => {
           const matches = r.reason.match(/Cycles: ([\d, ]+)/);
@@ -364,7 +361,7 @@ const TontineWithdrawal: React.FC = () => {
         });
 
         // Calcul du montant total des demandes EN ATTENTE pour ce client
-        const pendingAmount = clientPending
+        const pendingAmount = clientRequests
           .filter(r => r.status === 'En attente')
           .reduce((sum, r) => sum + r.amount, 0);
 
@@ -385,7 +382,7 @@ const TontineWithdrawal: React.FC = () => {
 
         return {
           ...m,
-          availableTontine: Math.max(0, stats.netBalance - pendingAmount),
+          availableTontine: Math.max(0, stats.netBalance),
           cycles: stats.cycles,
           currentCycleCases: stats.currentCycleCases,
           currentCycleDates: stats.currentCycleDates,

@@ -308,6 +308,43 @@ const TontineVerification: React.FC = () => {
     };
   };
 
+  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
+
+  const toggleSelectRequest = (id: string) => {
+    setSelectedRequestIds(prev => 
+      prev.includes(id) ? prev.filter(rid => rid !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedRequestIds.length === 0) return;
+    
+    const requestsToApprove = pendingRequests.filter(r => selectedRequestIds.includes(r.id));
+    
+    // Check if all selected requests belong to the same client
+    const clientIds = new Set(requestsToApprove.map(r => r.clientId));
+    if (clientIds.size > 1) {
+      if (!confirm("Vous avez sélectionné des demandes de clients différents. Voulez-vous vraiment continuer ?")) {
+        return;
+      }
+    }
+
+    setIsBulkApproving(true);
+    try {
+      for (const req of requestsToApprove) {
+        await handleApprove(req);
+      }
+      setSelectedRequestIds([]);
+      alert(`${selectedRequestIds.length} demande(s) validée(s) avec succès.`);
+    } catch (error) {
+      console.error("Erreur lors de la validation groupée:", error);
+      alert("Une erreur est survenue lors de la validation groupée.");
+    } finally {
+      setIsBulkApproving(false);
+    }
+  };
+
   const loadData = () => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     const savedRequests = localStorage.getItem('microfox_pending_withdrawals');
@@ -364,6 +401,7 @@ const TontineVerification: React.FC = () => {
   }, []);
 
   const handleApprove = (request: any) => {
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     const observed = observedBalances[request.id];
     const disburse = disburseAmounts[request.id];
     const report = reports[request.id] || '';
@@ -452,71 +490,23 @@ const TontineVerification: React.FC = () => {
       localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
     }
 
-    const updatedPending = pendingRequests.map(r => r.id === request.id ? { ...r, isDeleted: true } : r);
+    // Update pending withdrawals (Soft Delete)
+    const savedPending = localStorage.getItem('microfox_pending_withdrawals');
+    const allPending = savedPending ? JSON.parse(savedPending) : [];
+    const updatedPending = allPending.map((r: any) => r.id === request.id ? { ...r, isDeleted: true } : r);
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updatedPending));
-    setPendingRequests(updatedPending.filter(r => !r.isDeleted));
-
-    // Update member data and history to reflect the withdrawal
-    if (client) {
-      const savedMembers = localStorage.getItem('microfox_members_data');
-      const allMembers = savedMembers ? JSON.parse(savedMembers) : [];
-      
-      const updatedMembers = allMembers.map((m: any) => {
-        if (m.id === client.id) {
-          const newHistoryEntry = {
-            id: `retrait_${Date.now()}`,
-            type: 'retrait',
-            account: 'tontine',
-            tontineAccountId: activeTontineAccount?.id,
-            amount: finalAmount,
-            date: new Date().toISOString(),
-            description: request.reason || `Retrait Tontine - ${finalAmount} F`
-          };
-
-          const updatedHistory = [newHistoryEntry, ...(m.history || [])];
-          
-          // Update balances
-          const updatedBalances = {
-            ...m.balances,
-            tontine: Math.max(0, (m.balances?.tontine || 0) - finalAmount)
-          };
-
-          const updatedTontineAccounts = (m.tontineAccounts || []).map((acc: any) => {
-            if (acc.id === activeTontineAccount?.id) {
-              return { ...acc, balance: Math.max(0, acc.balance - finalAmount) };
-            }
-            return acc;
-          });
-
-          return {
-            ...m,
-            history: updatedHistory,
-            balances: updatedBalances,
-            tontineAccounts: updatedTontineAccounts
-          };
-        }
-        return m;
-      });
-
-      localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
-      setMembers(updatedMembers);
-
-      // Also update separate history if it exists
-      const savedHist = localStorage.getItem(`microfox_history_${client.id}`);
-      if (savedHist) {
-        const hist = JSON.parse(savedHist);
-        const newHist = [{
-          id: `retrait_${Date.now()}`,
-          type: 'retrait',
-          account: 'tontine',
-          tontineAccountId: activeTontineAccount?.id,
-          amount: finalAmount,
-          date: new Date().toISOString(),
-          description: request.reason || `Retrait Tontine - ${finalAmount} F`
-        }, ...hist];
-        localStorage.setItem(`microfox_history_${client.id}`, JSON.stringify(newHist));
+    
+    // Update local state (filtering out deleted and applying zone filter)
+    setPendingRequests(updatedPending.filter((r: any) => {
+      if (r.isDeleted) return false;
+      if (currentUser.role === 'agent commercial') {
+        return r.zone === currentUser.zoneCollecte || r.zone === currentUser.zone;
       }
-    }
+      return true;
+    }));
+
+    // Note: Member data and history are NOT updated here. 
+    // They will be updated by the cashier during the final disbursement (decaissement).
 
     localStorage.setItem('microfox_pending_sync', 'true');
     window.dispatchEvent(new Event('storage'));
@@ -558,8 +548,8 @@ const TontineVerification: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 mx-4 lg:mx-0">
-        <div className="relative">
+      <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 mx-4 lg:mx-0 flex flex-col md:flex-row gap-4 items-center">
+        <div className="relative flex-1 w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={20} />
           <input 
             type="text" 
@@ -569,6 +559,16 @@ const TontineVerification: React.FC = () => {
             className="w-full pl-12 pr-4 py-4 bg-white border-2 border-[#00c896] rounded-2xl font-medium outline-none placeholder:text-gray-500 text-[#121c32] text-sm lg:text-base"
           />
         </div>
+        {selectedRequestIds.length > 0 && (
+          <button
+            onClick={handleBulkApprove}
+            disabled={isBulkApproving}
+            className="flex items-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-tight shadow-lg hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+          >
+            {isBulkApproving ? <Clock className="animate-spin" size={20} /> : <CheckCircle size={20} />}
+            Valider ({selectedRequestIds.length})
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden mx-4 lg:mx-0">
@@ -576,6 +576,20 @@ const TontineVerification: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gray-50 bg-gray-50/50">
+                <th className="px-4 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest w-10">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedRequestIds.length === filteredRequests.length && filteredRequests.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedRequestIds(filteredRequests.map(r => r.id));
+                      } else {
+                        setSelectedRequestIds([]);
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-4 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest w-10"></th>
                 <th className="px-2 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Client</th>
                 <th className="px-4 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Montant Demande</th>
@@ -616,16 +630,27 @@ const TontineVerification: React.FC = () => {
                     .filter((tx: any) => selectedTxIds.includes(tx.id))
                     .reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
-                  return (
-                    <React.Fragment key={request.id}>
-                      <tr className={`hover:bg-gray-50 transition-colors cursor-pointer ${isExpanded ? 'bg-gray-50/50' : ''}`} onClick={() => {
-                        setExpandedRequestId(isExpanded ? null : request.id);
-                        setSelectedTxIds([]);
-                      }}>
-                        <td className="px-4 py-4">
-                          {isExpanded ? <ChevronUp size={18} className="text-gray-600" /> : <ChevronDown size={18} className="text-gray-600" />}
-                        </td>
-                        <td className="px-2 py-4">
+                    return (
+                      <React.Fragment key={request.id}>
+                        <tr 
+                          className={`hover:bg-gray-50 transition-colors cursor-pointer ${isExpanded ? 'bg-gray-50/50' : ''} ${selectedRequestIds.includes(request.id) ? 'bg-blue-50/50' : ''}`} 
+                          onClick={() => {
+                            setExpandedRequestId(isExpanded ? null : request.id);
+                            setSelectedTxIds([]);
+                          }}
+                        >
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedRequestIds.includes(request.id)}
+                              onChange={() => toggleSelectRequest(request.id)}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-4 py-4">
+                            {isExpanded ? <ChevronUp size={18} className="text-gray-600" /> : <ChevronDown size={18} className="text-gray-600" />}
+                          </td>
+                          <td className="px-2 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-[#121c32] text-white flex items-center justify-center font-black text-[9px] lg:text-[10px] shrink-0">
                               {request.clientName.split(' ').map((n: string) => n[0]).join('')}

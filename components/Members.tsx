@@ -71,7 +71,7 @@ const suggestNextAccountNumber = (type: 'epargne' | 'tontine', currentMembers: C
 
 const OperationForm: React.FC<{
   onClose: () => void;
-  onSave: (transaction: Omit<Transaction, 'id' | 'date'>, validatedRequestId?: string) => void;
+  onSave: (transaction: Omit<Transaction, 'id' | 'date'>, validatedRequestIds?: string[]) => void;
   clientId: string;
   clientName: string;
   tontineAccounts: TontineAccount[];
@@ -103,19 +103,19 @@ const OperationForm: React.FC<{
   const isTontineBlocked = (account === 'tontine' || (type === 'transfert' && account === 'tontine')) && selectedTontine?.isBlocked;
   
   const [validatedRequests, setValidatedRequests] = useState<any[]>([]);
-  const [selectedValidatedId, setSelectedValidatedId] = useState<string | null>(null);
+  const [selectedValidatedIds, setSelectedValidatedIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (type === 'retrait' && account === 'tontine') {
       const saved = localStorage.getItem('microfox_validated_withdrawals');
       if (saved) {
         const list = JSON.parse(saved);
-        const clientRequests = list.filter((r: any) => r.clientId === clientId);
+        const clientRequests = list.filter((r: any) => r.clientId === clientId && !r.isDeleted);
         setValidatedRequests(clientRequests);
       }
     } else {
       setValidatedRequests([]);
-      setSelectedValidatedId(null);
+      setSelectedValidatedIds([]);
       setAmount('');
     }
   }, [type, account, clientId]);
@@ -129,9 +129,33 @@ const OperationForm: React.FC<{
   }, [type, account]);
 
   const handleSelectValidated = (req: any) => {
-    setSelectedValidatedId(req.id);
-    setAmount(req.amount.toString());
-    setSearchDescription(`Retrait ${account.charAt(0).toUpperCase() + account.slice(1)} Validé - Motif: ${req.reason}`);
+    const isSelected = selectedValidatedIds.includes(req.id);
+    let newIds: string[];
+    
+    if (isSelected) {
+      newIds = selectedValidatedIds.filter(id => id !== req.id);
+    } else {
+      newIds = [...selectedValidatedIds, req.id];
+    }
+    
+    setSelectedValidatedIds(newIds);
+    
+    // Calculer le montant total
+    const totalAmount = validatedRequests
+      .filter(r => newIds.includes(r.id))
+      .reduce((sum, r) => sum + r.amount, 0);
+    
+    setAmount(totalAmount > 0 ? totalAmount.toString() : '');
+    
+    if (newIds.length > 0) {
+      const reasons = validatedRequests
+        .filter(r => newIds.includes(r.id))
+        .map(r => r.reason)
+        .join(', ');
+      setSearchDescription(`Retrait ${account.charAt(0).toUpperCase() + account.slice(1)} Validé (${newIds.length}) - Motifs: ${reasons}`);
+    } else {
+      setSearchDescription('');
+    }
   };
 
   const handleValidate = () => {
@@ -149,13 +173,13 @@ const OperationForm: React.FC<{
       }
     }
 
-    if ((account === 'tontine' || (type === 'transfert' && account === 'tontine')) && isTontineBlocked && !selectedValidatedId) {
+    if ((account === 'tontine' || (type === 'transfert' && account === 'tontine')) && isTontineBlocked && selectedValidatedIds.length === 0) {
       alert("Opération impossible : Le compte tontine est bloqué.");
       return;
     }
 
-    if ((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && !selectedValidatedId) {
-      alert(`Opération impossible : Aucun retrait ${account} n'est possible sans vérification préalable. Veuillez sélectionner une demande validée.`);
+    if ((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) {
+      alert(`Opération impossible : Aucun retrait ${account} n'est possible sans vérification préalable. Veuillez sélectionner une ou plusieurs demandes validées.`);
       return;
     }
 
@@ -207,7 +231,7 @@ const OperationForm: React.FC<{
       amount: numAmount,
       description: finalDescription,
       destinationAccount: type === 'transfert' ? transferDest : undefined
-    }, selectedValidatedId || undefined);
+    }, selectedValidatedIds.length > 0 ? selectedValidatedIds : undefined);
   };
 
   return (
@@ -451,25 +475,25 @@ const OperationForm: React.FC<{
                   <button
                     key={req.id}
                     onClick={() => handleSelectValidated(req)}
-                    className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${selectedValidatedId === req.id ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-100 text-[#121c32] hover:bg-blue-50'}`}
+                    className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${selectedValidatedIds.includes(req.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-100 text-[#121c32] hover:bg-blue-50'}`}
                   >
                     <div className="text-left">
                       <p className="text-sm font-black">{req.amount.toLocaleString()} F</p>
-                      <p className={`text-[9px] font-bold uppercase ${selectedValidatedId === req.id ? 'text-white/70' : 'text-gray-400'}`}>
+                      <p className={`text-[9px] font-bold uppercase ${selectedValidatedIds.includes(req.id) ? 'text-white/70' : 'text-gray-400'}`}>
                         Validé le {new Date(req.validationDate).toLocaleDateString()}
                       </p>
                       {req.gap !== undefined && req.gap !== 0 && (
-                        <p className={`text-[9px] font-black uppercase mt-1 ${selectedValidatedId === req.id ? 'text-red-200' : 'text-red-500'}`}>
+                        <p className={`text-[9px] font-black uppercase mt-1 ${selectedValidatedIds.includes(req.id) ? 'text-red-200' : 'text-red-500'}`}>
                           Écart: {req.gap > 0 ? '+' : ''}{req.gap.toLocaleString()} F
                         </p>
                       )}
                       {req.report && (
-                        <p className={`text-[9px] font-bold italic mt-0.5 ${selectedValidatedId === req.id ? 'text-white/80' : 'text-gray-500'}`}>
+                        <p className={`text-[9px] font-bold italic mt-0.5 ${selectedValidatedIds.includes(req.id) ? 'text-white/80' : 'text-gray-500'}`}>
                           Rapport: {req.report}
                         </p>
                       )}
                     </div>
-                    {selectedValidatedId === req.id && <CheckCircle size={18} />}
+                    {selectedValidatedIds.includes(req.id) && <CheckCircle size={18} />}
                   </button>
                 ))}
               </div>
@@ -517,17 +541,17 @@ const OperationForm: React.FC<{
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
                 readOnly={type === 'retrait' && account === 'tontine'}
-                disabled={((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && !selectedValidatedId) || isEpargneBlocked || isTontineBlocked}
-                className={`w-full p-6 bg-gray-50 border-2 border-transparent focus:border-emerald-500 rounded-2xl text-3xl font-black outline-none transition-all text-center ${((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && !selectedValidatedId) || isEpargneBlocked || isTontineBlocked ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-black'}`}
+                disabled={((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) || isEpargneBlocked || isTontineBlocked}
+                className={`w-full p-6 bg-gray-50 border-2 border-transparent focus:border-emerald-500 rounded-2xl text-3xl font-black outline-none transition-all text-center ${((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) || isEpargneBlocked || isTontineBlocked ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-black'}`}
               />
               {(isEpargneBlocked || isTontineBlocked) && (
                 <p className="text-[9px] font-black text-red-500 uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
                   <Lock size={12} /> Compte bloqué
                 </p>
               )}
-              {type === 'retrait' && account === 'tontine' && !selectedValidatedId && (
+              {type === 'retrait' && account === 'tontine' && selectedValidatedIds.length === 0 && (
                 <p className="text-[9px] font-black text-red-500 uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
-                  <ShieldAlert size={12} /> Sélectionner une demande validée obligatoire
+                  <ShieldAlert size={12} /> Sélectionner une ou plusieurs demandes validées obligatoire
                 </p>
               )}
               {isEpargneBlocked && (
@@ -2407,21 +2431,34 @@ const Members: React.FC = () => {
     alert("Compte épargne ouvert avec succès.");
   };
 
-  const handleSaveOperation = (op: Omit<Transaction, 'id' | 'date'>, validatedRequestId?: string) => {
+  const handleSaveOperation = (op: Omit<Transaction, 'id' | 'date'>, validatedRequestIds?: string[]) => {
     if (!selectedClientId) return;
 
-    // Récupérer les informations de la demande validée si elle existe pour gérer les écarts
-    let gap = 0;
-    let responsibleAgentId = null;
-    if (validatedRequestId) {
+    // Récupérer les informations des demandes validées si elles existent pour gérer les écarts
+    let totalGap = 0;
+    let responsibleAgentId = '';
+    if (validatedRequestIds && validatedRequestIds.length > 0) {
       const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
       if (savedValidated) {
         const validatedList = JSON.parse(savedValidated);
-        const request = validatedList.find((r: any) => r.id === validatedRequestId);
-        if (request && request.gap) {
-          gap = Number(request.gap) || 0;
-          responsibleAgentId = request.userId;
-        }
+        validatedRequestIds.forEach(id => {
+          const request = validatedList.find((r: any) => r.id === id);
+          if (request) {
+            if (request.gap) {
+              totalGap += Number(request.gap) || 0;
+            }
+            // On récupère l'agent responsable (celui qui a été identifié lors de la validation)
+            // On cherche dans microfox_all_gaps pour trouver l'agent lié à cette demande
+            const savedGaps = localStorage.getItem('microfox_all_gaps');
+            if (savedGaps) {
+              const allGaps = JSON.parse(savedGaps);
+              const gapEntry = allGaps.find((g: any) => g.sourceId === id);
+              if (gapEntry && gapEntry.userId) {
+                responsibleAgentId = gapEntry.userId;
+              }
+            }
+          }
+        });
       }
     }
     
@@ -2432,7 +2469,7 @@ const Members: React.FC = () => {
     if (targetCaisse && (op.type === 'retrait' || op.type === 'deblocage')) {
       const cashKey = `microfox_cash_balance_${targetCaisse}`;
       const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
-      if (currentCashBalance <= 0 && !validatedRequestId) {
+      if (currentCashBalance <= 0 && (!validatedRequestIds || validatedRequestIds.length === 0)) {
         alert(`Opération impossible : Le solde de la ${targetCaisse} est de 0 F. Veuillez approvisionner la caisse.`);
         return;
       }
@@ -2471,14 +2508,14 @@ const Members: React.FC = () => {
           if (op.account === 'tontine' && op.tontineAccountId) {
             const accIdx = newTontineAccounts.findIndex(a => a.id === op.tontineAccountId);
             // Autoriser le retrait si validé, même si le solde est insuffisant (cas des écarts)
-            if (accIdx !== -1 && (newTontineAccounts[accIdx].balance >= op.amount || validatedRequestId)) {
+            if (accIdx !== -1 && (newTontineAccounts[accIdx].balance >= op.amount || (validatedRequestIds && validatedRequestIds.length > 0))) {
               newTontineAccounts[accIdx].balance -= op.amount;
               newBalances.tontine -= op.amount;
             } else {
               alert(`Opération impossible : Solde tontine insuffisant sur ce compte (${accIdx !== -1 ? newTontineAccounts[accIdx].balance : 0} F disponibles).`);
               return c;
             }
-          } else if (newBalances[op.account] >= op.amount || validatedRequestId) {
+          } else if (newBalances[op.account] >= op.amount || (validatedRequestIds && validatedRequestIds.length > 0)) {
             newBalances[op.account] -= op.amount;
           } else {
             alert(`Opération impossible : Solde insuffisant sur le compte ${op.account} (${newBalances[op.account]} F disponibles).`);
@@ -2540,11 +2577,16 @@ const Members: React.FC = () => {
       localStorage.setItem('microfox_members_data', JSON.stringify(updated));
       localStorage.setItem('microfox_pending_sync', 'true');
 
-      if (validatedRequestId) {
+      if (validatedRequestIds && validatedRequestIds.length > 0) {
         const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
         if (savedValidated) {
           const validatedList = JSON.parse(savedValidated);
-          const updatedValidatedList = validatedList.filter((r: any) => r.id !== validatedRequestId);
+          const updatedValidatedList = validatedList.map((r: any) => {
+            if (validatedRequestIds.includes(r.id)) {
+              return { ...r, isDeleted: true };
+            }
+            return r;
+          });
           localStorage.setItem('microfox_validated_withdrawals', JSON.stringify(updatedValidatedList));
           localStorage.setItem('microfox_pending_sync', 'true');
         }
@@ -2567,17 +2609,17 @@ const Members: React.FC = () => {
           
           // Si retrait tontine avec écart, on retire le montant total (décaissé + écart) de la caisse
           // La différence n'est pas retirée du compte client (déjà géré par op.amount) mais de la caisse
-          const finalCashDelta = (op.account === 'tontine' && op.type === 'retrait' && gap > 0) 
-            ? cashDelta - gap 
+          const finalCashDelta = (op.account === 'tontine' && op.type === 'retrait' && totalGap > 0) 
+            ? cashDelta - totalGap 
             : cashDelta;
             
           localStorage.setItem(cashKey, (currentCashBalance + finalCashDelta).toString());
           
           // Et on impute l'écart à l'agent responsable
-          if (op.account === 'tontine' && op.type === 'retrait' && gap > 0 && responsibleAgentId) {
+          if (op.account === 'tontine' && op.type === 'retrait' && totalGap > 0 && responsibleAgentId) {
             const agentBalanceKey = `microfox_agent_balance_${responsibleAgentId}`;
             const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
-            localStorage.setItem(agentBalanceKey, (currentAgentBalance - gap).toString());
+            localStorage.setItem(agentBalanceKey, (currentAgentBalance - totalGap).toString());
           }
         } else if (currentUser?.role === 'agent commercial') {
           const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;

@@ -59,14 +59,24 @@ const DailyTontine: React.FC = () => {
         const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
         
         const tontineDeposits = clientHistory
-          .filter((h: any) => h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
+          .filter((h: any) => h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot' || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && !h.description?.toLowerCase().includes('livret'))
           .reduce((sum: number, h: any) => sum + h.amount, 0);
         const tontineWithdrawals = clientHistory
-          .filter((h: any) => h.account === 'tontine' && (h.type === 'retrait' || h.type === 'transfert'))
+          .filter((h: any) => h.account === 'tontine' && (h.type === 'retrait' || (h.type === 'transfert' && h.account === 'tontine')))
           .reduce((sum: number, h: any) => sum + h.amount, 0);
         
-        const grossBalance = tontineDeposits - tontineWithdrawals;
+        const grossBalance = Math.max(0, tontineDeposits - tontineWithdrawals);
         let canChangeMise = true;
+
+        // Load pending and validated withdrawals to subtract from available
+        const savedPending = localStorage.getItem('microfox_pending_withdrawals');
+        const allPending = savedPending ? JSON.parse(savedPending).filter((r: any) => !r.isDeleted && r.clientId === m.id) : [];
+        
+        const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
+        const allValidated = savedValidated ? JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && r.clientId === m.id) : [];
+        
+        const allRequests = [...allPending, ...allValidated];
+        const pendingAmount = allRequests.reduce((sum: number, r: any) => sum + r.amount, 0);
 
         // Calcul de la commission pour déterminer le solde disponible
         let totalCommission = 0;
@@ -78,9 +88,15 @@ const DailyTontine: React.FC = () => {
             .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
             .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-          const accountWithdrawals = clientHistory
-            .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert'))
-            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const accountWithdrawals = [
+            ...clientHistory.filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert')),
+            ...allRequests.map(p => ({
+              ...p,
+              type: 'retrait',
+              account: 'tontine',
+              description: p.reason || `Retrait Tontine - ${p.amount} F`
+            }))
+          ].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
           if (accountHistory.length > 0) {
             let currentCycleFirstDepositDate: Date | null = null;
@@ -209,7 +225,7 @@ const DailyTontine: React.FC = () => {
                 canChangeMise = false;
               }
             }
-            totalCommission = totalDecaissable; 
+            totalCommission = Math.max(0, totalDecaissable); 
           }
         }
 
