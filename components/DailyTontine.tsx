@@ -79,7 +79,7 @@ const DailyTontine: React.FC = () => {
             .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
           const accountWithdrawals = clientHistory
-            .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && h.type === 'retrait')
+            .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert'))
             .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
           if (accountHistory.length > 0) {

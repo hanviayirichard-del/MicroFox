@@ -318,7 +318,7 @@ const TontineWithdrawal: React.FC = () => {
 
     // Récupération des demandes en attente et validées pour filtrer les cycles déjà demandés
     const savedPending = localStorage.getItem('microfox_pending_withdrawals');
-    let pending = savedPending ? JSON.parse(savedPending) : [];
+    let pending = savedPending ? JSON.parse(savedPending).filter((r: any) => !r.isDeleted) : [];
     
     // Filtrage des demandes en attente par zone pour l'agent commercial
     if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
@@ -329,7 +329,7 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
-    const validated = savedValidated ? JSON.parse(savedValidated) : [];
+    const validated = savedValidated ? JSON.parse(savedValidated).filter((r: any) => !r.isDeleted) : [];
     const allRequests = [...pending, ...validated];
 
       const tontiniers = allMembers.filter((m: any) => {
@@ -465,9 +465,9 @@ const TontineWithdrawal: React.FC = () => {
   const handleCancelRequest = (requestId: string) => {
     const saved = localStorage.getItem('microfox_pending_withdrawals');
     const currentPending = saved ? JSON.parse(saved) : [];
-    const updated = currentPending.filter((r: any) => r.id !== requestId);
+    const updated = currentPending.map((r: any) => r.id === requestId ? { ...r, isDeleted: true } : r);
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updated));
-    setPendingRequests(updated);
+    setPendingRequests(updated.filter((r: any) => !r.isDeleted));
     setSuccessMessage("Demande annulée avec succès.");
     setTimeout(() => setSuccessMessage(null), 3000);
     loadData();

@@ -315,7 +315,7 @@ const TontineVerification: React.FC = () => {
     const allMembers = savedMembers ? JSON.parse(savedMembers) : [];
 
     if (savedRequests) {
-      let requests = JSON.parse(savedRequests);
+      let requests = JSON.parse(savedRequests).filter((r: any) => !r.isDeleted);
       
       // Filtrage par zone pour l'agent commercial
       if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
@@ -328,7 +328,7 @@ const TontineVerification: React.FC = () => {
     }
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
     if (savedValidated) {
-      let validated = JSON.parse(savedValidated);
+      let validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted);
       // Filtrage par zone pour l'agent commercial
       if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
         validated = validated.filter((r: any) => {
@@ -452,9 +452,9 @@ const TontineVerification: React.FC = () => {
       localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
     }
 
-    const updatedPending = pendingRequests.filter(r => r.id !== request.id);
+    const updatedPending = pendingRequests.map(r => r.id === request.id ? { ...r, isDeleted: true } : r);
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updatedPending));
-    setPendingRequests(updatedPending);
+    setPendingRequests(updatedPending.filter(r => !r.isDeleted));
 
     // Update member data and history to reflect the withdrawal
     if (client) {
@@ -526,9 +526,9 @@ const TontineVerification: React.FC = () => {
   const handleReject = (requestId: string) => {
     const saved = localStorage.getItem('microfox_pending_withdrawals');
     const currentPending = saved ? JSON.parse(saved) : [];
-    const updatedRequests = currentPending.filter((r: any) => r.id !== requestId);
+    const updatedRequests = currentPending.map((r: any) => r.id === requestId ? { ...r, isDeleted: true } : r);
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updatedRequests));
-    setPendingRequests(updatedRequests);
+    setPendingRequests(updatedRequests.filter((r: any) => !r.isDeleted));
     alert("Demande rejetée.");
   };
 
