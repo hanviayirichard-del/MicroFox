@@ -329,6 +329,12 @@ export default function CreditManagement() {
 
     const updatedClients = clients.map((c: any) => {
       if (c.id === memberId) {
+        let fullHistory = c.history || [];
+        if (fullHistory.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        }
+
         const currentCredit = c.balances.credit || 0;
         const newTotal = currentCredit + amount + interest + penalty; // On ajoute les intérêts et pénalités au solde dû
         
@@ -341,10 +347,13 @@ export default function CreditManagement() {
           description: `Déblocage de crédit - Échéance: ${dueDate}`
         };
         
+        const newHistory = [newTx, ...fullHistory];
+        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+
         return {
           ...c,
           balances: { ...c.balances, credit: newTotal },
-          history: [newTx, ...(c.history || [])],
+          history: newHistory,
           // On peut stocker les détails spécifiques si besoin
           lastCreditDetails: {
             capital: amount,

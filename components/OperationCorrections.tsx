@@ -38,10 +38,21 @@ const OperationCorrections: React.FC = () => {
     const savedMembers = localStorage.getItem('microfox_members_data');
     if (savedMembers) {
       const parsedMembers: ClientAccount[] = JSON.parse(savedMembers);
-      setMembers(parsedMembers);
+      
+      // Ensure history is loaded for each client if it's empty in the saved array
+      const withHistory = parsedMembers.map(member => {
+        let history = member.history || [];
+        if (history.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${member.id}`);
+          if (savedHistory) history = JSON.parse(savedHistory);
+        }
+        return { ...member, history };
+      });
+
+      setMembers(withHistory);
 
       const ops: OperationWithMember[] = [];
-      parsedMembers.forEach(member => {
+      withHistory.forEach(member => {
         const history = member.history || [];
         history.forEach(tx => {
           ops.push({
@@ -72,8 +83,8 @@ const OperationCorrections: React.FC = () => {
 
     const updatedMembers = members.map(m => {
       if (m.id === op.memberId) {
-        // Remove from history
         const newHistory = m.history.filter(tx => tx.id !== op.id);
+        localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
         
         // Reverse balance impact
         const newBalances = { ...m.balances };
@@ -139,13 +150,13 @@ const OperationCorrections: React.FC = () => {
 
     const updatedMembers = members.map(m => {
       if (m.id === editingOp.memberId) {
-        // Update history
         const newHistory = m.history.map(tx => {
           if (tx.id === editingOp.id) {
             return { ...tx, amount: newAmount, description: editDescription };
           }
           return tx;
         });
+        localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
 
         // Update balances
         const newBalances = { ...m.balances };

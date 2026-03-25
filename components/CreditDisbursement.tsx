@@ -55,6 +55,12 @@ const CreditDisbursement: React.FC = () => {
 
     const updatedClients = clients.map((c: any) => {
       if (c.id === memberId) {
+        let fullHistory = c.history || [];
+        if (fullHistory.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        }
+
         const currentCredit = c.balances?.credit || 0;
         const newTotal = currentCredit + request.capital + request.interest + request.penalty;
         
@@ -76,13 +82,16 @@ const CreditDisbursement: React.FC = () => {
           description: `Frais de dossier crédit - Échéance: ${request.dueDate}`
         } : null;
         
-        const newHistory = [newTx];
-        if (feesTx) newHistory.push(feesTx);
+        const addedHistory = [newTx];
+        if (feesTx) addedHistory.push(feesTx);
+
+        const newHistory = [...addedHistory, ...fullHistory];
+        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
 
         return {
           ...c,
           balances: { ...c.balances, credit: newTotal },
-          history: [...newHistory, ...(c.history || [])],
+          history: newHistory,
           lastCreditRequest: {
             ...request,
             status: 'Débloqué',

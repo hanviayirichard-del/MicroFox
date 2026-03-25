@@ -47,8 +47,11 @@ const GeographicMap: React.FC = () => {
         const user = savedUser ? JSON.parse(savedUser) : {};
         
         let filteredClientsData = parsedClients;
-        if (user.role === 'agent commercial' && user.zoneCollecte) {
-          filteredClientsData = parsedClients.filter((c: any) => c.zone === user.zoneCollecte);
+        if (user.role === 'agent commercial') {
+          const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+          if (agentZones.length > 0) {
+            filteredClientsData = parsedClients.filter((c: any) => agentZones.includes(c.zone));
+          }
         }
 
         setClients(filteredClientsData.filter((c: ClientAccount) => c.latitude !== null && c.latitude !== undefined && c.longitude !== null && c.longitude !== undefined));

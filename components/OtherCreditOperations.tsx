@@ -19,7 +19,18 @@ const OtherCreditOperations: React.FC = () => {
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
     if (saved) {
-      setMembers(JSON.parse(saved));
+      const parsed = JSON.parse(saved);
+      // Ensure history is loaded for each client if it's empty in the saved array
+      const withHistory = parsed.map((c: any) => {
+        if (!c.history || c.history.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+          if (savedHistory) {
+            return { ...c, history: JSON.parse(savedHistory) };
+          }
+        }
+        return c;
+      });
+      setMembers(withHistory);
     }
   };
 
@@ -69,11 +80,14 @@ const OtherCreditOperations: React.FC = () => {
           description: `Application de pénalité de retard`
         };
 
+        const newHistory = [newTx, ...(m.history || [])];
+        localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+
         return {
           ...m,
           balances: { ...m.balances, credit: newTotal },
           lastCreditRequest: updatedRequest,
-          history: [newTx, ...(m.history || [])]
+          history: newHistory
         };
       }
       return m;
@@ -117,11 +131,14 @@ const OtherCreditOperations: React.FC = () => {
           description: `Application de ristourne de fidélité`
         };
 
+        const newHistory = [newTx, ...(m.history || [])];
+        localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+
         return {
           ...m,
           balances: { ...m.balances, credit: newTotal },
           lastCreditRequest: updatedRequest,
-          history: [newTx, ...(m.history || [])]
+          history: newHistory
         };
       }
       return m;

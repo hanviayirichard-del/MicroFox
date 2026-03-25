@@ -357,11 +357,14 @@ const TontineVerification: React.FC = () => {
       let requests = JSON.parse(savedRequests).filter((r: any) => !r.isDeleted);
       
       // Filtrage par zone pour l'agent commercial
-      if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-        requests = requests.filter((r: any) => {
-          const client = allMembers.find((m: any) => m.id === r.clientId);
-          return client && (client.zone === currentUser.zoneCollecte || client.zoneCollecte === currentUser.zoneCollecte);
-        });
+      if (currentUser?.role === 'agent commercial') {
+        const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+        if (agentZones.length > 0) {
+          requests = requests.filter((r: any) => {
+            const client = allMembers.find((m: any) => m.id === r.clientId);
+            return client && (agentZones.includes(client.zone) || agentZones.includes(client.zoneCollecte));
+          });
+        }
       }
       setPendingRequests(requests);
     }
@@ -369,11 +372,14 @@ const TontineVerification: React.FC = () => {
     if (savedValidated) {
       let validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted);
       // Filtrage par zone pour l'agent commercial
-      if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-        validated = validated.filter((r: any) => {
-          const client = allMembers.find((m: any) => m.id === r.clientId);
-          return client && (client.zone === currentUser.zoneCollecte || client.zoneCollecte === currentUser.zoneCollecte);
-        });
+      if (currentUser?.role === 'agent commercial') {
+        const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+        if (agentZones.length > 0) {
+          validated = validated.filter((r: any) => {
+            const client = allMembers.find((m: any) => m.id === r.clientId);
+            return client && (agentZones.includes(client.zone) || agentZones.includes(client.zoneCollecte));
+          });
+        }
       }
       setValidatedHistory(validated);
     }
@@ -470,7 +476,11 @@ const TontineVerification: React.FC = () => {
       const clientZone = request.clientZone || client?.zoneCollecte || client?.zone;
       const savedUsers = localStorage.getItem('microfox_users');
       const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
-      const zoneAgent = allUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === clientZone);
+      const zoneAgent = allUsers.find((u: any) => {
+        if (u.role !== 'agent commercial') return false;
+        const agentZones = u.zonesCollecte || (u.zoneCollecte ? [u.zoneCollecte] : []);
+        return agentZones.includes(clientZone);
+      });
       const responsibleUserId = zoneAgent?.id || request.userId;
 
       const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
@@ -505,7 +515,10 @@ const TontineVerification: React.FC = () => {
     setPendingRequests(updatedPending.filter((r: any) => {
       if (r.isDeleted) return false;
       if (currentUser.role === 'agent commercial') {
-        return r.zone === currentUser.zoneCollecte || r.zone === currentUser.zone;
+        const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+        if (agentZones.length > 0) {
+          return agentZones.includes(r.zone) || agentZones.includes(r.zone);
+        }
       }
       return true;
     }));

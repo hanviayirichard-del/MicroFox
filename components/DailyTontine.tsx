@@ -34,8 +34,11 @@ const DailyTontine: React.FC = () => {
       const user = savedUser ? JSON.parse(savedUser) : {};
       
       let filteredAllMembers = allMembers;
-      if (user.role === 'agent commercial' && user.zoneCollecte) {
-        filteredAllMembers = allMembers.filter((m: any) => m.zone === user.zoneCollecte);
+      if (user.role === 'agent commercial') {
+        const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+        if (agentZones.length > 0) {
+          filteredAllMembers = allMembers.filter((m: any) => agentZones.includes(m.zone));
+        }
       } else if (user.role === 'caissier') {
         filteredAllMembers = allMembers.filter((m: any) => m.zone === '01');
       }
@@ -323,11 +326,18 @@ const DailyTontine: React.FC = () => {
       const allMembers = JSON.parse(savedMembers);
       const updatedMembers = allMembers.map((m: any) => {
         if (m.id === clientId) {
+          let fullHistory = m.history || [];
+          if (fullHistory.length === 0) {
+            const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+            if (savedHistory) fullHistory = JSON.parse(savedHistory);
+          }
+
           if (m.tontineAccounts && m.tontineAccounts.length > 0) {
             const updatedTontineAccounts = [...m.tontineAccounts];
             updatedTontineAccounts[0] = { ...updatedTontineAccounts[0], dailyMise: newMise };
-            return { ...m, tontineAccounts: updatedTontineAccounts };
+            return { ...m, tontineAccounts: updatedTontineAccounts, history: fullHistory };
           }
+          return { ...m, history: fullHistory };
         }
         return m;
       });
@@ -374,12 +384,24 @@ const DailyTontine: React.FC = () => {
     if (savedMembers) {
       const allMembers = JSON.parse(savedMembers);
       const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
-      const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === client.zone);
+      const agentForZone = savedUsers.find((u: any) => {
+        if (u.role !== 'agent commercial') return false;
+        const agentZones = u.zonesCollecte || (u.zoneCollecte ? [u.zoneCollecte] : []);
+        return agentZones.includes(client.zone);
+      });
       const agentNameForZone = agentForZone ? agentForZone.identifiant : (currentUser?.identifiant || 'N/A');
 
+      let createdTx: any = null;
       const updatedMembers = allMembers.map((m: any) => {
         if (m.id === client.id) {
-          const newTx = {
+          // Load full history to avoid losing it when updating members data
+          let fullHistory = m.history || [];
+          if (fullHistory.length === 0) {
+            const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+            if (savedHistory) fullHistory = JSON.parse(savedHistory);
+          }
+
+          createdTx = {
             id: Date.now().toString(),
             type: 'cotisation',
             account: 'tontine',
@@ -389,7 +411,9 @@ const DailyTontine: React.FC = () => {
             description: description,
             userId: currentUser?.id,
             cashierName: agentNameForZone,
-            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
+            balanceBefore: client.tontineBalance,
+            balance: nextBalance
           };
 
           const updatedTontineAccounts = m.tontineAccounts.map((ta: any) => {
@@ -399,11 +423,14 @@ const DailyTontine: React.FC = () => {
             return ta;
           });
 
+          const newHistory = [createdTx, ...fullHistory];
+          localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+
           return {
             ...m,
             balances: { ...m.balances, tontine: nextBalance },
             tontineAccounts: updatedTontineAccounts,
-            history: [newTx, ...(m.history || [])]
+            history: newHistory
           };
         }
         return m;
@@ -411,25 +438,6 @@ const DailyTontine: React.FC = () => {
       localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
       localStorage.setItem('microfox_pending_sync', 'true');
       
-      // 2. Mise à jour de l'historique spécifique
-      const historyKey = `microfox_history_${client.id}`;
-      const savedHistory = localStorage.getItem(historyKey);
-      let history = savedHistory ? JSON.parse(savedHistory) : [];
-      const newTx = {
-        id: Date.now().toString(),
-        type: 'cotisation',
-        account: 'tontine',
-        tontineAccountId: client.accountNumber.startsWith('TN') ? client.accountNumber : `${client.id}_tn_0`,
-        amount: amount,
-        date: new Date().toISOString(),
-        description: description,
-        userId: currentUser?.id,
-        cashierName: agentNameForZone,
-        caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
-      };
-      localStorage.setItem(historyKey, JSON.stringify([newTx, ...history]));
-      localStorage.setItem('microfox_pending_sync', 'true');
-
       // 3. Mise à jour des soldes (Caisse ou Agent)
       const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
       if (targetCaisse) {
@@ -455,8 +463,9 @@ const DailyTontine: React.FC = () => {
   const filteredClients = clientList.filter((c: any) => {
     // La liste clientList est déjà filtrée dans loadTontineClients par zone pour l'agent,
     // mais nous gardons cette sécurité supplémentaire ici.
-    if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-      if (c.zone !== currentUser.zoneCollecte) return false;
+    if (currentUser?.role === 'agent commercial') {
+      const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+      if (agentZones.length > 0 && !agentZones.includes(c.zone)) return false;
     }
 
     return c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 

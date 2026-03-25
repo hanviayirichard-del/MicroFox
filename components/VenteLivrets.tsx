@@ -29,9 +29,20 @@ const VenteLivrets: React.FC = () => {
       setSelectedType('tontine');
     }
 
-    let filteredMembersData = membersData;
-    if (user.role === 'agent commercial' && user.zoneCollecte) {
-      filteredMembersData = membersData.filter((m: any) => m.zone === user.zoneCollecte);
+    let filteredMembersData = membersData.map((m: any) => {
+      let history = m.history || [];
+      if (history.length === 0) {
+        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+        if (savedHistory) history = JSON.parse(savedHistory);
+      }
+      return { ...m, history };
+    });
+
+    if (user.role === 'agent commercial') {
+      const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        filteredMembersData = filteredMembersData.filter((m: any) => agentZones.includes(m.zone));
+      }
     }
     setMembers(filteredMembersData);
 
@@ -121,6 +132,12 @@ const VenteLivrets: React.FC = () => {
     
     const updatedMembers = allMembers.map((m: any) => {
       if (m.id === member.id) {
+        let fullHistory = m.history || [];
+        if (fullHistory.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        }
+
         const newTx = {
           id: Date.now().toString(),
           type: 'depot',
@@ -131,9 +148,12 @@ const VenteLivrets: React.FC = () => {
           userId: currentUser?.id
         };
         
+        const newHistory = [newTx, ...fullHistory];
+        localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+
         return {
           ...m,
-          history: [newTx, ...(m.history || [])]
+          history: newHistory
         };
       }
       return m;

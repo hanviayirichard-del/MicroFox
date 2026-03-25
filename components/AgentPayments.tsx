@@ -73,7 +73,8 @@ const AgentPayments: React.FC = () => {
       if (savedMembers) {
         const allMembers = JSON.parse(savedMembers);
         allMembers.forEach((m: any) => {
-          if (user?.role === 'agent commercial' && user?.zoneCollecte && m.zone !== user.zoneCollecte) {
+          const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+          if (user?.role === 'agent commercial' && agentZones.length > 0 && !agentZones.includes(m.zone)) {
             return;
           }
           const history = m.history || [];

@@ -28,6 +28,7 @@ export interface User {
   codeMF: string;
   motDePasse: string;
   zoneCollecte?: string;
+  zonesCollecte?: string[];
   caisse?: string;
   isBlocked?: boolean;
   isDeleted?: boolean;

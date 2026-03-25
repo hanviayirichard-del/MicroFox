@@ -21,9 +21,10 @@ const Commissions: React.FC = () => {
   const [endDate, setEndDate] = useState(dates.end);
   const [searchTerm, setSearchTerm] = useState('');
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
-  const [selectedZone, setSelectedZone] = useState(currentUser?.role === 'agent commercial' ? (currentUser?.zoneCollecte || '') : '');
+  const [selectedZone, setSelectedZone] = useState(currentUser?.role === 'agent commercial' ? (currentUser?.zonesCollecte?.[0] || currentUser?.zoneCollecte || '') : '');
   
-  const zones = ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
+  const agentZones = currentUser?.zonesCollecte || (currentUser?.zoneCollecte ? [currentUser.zoneCollecte] : []);
+  const zones = currentUser?.role === 'agent commercial' ? agentZones : ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
   
   const [stats, setStats] = useState({
     totalCommissions: 0,

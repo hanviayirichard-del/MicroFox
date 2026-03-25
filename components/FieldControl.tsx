@@ -58,8 +58,11 @@ const FieldControl: React.FC = () => {
     
     const matchesZone = !selectedZone || c.zone === selectedZone;
     
-    if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-      return matchesSearch && c.zone === currentUser.zoneCollecte;
+    if (currentUser?.role === 'agent commercial') {
+      const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        return matchesSearch && agentZones.includes(c.zone);
+      }
     }
     
     return matchesSearch && matchesZone;

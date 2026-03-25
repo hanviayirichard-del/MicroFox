@@ -21,8 +21,11 @@ const ActiveCredits: React.FC = () => {
   const activeCredits = members.filter(m => {
     const savedUser = localStorage.getItem('microfox_current_user');
     const user = savedUser ? JSON.parse(savedUser) : {};
-    if (user.role === 'agent commercial' && user.zoneCollecte) {
-      return m.zone === user.zoneCollecte;
+    if (user.role === 'agent commercial') {
+      const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        return agentZones.includes(m.zone);
+      }
     }
     return true;
   }).filter(m => (m.balances?.credit || 0) > 0).filter(m => {

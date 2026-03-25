@@ -321,11 +321,14 @@ const TontineWithdrawal: React.FC = () => {
     let pending = savedPending ? JSON.parse(savedPending).filter((r: any) => !r.isDeleted) : [];
     
     // Filtrage des demandes en attente par zone pour l'agent commercial
-    if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-      pending = pending.filter((r: any) => {
-        const client = allMembers.find((m: any) => m.id === r.clientId);
-        return client && (client.zone === currentUser.zoneCollecte || client.zoneCollecte === currentUser.zoneCollecte);
-      });
+    if (currentUser?.role === 'agent commercial') {
+      const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        pending = pending.filter((r: any) => {
+          const client = allMembers.find((m: any) => m.id === r.clientId);
+          return client && (agentZones.includes(client.zone) || agentZones.includes(client.zoneCollecte));
+        });
+      }
     }
 
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
@@ -337,9 +340,12 @@ const TontineWithdrawal: React.FC = () => {
         if (!hasTontine) return false;
         
         // Filtrage par zone pour l'agent commercial
-        if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-          return m.zone === currentUser.zoneCollecte || m.zoneCollecte === currentUser.zoneCollecte;
+      if (currentUser?.role === 'agent commercial') {
+        const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+        if (agentZones.length > 0) {
+          return agentZones.includes(m.zone) || agentZones.includes(m.zoneCollecte);
         }
+      }
         return true;
       }).map((m: any) => {
         const acc = m.tontineAccounts[0];

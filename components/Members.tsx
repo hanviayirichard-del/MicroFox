@@ -1861,25 +1861,39 @@ const OpenEpargneModal: React.FC<{
 const Members: React.FC = () => {
   const [clients, setClients] = useState<ClientAccount[]>(() => {
     const saved = localStorage.getItem('microfox_members_data');
-    if (saved) return JSON.parse(saved);
+    let loadedClients: ClientAccount[] = [];
+    
+    if (saved) {
+      loadedClients = JSON.parse(saved);
+    } else {
+      loadedClients = [
+        {
+          id: '1',
+          name: 'KOFFI Ama Gertrude',
+          code: 'CLT-001254',
+          epargneAccountNumber: 'EP-44201',
+          status: 'Actif',
+          balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
+          creditStatus: 'Sain',
+          tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 0 }],
+          history: [],
+          gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
+          dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '12 Mois'
+        },
+        { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
+      ];
+    }
 
-    const initialClients = [
-      {
-        id: '1',
-        name: 'KOFFI Ama Gertrude',
-        code: 'CLT-001254',
-        epargneAccountNumber: 'EP-44201',
-        status: 'Actif',
-        balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
-        creditStatus: 'Sain',
-        tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 0 }],
-        history: [],
-        gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
-        dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '12 Mois'
-      },
-      { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
-    ];
-    return initialClients;
+    // Ensure history is loaded for each client if it's empty in the main array
+    return loadedClients.map(c => {
+      if (!c.history || c.history.length === 0) {
+        const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+        if (savedHistory) {
+          return { ...c, history: JSON.parse(savedHistory) };
+        }
+      }
+      return c;
+    });
   });
 
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
@@ -1941,8 +1955,11 @@ const Members: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-      setSelectedZone(currentUser.zoneCollecte);
+    if (currentUser?.role === 'agent commercial') {
+      const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        setSelectedZone(agentZones[0]);
+      }
     }
   }, [currentUser]);
 
@@ -1967,8 +1984,9 @@ const Members: React.FC = () => {
 
   const filteredClients = clients.filter(c => {
     // Restriction pour les agents commerciaux
-    if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-      if (c.zone !== currentUser.zoneCollecte) return false;
+    if (currentUser?.role === 'agent commercial') {
+      const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+      if (agentZones.length > 0 && !agentZones.includes(c.zone)) return false;
     }
 
     // Filtre par zone
@@ -2300,9 +2318,21 @@ const Members: React.FC = () => {
     const syncBalances = () => {
       const savedMembers = localStorage.getItem('microfox_members_data');
       if (savedMembers) {
-        const parsed = JSON.parse(savedMembers);
-        if (JSON.stringify(parsed) !== JSON.stringify(clients)) {
-          setClients(parsed);
+        const parsed: ClientAccount[] = JSON.parse(savedMembers);
+        
+        // Ensure history is loaded for each client if it's empty in the saved array
+        const withHistory = parsed.map(c => {
+          if (!c.history || c.history.length === 0) {
+            const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+            if (savedHistory) {
+              return { ...c, history: JSON.parse(savedHistory) };
+            }
+          }
+          return c;
+        });
+
+        if (JSON.stringify(withHistory) !== JSON.stringify(clients)) {
+          setClients(withHistory);
         }
       }
     };
@@ -2313,9 +2343,7 @@ const Members: React.FC = () => {
   }, [clients]);
 
   const handleRegister = (newClient: ClientAccount) => {
-    const saved = localStorage.getItem('microfox_members_data');
-    const currentClients = saved ? JSON.parse(saved) : [];
-    const updatedClients = [newClient, ...currentClients];
+    const updatedClients = [newClient, ...clients];
     setClients(updatedClients);
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
     localStorage.setItem('microfox_pending_sync', 'true');
@@ -2528,9 +2556,7 @@ const Members: React.FC = () => {
     }
     
     let success = false;
-    const saved = localStorage.getItem('microfox_members_data');
-    const currentMembers = saved ? JSON.parse(saved) : [];
-    const updated = currentMembers.map(c => {
+    const updated = clients.map(c => {
       if (c.id === selectedClientId) {
         const newBalances = { ...c.balances };
         const newTontineAccounts = [...c.tontineAccounts];
@@ -2850,11 +2876,17 @@ const Members: React.FC = () => {
               <select 
                 value={selectedZone}
                 onChange={(e) => setSelectedZone(e.target.value)}
-                disabled={currentUser?.role === 'agent commercial'}
                 className="bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 outline-none focus:border-emerald-500/50 disabled:opacity-50"
               >
                 {currentUser?.role === 'agent commercial' ? (
-                  <option value={currentUser.zoneCollecte} className="bg-[#0a1226]">Zone {currentUser.zoneCollecte}</option>
+                  <>
+                    {(currentUser.zonesCollecte && currentUser.zonesCollecte.length > 1) && (
+                      <option value="all" className="bg-[#0a1226]">Mes Zones</option>
+                    )}
+                    {(currentUser.zonesCollecte || [currentUser.zoneCollecte]).map((z: string) => (
+                      <option key={z} value={z} className="bg-[#0a1226]">Zone {z}</option>
+                    ))}
+                  </>
                 ) : (
                   <>
                     <option value="all" className="bg-[#0a1226]">Toutes Zones</option>

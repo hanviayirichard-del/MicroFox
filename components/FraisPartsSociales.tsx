@@ -104,6 +104,13 @@ const FraisPartsSociales: React.FC = () => {
       
       if (memberIdx !== -1) {
         const member = allMembers[memberIdx];
+        
+        let fullHistory = member.history || [];
+        if (fullHistory.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${member.id}`);
+          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        }
+
         const txId = `tx_${Date.now()}`;
         const newTx = {
           id: txId,
@@ -115,7 +122,10 @@ const FraisPartsSociales: React.FC = () => {
           reference: `PS-${Date.now().toString().slice(-6)}`
         };
 
-        member.history = [newTx, ...(member.history || [])];
+        const newHistory = [newTx, ...fullHistory];
+        member.history = newHistory;
+        localStorage.setItem(`microfox_history_${member.id}`, JSON.stringify(newHistory));
+
         member.balances = {
           ...member.balances,
           partSociale: (member.balances?.partSociale || 0) + amount

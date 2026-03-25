@@ -60,8 +60,11 @@ const CashGaps: React.FC = () => {
           (item.userId && usersList.find((u: any) => u.id === item.userId)?.caisse === selectedCaisse);
         
         // Filtrage par zone pour l'agent commercial
-        if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-          return matchesStartDate && matchesEndDate && item.zone === currentUser.zoneCollecte && matchesUser && matchesCaisse;
+        if (currentUser?.role === 'agent commercial') {
+          const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+          if (agentZones.length > 0) {
+            return matchesStartDate && matchesEndDate && agentZones.includes(item.zone) && matchesUser && matchesCaisse;
+          }
         }
         
         return matchesStartDate && matchesEndDate && matchesUser && matchesCaisse;

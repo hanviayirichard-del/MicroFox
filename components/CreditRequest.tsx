@@ -55,6 +55,12 @@ const CreditRequest: React.FC = () => {
 
     const updatedClients = clients.map((c: any) => {
       if (c.id === selectedMemberId) {
+        let fullHistory = c.history || [];
+        if (fullHistory.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        }
+
         const newTx = {
           id: Date.now().toString(),
           type: 'deblocage',
@@ -64,9 +70,12 @@ const CreditRequest: React.FC = () => {
           description: `Demande de crédit enregistrée - Échéance: ${dueDate}`
         };
         
+        const newHistory = [newTx, ...fullHistory];
+        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+
         return {
           ...c,
-          history: [newTx, ...(c.history || [])],
+          history: newHistory,
           lastCreditRequest: {
             capital: Number(amount),
             interest: Number(interest),

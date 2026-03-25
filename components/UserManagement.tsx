@@ -15,6 +15,7 @@ const UserManagement: React.FC = () => {
     codeMF: '',
     motDePasse: '',
     zoneCollecte: '',
+    zonesCollecte: [] as string[],
     caisse: ''
   });
 
@@ -54,7 +55,8 @@ const UserManagement: React.FC = () => {
       microfinance: formData.microfinance.trim(),
       codeMF: formData.codeMF.trim().toUpperCase(),
       motDePasse: formData.motDePasse,
-      zoneCollecte: formData.zoneCollecte,
+      zoneCollecte: formData.zonesCollecte.length > 0 ? formData.zonesCollecte[0] : '',
+      zonesCollecte: formData.zonesCollecte,
       caisse: formData.caisse,
       isBlocked: false
     };
@@ -71,6 +73,7 @@ const UserManagement: React.FC = () => {
       codeMF: '',
       motDePasse: '',
       zoneCollecte: '',
+      zonesCollecte: [],
       caisse: ''
     });
   };
@@ -184,10 +187,20 @@ const UserManagement: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    {user.role === 'agent commercial' && user.zoneCollecte ? (
-                      <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase">
-                        Zone {user.zoneCollecte}
-                      </span>
+                    {user.role === 'agent commercial' && (user.zonesCollecte?.length || user.zoneCollecte) ? (
+                      <div className="flex flex-wrap gap-1">
+                        {user.zonesCollecte && user.zonesCollecte.length > 0 ? (
+                          user.zonesCollecte.map(z => (
+                            <span key={z} className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase">
+                              Zone {z}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase">
+                            Zone {user.zoneCollecte}
+                          </span>
+                        )}
+                      </div>
                     ) : user.role === 'caissier' && user.caisse ? (
                       <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase">
                         {user.caisse}
@@ -263,16 +276,25 @@ const UserManagement: React.FC = () => {
 
               {formData.role === 'agent commercial' && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Zone de Collecte</label>
-                  <select 
-                    required
-                    className="w-full p-4 bg-gray-50 border border-transparent focus:border-indigo-200 rounded-2xl outline-none text-sm font-bold text-[#121c32] transition-all appearance-none"
-                    value={formData.zoneCollecte}
-                    onChange={e => setFormData({...formData, zoneCollecte: e.target.value})}
-                  >
-                    <option value="">Sélectionner une zone</option>
-                    {zones.map(z => <option key={z} value={z}>Zone {z}</option>)}
-                  </select>
+                  <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Zones de Collecte</label>
+                  <div className="grid grid-cols-3 gap-2 p-4 bg-gray-50 rounded-2xl border border-transparent focus-within:border-indigo-200 transition-all">
+                    {zones.map(z => (
+                      <label key={z} className="flex items-center gap-2 cursor-pointer group">
+                        <input 
+                          type="checkbox"
+                          checked={formData.zonesCollecte.includes(z)}
+                          onChange={(e) => {
+                            const newZones = e.target.checked 
+                              ? [...formData.zonesCollecte, z]
+                              : formData.zonesCollecte.filter(item => item !== z);
+                            setFormData({...formData, zonesCollecte: newZones});
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-[10px] font-bold text-[#121c32] uppercase group-hover:text-indigo-600 transition-colors">Zone {z}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
 

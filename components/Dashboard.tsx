@@ -213,8 +213,11 @@ const Dashboard: React.FC = () => {
     const savedUser = localStorage.getItem('microfox_current_user');
     const user = savedUser ? JSON.parse(savedUser) : {};
     
-    if (user.role === 'agent commercial' && user.zoneCollecte) {
-      clients = clients.filter((c: any) => c.zone === user.zoneCollecte);
+    if (user.role === 'agent commercial') {
+      const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        clients = clients.filter((c: any) => agentZones.includes(c.zone));
+      }
     }
 
     const targetDate = new Date();
@@ -329,8 +332,11 @@ const Dashboard: React.FC = () => {
     const user = savedUser ? JSON.parse(savedUser) : {};
     
     let filteredAllClients = allClients;
-    if (user.role === 'agent commercial' && user.zoneCollecte) {
-      filteredAllClients = allClients.filter((c: any) => c.zone === user.zoneCollecte);
+    if (user.role === 'agent commercial') {
+      const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+      if (agentZones.length > 0) {
+        filteredAllClients = allClients.filter((c: any) => agentZones.includes(c.zone));
+      }
     }
 
     const clients = filteredAllClients.filter((c: any) => {
