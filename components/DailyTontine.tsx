@@ -401,11 +401,14 @@ const DailyTontine: React.FC = () => {
             if (savedHistory) fullHistory = JSON.parse(savedHistory);
           }
 
+          const targetAccount = m.tontineAccounts.find((ta: any) => ta.number === client.accountNumber);
+          const targetAccountId = targetAccount ? targetAccount.id : m.tontineAccounts[0].id;
+
           createdTx = {
             id: Date.now().toString(),
             type: 'cotisation',
             account: 'tontine',
-            tontineAccountId: m.tontineAccounts[0].id,
+            tontineAccountId: targetAccountId,
             amount: amount,
             date: new Date().toISOString(),
             description: description,
@@ -426,9 +429,11 @@ const DailyTontine: React.FC = () => {
           const newHistory = [createdTx, ...fullHistory];
           localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
 
+          // Ensure the member object in microfox_members_data also has the updated history
+          // and the correct balances.
           return {
             ...m,
-            balances: { ...m.balances, tontine: nextBalance },
+            balances: { ...m.balances, tontine: m.balances.tontine + amount },
             tontineAccounts: updatedTontineAccounts,
             history: newHistory
           };
