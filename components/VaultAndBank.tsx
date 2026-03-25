@@ -19,25 +19,39 @@ const VaultAndBank: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [observedAmount, setObservedAmount] = useState('');
   const [observation, setObservation] = useState('');
-  const [caisses, setCaisses] = useState(['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2']);
+  const [caisses, setCaisses] = useState(['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4']);
   const [selectedCaisse, setSelectedCaisse] = useState('CAISSE PRINCIPALE');
-  const [denominations, setDenominations] = useState({
+  const [denominations, setDenominations] = useState<any>({
     '10000': 0,
     '5000': 0,
     '2000': 0,
     '1000': 0,
     '500': 0,
+    '250': 0,
+    '200': 0,
+    '100': 0,
+    '50': 0,
+    '25': 0,
+    '10': 0,
+    '5': 0,
     'monnaie': 0
   });
 
   const calculateTotalFromDenominations = (newDenoms: any) => {
     const total = 
-      (newDenoms['10000'] * 10000) +
-      (newDenoms['5000'] * 5000) +
-      (newDenoms['2000'] * 2000) +
-      (newDenoms['1000'] * 1000) +
-      (newDenoms['500'] * 500) +
-      newDenoms['monnaie'];
+      (Number(newDenoms['10000'] || 0) * 10000) +
+      (Number(newDenoms['5000'] || 0) * 5000) +
+      (Number(newDenoms['2000'] || 0) * 2000) +
+      (Number(newDenoms['1000'] || 0) * 1000) +
+      (Number(newDenoms['500'] || 0) * 500) +
+      (Number(newDenoms['250'] || 0) * 250) +
+      (Number(newDenoms['200'] || 0) * 200) +
+      (Number(newDenoms['100'] || 0) * 100) +
+      (Number(newDenoms['50'] || 0) * 50) +
+      (Number(newDenoms['25'] || 0) * 25) +
+      (Number(newDenoms['10'] || 0) * 10) +
+      (Number(newDenoms['5'] || 0) * 5) +
+      Number(newDenoms['monnaie'] || 0);
     return total;
   };
 
@@ -67,7 +81,7 @@ const VaultAndBank: React.FC = () => {
           .filter((u: any) => u.role === 'caissier' && u.caisse)
           .map((u: any) => u.caisse.toUpperCase());
         
-        const allCaisses = ['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2'];
+        const allCaisses = ['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'];
         setCaisses(allCaisses);
         if (!allCaisses.includes(selectedCaisse.toUpperCase())) {
           setSelectedCaisse(allCaisses[0]);
@@ -175,6 +189,7 @@ const VaultAndBank: React.FC = () => {
           observedAmount: observed,
           gapAmount: gap,
           status: 'En attente',
+          caisse: selectedCaisse,
           observation: observation,
           userId: responsibleUserId
         };
@@ -188,6 +203,7 @@ const VaultAndBank: React.FC = () => {
     localStorage.setItem('microfox_bank_balance', newBank.toString());
     localStorage.setItem(cashKey, cashBalance.toString());
 
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     const newTx = {
       id: Date.now().toString(),
       type: typeLabel,
@@ -195,7 +211,9 @@ const VaultAndBank: React.FC = () => {
       to,
       amount: val,
       denominations: { ...denominations },
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      userId: currentUser?.id,
+      cashierName: currentUser?.identifiant
     };
 
     const updatedTxs = [newTx, ...transactions];
@@ -213,6 +231,13 @@ const VaultAndBank: React.FC = () => {
       '2000': 0,
       '1000': 0,
       '500': 0,
+      '250': 0,
+      '200': 0,
+      '100': 0,
+      '50': 0,
+      '25': 0,
+      '10': 0,
+      '5': 0,
       'monnaie': 0
     });
     window.dispatchEvent(new Event('storage'));
@@ -238,6 +263,13 @@ const VaultAndBank: React.FC = () => {
       '2000': 0,
       '1000': 0,
       '500': 0,
+      '250': 0,
+      '200': 0,
+      '100': 0,
+      '50': 0,
+      '25': 0,
+      '10': 0,
+      '5': 0,
       'monnaie': 0
     });
     setDestination(defaultDest || 'Coffre');
@@ -400,8 +432,8 @@ const VaultAndBank: React.FC = () => {
 
       {/* Modal Historique Billetage */}
       {selectedTxForBilletage && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200 my-8">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -421,7 +453,7 @@ const VaultAndBank: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-y-auto max-h-[60vh] custom-scrollbar">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-100/50 border-b border-gray-100">
@@ -431,7 +463,7 @@ const VaultAndBank: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {[10000, 5000, 2000, 1000, 500].map((denom) => (
+                    {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map((denom) => (
                       <tr key={denom}>
                         <td className="px-4 py-2 font-bold text-gray-600">{denom.toLocaleString()} F</td>
                         <td className="px-4 py-2 text-center font-black text-[#121c32]">
@@ -512,7 +544,7 @@ const VaultAndBank: React.FC = () => {
                       onChange={(e) => setSelectedCaisse(e.target.value)}
                       className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-black text-[#121c32] focus:border-indigo-500 transition-all appearance-none uppercase tracking-tight"
                     >
-                      {caisses.filter(c => modalType === 'CtoV' ? c === 'CAISSE PRINCIPALE' : (c === 'CAISSE 1' || c === 'CAISSE 2')).map(c => {
+                      {caisses.filter(c => modalType === 'CtoV' ? c === 'CAISSE PRINCIPALE' : (c === 'CAISSE 1' || c === 'CAISSE 2' || c === 'CAISSE 3' || c === 'CAISSE 4')).map(c => {
                         const saved = localStorage.getItem(`microfox_cash_balance_${c}`);
                         const bal = saved !== null ? Number(saved) : (c === 'CAISSE PRINCIPALE' ? 5000000 : 0);
                         return <option key={c} value={c}>{c} ({bal.toLocaleString()} F)</option>;
@@ -550,7 +582,7 @@ const VaultAndBank: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Détails du Billetage</label>
-                <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <div className="border border-gray-100 rounded-2xl overflow-y-auto max-h-[400px] custom-scrollbar">
                   <table className="w-full text-[10px]">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
@@ -560,21 +592,21 @@ const VaultAndBank: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {[10000, 5000, 2000, 1000, 500].map((denom) => (
+                      {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map((denom) => (
                         <tr key={denom}>
                           <td className="px-2 py-1 font-bold text-gray-600">{denom.toLocaleString()}</td>
                           <td className="px-2 py-1">
                             <input 
                               type="number" 
                               min="0"
-                              value={denominations[denom.toString() as keyof typeof denominations] || ''}
+                              value={denominations[denom.toString()] || ''}
                               onChange={(e) => handleDenominationChange(denom.toString(), e.target.value)}
                               className="w-full bg-gray-50 border border-gray-100 rounded-lg px-2 py-0.5 text-center font-black text-[#121c32] outline-none focus:border-indigo-500"
                               placeholder="0"
                             />
                           </td>
                           <td className="px-2 py-1 text-right font-black text-gray-400">
-                            {((denominations[denom.toString() as keyof typeof denominations] || 0) * denom).toLocaleString()}
+                            {((denominations[denom.toString()] || 0) * denom).toLocaleString()}
                           </td>
                         </tr>
                       ))}

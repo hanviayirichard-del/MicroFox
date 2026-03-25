@@ -106,7 +106,7 @@ const OperationForm: React.FC<{
   const [selectedValidatedIds, setSelectedValidatedIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (type === 'retrait' && account === 'tontine') {
+    if ((type === 'retrait' || type === 'transfert') && account === 'tontine') {
       const saved = localStorage.getItem('microfox_validated_withdrawals');
       if (saved) {
         const list = JSON.parse(saved);
@@ -152,7 +152,8 @@ const OperationForm: React.FC<{
         .filter(r => newIds.includes(r.id))
         .map(r => r.reason)
         .join(', ');
-      setSearchDescription(`Retrait ${account.charAt(0).toUpperCase() + account.slice(1)} Validé (${newIds.length}) - Motifs: ${reasons}`);
+      const actionLabel = type === 'transfert' ? 'Transfert' : 'Retrait';
+      setSearchDescription(`${actionLabel} ${account.charAt(0).toUpperCase() + account.slice(1)} Validé (${newIds.length}) - Motifs: ${reasons}`);
     } else {
       setSearchDescription('');
     }
@@ -175,6 +176,11 @@ const OperationForm: React.FC<{
 
     if ((account === 'tontine' || (type === 'transfert' && account === 'tontine')) && isTontineBlocked && selectedValidatedIds.length === 0) {
       alert("Opération impossible : Le compte tontine est bloqué.");
+      return;
+    }
+
+    if (type === 'depot' && account === 'tontine' && currentUser?.role === 'caissier') {
+      alert("Opération impossible : Le caissier n'est pas autorisé à effectuer des dépôts tontine.");
       return;
     }
 
@@ -334,12 +340,27 @@ const OperationForm: React.FC<{
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Compte Destination</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {account === 'tontine' || account === 'garantie' ? (
+                  {account === 'garantie' ? (
                     <button 
                       className="col-span-3 py-3 rounded-2xl font-black text-[10px] uppercase bg-white text-[#121c32] shadow-lg"
                     >
                       Épargne
                     </button>
+                  ) : account === 'tontine' ? (
+                    <>
+                      <button 
+                        onClick={() => setTransferDest('epargne')}
+                        className={`py-3 rounded-2xl font-black text-[10px] uppercase transition-all ${transferDest === 'epargne' ? 'bg-white text-[#121c32] shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
+                      >
+                        Épargne
+                      </button>
+                      <button 
+                        onClick={() => setTransferDest('garantie')}
+                        className={`py-3 rounded-2xl font-black text-[10px] uppercase transition-all ${transferDest === 'garantie' ? 'bg-white text-[#121c32] shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
+                      >
+                        Garantie
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button 
@@ -453,7 +474,7 @@ const OperationForm: React.FC<{
                 >
                   P. Sociale
                 </button>
-                {(type === 'retrait' || type === 'depot') && (
+                {(type === 'retrait' || (type === 'depot' && currentUser?.role !== 'caissier')) && (
                   <button 
                     onClick={() => setAccount('tontine')}
                     className={`py-3 rounded-2xl font-black text-[10px] uppercase transition-all ${account === 'tontine' ? 'bg-white text-[#121c32] shadow-lg' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
@@ -465,7 +486,7 @@ const OperationForm: React.FC<{
             </div>
           )}
 
-          {(type === 'retrait' && account === 'tontine' && validatedRequests.length > 0) && (
+          {((type === 'retrait' || type === 'transfert') && account === 'tontine' && validatedRequests.length > 0) && (
             <div className="space-y-3 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
               <label className="text-[11px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
                 <ClipboardCheck size={14} /> Demandes validées
@@ -540,8 +561,8 @@ const OperationForm: React.FC<{
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
-                readOnly={type === 'retrait' && account === 'tontine'}
-                disabled={((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) || isEpargneBlocked || isTontineBlocked}
+                readOnly={(type === 'retrait' || type === 'transfert') && account === 'tontine'}
+                disabled={((type === 'retrait' || type === 'retrait_garantie' || type === 'transfert') && account === 'tontine' && selectedValidatedIds.length === 0 && validatedRequests.length > 0) || isEpargneBlocked || isTontineBlocked}
                 className={`w-full p-6 bg-gray-50 border-2 border-transparent focus:border-emerald-500 rounded-2xl text-3xl font-black outline-none transition-all text-center ${((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) || isEpargneBlocked || isTontineBlocked ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-black'}`}
               />
               {(isEpargneBlocked || isTontineBlocked) && (
@@ -549,7 +570,7 @@ const OperationForm: React.FC<{
                   <Lock size={12} /> Compte bloqué
                 </p>
               )}
-              {type === 'retrait' && account === 'tontine' && selectedValidatedIds.length === 0 && (
+              {((type === 'retrait' || type === 'transfert') && account === 'tontine' && selectedValidatedIds.length === 0 && validatedRequests.length > 0) && (
                 <p className="text-[9px] font-black text-red-500 uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
                   <ShieldAlert size={12} /> Sélectionner une ou plusieurs demandes validées obligatoire
                 </p>
@@ -827,7 +848,8 @@ const RegistrationForm: React.FC<{
           amount: partSocialePayee,
           date: new Date().toISOString(),
           description: 'Paiement part sociale à l\'adhésion',
-          userId: currentUser?.id
+          userId: currentUser?.id,
+          cashierName: currentUser?.identifiant
         });
       }
       if (fraisAdhesion > 0) {
@@ -838,7 +860,8 @@ const RegistrationForm: React.FC<{
           amount: fraisAdhesion,
           date: new Date().toISOString(),
           description: 'Frais d\'adhésion',
-          userId: currentUser?.id
+          userId: currentUser?.id,
+          cashierName: currentUser?.identifiant
         });
       }
       if (fraisLivret > 0) {
@@ -849,7 +872,8 @@ const RegistrationForm: React.FC<{
           amount: fraisLivret,
           date: new Date().toISOString(),
           description: `Vente de Livret Épargne - Agent ${currentUser?.identifiant || 'Système'}`,
-          userId: currentUser?.id
+          userId: currentUser?.id,
+          cashierName: currentUser?.identifiant
         });
       }
       if (depotInitialEpargne > 0) {
@@ -860,7 +884,8 @@ const RegistrationForm: React.FC<{
           amount: depotInitialEpargne,
           date: new Date().toISOString(),
           description: 'Dépôt initial épargne',
-          userId: currentUser?.id
+          userId: currentUser?.id,
+          cashierName: currentUser?.identifiant
         });
       }
     }
@@ -1870,6 +1895,8 @@ const Members: React.FC = () => {
   }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedZone, setSelectedZone] = useState<string>('all');
+  const [showActiveOnly, setShowActiveOnly] = useState<boolean>(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>('1');
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const [isHeaderVisible, setIsHeaderVisible] = useState<boolean>(true);
@@ -1913,6 +1940,12 @@ const Members: React.FC = () => {
     if (user) setCurrentUser(JSON.parse(user));
   }, []);
 
+  useEffect(() => {
+    if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
+      setSelectedZone(currentUser.zoneCollecte);
+    }
+  }, [currentUser]);
+
   const cyclesListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1936,6 +1969,21 @@ const Members: React.FC = () => {
     // Restriction pour les agents commerciaux
     if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
       if (c.zone !== currentUser.zoneCollecte) return false;
+    }
+
+    // Filtre par zone
+    if (selectedZone !== 'all' && c.zone !== selectedZone) return false;
+
+    // Filtre par clients actifs (au moins une opération ce mois-ci)
+    if (showActiveOnly) {
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      const hasRecentOp = c.history.some(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+      });
+      if (!hasRecentOp) return false;
     }
 
     const isEpargneVisible = !c.isEpargneInvisible || currentUser?.role === 'administrateur';
@@ -2277,7 +2325,7 @@ const Members: React.FC = () => {
     localStorage.setItem(`microfox_history_${newClient.id}`, JSON.stringify(newClient.history));
 
     // Mise à jour du solde de la caisse ou de l'agent
-    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
     const totalInflow = newClient.history.reduce((sum, tx) => sum + tx.amount, 0);
     if (totalInflow > 0) {
       if (targetCaisse) {
@@ -2358,7 +2406,8 @@ const Members: React.FC = () => {
             amount: info.partSociale,
             date: now,
             description: 'Ouverture compte: Part sociale',
-            userId: currentUser?.id
+            userId: currentUser?.id,
+            cashierName: currentUser?.identifiant
           });
         }
         if (info.adhesion > 0) {
@@ -2369,7 +2418,8 @@ const Members: React.FC = () => {
             amount: info.adhesion,
             date: now,
             description: 'Ouverture compte: Frais d\'adhésion',
-            userId: currentUser?.id
+            userId: currentUser?.id,
+            cashierName: currentUser?.identifiant
           });
         }
         if (info.livret > 0) {
@@ -2380,7 +2430,8 @@ const Members: React.FC = () => {
             amount: info.livret,
             date: now,
             description: `Vente de Livret Épargne - Agent ${currentUser?.identifiant || 'Système'}`,
-            userId: currentUser?.id
+            userId: currentUser?.id,
+            cashierName: currentUser?.identifiant
           });
         }
         if (info.depot > 0) {
@@ -2391,7 +2442,8 @@ const Members: React.FC = () => {
             amount: info.depot,
             date: now,
             description: 'Ouverture compte: Dépôt initial',
-            userId: currentUser?.id
+            userId: currentUser?.id,
+            cashierName: currentUser?.identifiant
           });
         }
 
@@ -2413,7 +2465,7 @@ const Members: React.FC = () => {
     localStorage.setItem('microfox_pending_sync', 'true');
 
     // Mise à jour du solde de la caisse ou de l'agent
-    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
     const totalInflow = info.partSociale + info.adhesion + info.livret + info.depot;
     if (totalInflow > 0) {
       if (targetCaisse) {
@@ -2464,7 +2516,7 @@ const Members: React.FC = () => {
     
     // Vérification du solde de la caisse pour les retraits et déblocages
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
-    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
     
     if (targetCaisse && (op.type === 'retrait' || op.type === 'deblocage')) {
       const cashKey = `microfox_cash_balance_${targetCaisse}`;
@@ -2539,11 +2591,17 @@ const Members: React.FC = () => {
           ? (newTontineAccounts.find(a => a.id === op.tontineAccountId)?.balance || 0)
           : (newBalances[op.account as keyof typeof newBalances] || 0);
 
+        const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+        const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === c.zone);
+        const agentName = agentForZone ? agentForZone.identifiant : (currentUser?.identifiant || 'N/A');
+
         const newTransaction: Transaction = {
           ...op,
           id: Date.now().toString(),
           date: new Date().toISOString(),
           userId: currentUser?.id,
+          cashierName: (op.account === 'tontine' && (op.type === 'depot' || op.type === 'cotisation')) ? agentName : currentUser?.identifiant,
+          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
           balance: balanceAfter,
           balanceBefore: balanceBefore
         };
@@ -2593,7 +2651,7 @@ const Members: React.FC = () => {
       }
 
       // Mise à jour du solde de la caisse ou de l'agent
-      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
       
       let cashDelta = 0;
       if (op.type === 'depot' || op.type === 'remboursement' || op.type === 'cotisation') {
@@ -2682,15 +2740,16 @@ const Members: React.FC = () => {
       return;
     }
 
+    const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
     const data = clients.map(c => ({
       'Code Client': c.code,
       'Nom Complet': c.name,
       'Statut': c.status,
-      'Épargne': c.balances.epargne,
-      'Tontine': c.balances.tontine,
-      'Crédit': c.balances.credit,
-      'Garantie': c.balances.garantie,
-      'Part Sociale': c.balances.partSociale,
+      'Épargne': c.balances.epargne.toLocaleString() + ' F',
+      'Tontine': c.balances.tontine.toLocaleString() + ' F',
+      'Crédit': c.balances.credit.toLocaleString() + ' F',
+      'Garantie': c.balances.garantie.toLocaleString() + ' F',
+      'Part Sociale': c.balances.partSociale.toLocaleString() + ' F',
       'Numéro Épargne': c.epargneAccountNumber || 'N/A',
       'Genre': c.gender || 'N/A',
       'Profession': c.profession || 'N/A',
@@ -2703,18 +2762,29 @@ const Members: React.FC = () => {
       <html lang="fr">
       <head>
         <meta charset="UTF-8">
-        <title>Liste des Membres - MicroFoX</title>
+        <title>Liste des Membres - ${mfConfig.nom}</title>
         <style>
-          body { font-family: sans-serif; padding: 20px; color: #121c32; }
-          h2 { color: #00c896; border-bottom: 2px solid #121c32; padding-bottom: 10px; text-transform: uppercase; }
+          body { font-family: sans-serif; padding: 40px; color: #121c32; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32; }
+          .mf-info { font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0; }
+          .report-title { font-size: 18px; font-weight: 800; margin: 20px 0; text-transform: uppercase; text-align: center; }
+          .period { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 30px; font-weight: bold; }
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #121c32; color: white; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: uppercase; }
-          td { border-bottom: 1px solid #eee; padding: 10px 8px; font-size: 12px; }
+          th { background: #f8fafc; padding: 12px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+          td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; text-align: center; }
           tr:nth-child(even) { background-color: #f9fafb; }
+          .text-right { text-align: center; }
         </style>
       </head>
       <body>
-        <h2>Liste des Membres - MicroFoX</h2>
+        <div class="header">
+          <h1 class="mf-name">${mfConfig.nom}</h1>
+          <p class="mf-info">${mfConfig.adresse}</p>
+          <p class="mf-info">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+        </div>
+        <h2 class="report-title">Liste des Membres</h2>
+        <p class="period">Généré le ${new Date().toLocaleDateString()}</p>
         <table>
           <thead>
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
@@ -2722,7 +2792,7 @@ const Members: React.FC = () => {
           <tbody>
             ${data.map(row => `
               <tr>
-                ${headers.map(h => `<td>${(row as any)[h]}</td>`).join('')}
+                ${headers.map((h, idx) => `<td class="${idx >= 3 && idx <= 7 ? 'text-right' : ''}">${(row as any)[h]}</td>`).join('')}
               </tr>
             `).join('')}
           </tbody>
@@ -2736,7 +2806,7 @@ const Members: React.FC = () => {
     const link = document.createElement("a");
     link.href = url;
     const dateStr = new Date().toLocaleDateString().replace(/[\/\\]/g, '-');
-    link.download = `Liste_Membres_MicroFox_${dateStr}.html`;
+    link.download = `Liste_Membres_${mfConfig.nom}_${dateStr}.html`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2755,37 +2825,71 @@ const Members: React.FC = () => {
             <Plus size={20} /> Nouveau Client
           </button>
 
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input 
-                type="text" 
-                placeholder="Rechercher par nom, tontine..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-4 bg-white/5 border border-white/5 rounded-2xl text-sm font-medium outline-none focus:border-emerald-500 shadow-sm text-white"
-              />
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Rechercher par nom, tontine..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-4 bg-white/5 border border-white/5 rounded-2xl text-sm font-medium outline-none focus:border-emerald-500 shadow-sm text-white"
+                />
+              </div>
+              <button 
+                onClick={exportToHTML}
+                className="p-4 bg-white/5 border border-white/5 rounded-2xl text-gray-500 hover:text-emerald-400 hover:border-emerald-500/30 transition-all shadow-sm"
+                title="Exporter en HTML"
+              >
+                <Download size={20} />
+              </button>
             </div>
-            <button 
-              onClick={exportToHTML}
-              className="p-4 bg-white/5 border border-white/5 rounded-2xl text-gray-500 hover:text-emerald-400 hover:border-emerald-500/30 transition-all shadow-sm"
-              title="Exporter en HTML"
-            >
-              <Download size={20} />
-            </button>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar no-scrollbar">
+              <select 
+                value={selectedZone}
+                onChange={(e) => setSelectedZone(e.target.value)}
+                disabled={currentUser?.role === 'agent commercial'}
+                className="bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 outline-none focus:border-emerald-500/50 disabled:opacity-50"
+              >
+                {currentUser?.role === 'agent commercial' ? (
+                  <option value={currentUser.zoneCollecte} className="bg-[#0a1226]">Zone {currentUser.zoneCollecte}</option>
+                ) : (
+                  <>
+                    <option value="all" className="bg-[#0a1226]">Toutes Zones</option>
+                    {['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'].map(z => (
+                      <option key={z} value={z} className="bg-[#0a1226]">Zone {z}</option>
+                    ))}
+                  </>
+                )}
+              </select>
+
+              <button 
+                onClick={() => setShowActiveOnly(!showActiveOnly)}
+                className={`whitespace-nowrap px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${showActiveOnly ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/5 text-gray-500'}`}
+              >
+                Actifs ce mois
+              </button>
+
+              <div className="ml-auto shrink-0 bg-white/5 px-3 py-2 rounded-xl border border-white/5">
+                <span className="text-[10px] font-black text-emerald-500">{filteredClients.length}</span>
+                <span className="text-[10px] font-black text-gray-500 ml-1 uppercase tracking-widest">Clients</span>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 min-h-0">
           {filteredClients.length > 0 ? (
             filteredClients.map(client => (
-              <button
+              <div
                 key={client.id}
                 onClick={() => {
                   setSelectedClientId(client.id);
                   if (window.innerWidth < 1024) setIsSidebarCollapsed(true);
                 }}
-                className={`w-full p-4 rounded-2xl flex items-center gap-3 transition-all border relative ${selectedClientId === client.id ? 'bg-emerald-600 text-white shadow-lg border-emerald-500' : 'bg-white/5 text-gray-400 hover:bg-white/10 border-white/5 shadow-sm'}`}
+                className={`w-full p-4 rounded-2xl flex items-center gap-3 transition-all border relative cursor-pointer ${selectedClientId === client.id ? 'bg-emerald-600 text-white shadow-lg border-emerald-500' : 'bg-white/5 text-gray-400 hover:bg-white/10 border-white/5 shadow-sm'}`}
               >
                 {client.balances.credit > 0 && (() => {
                   const dueDateStr = (client as any).lastCreditRequest?.dueDate || (client as any).lastCreditDetails?.dueDate;
@@ -2860,7 +2964,7 @@ const Members: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </button>
+              </div>
             ))
           ) : (
             <div className="text-center py-8 text-gray-600 italic text-sm">
@@ -3154,11 +3258,11 @@ const Members: React.FC = () => {
                         selectedClient.history.slice(0, 5).map((tx) => (
                           <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-[2rem] border border-white/5 hover:bg-white/10 transition-all group relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-1 h-full transition-all group-hover:w-1.5" style={{ backgroundColor: tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? '#10b981' : (tx.type === 'remboursement' ? '#a855f7' : '#ef4444') }} />
-                            <div className="flex items-center gap-5">
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? 'bg-emerald-500/10 text-emerald-400' : (tx.type === 'remboursement' ? 'bg-purple-500/10 text-purple-400' : 'bg-red-500/10 text-red-400')}`}>
+                            <div className="flex items-center gap-5 flex-1 min-w-0">
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shrink-0 ${tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? 'bg-emerald-500/10 text-emerald-400' : (tx.type === 'remboursement' ? 'bg-purple-500/10 text-purple-400' : 'bg-red-500/10 text-red-400')}`}>
                                 {tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? <ArrowDownLeft size={22} /> : <ArrowUpRight size={22} />}
                               </div>
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-sm font-black text-white uppercase tracking-tight">{tx.description}</p>
                                 <div className="flex items-center gap-2 mt-1">
                                   <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()}</p>
@@ -3167,7 +3271,7 @@ const Members: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0 ml-4">
                               <p className={`text-base font-black ${tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? 'text-emerald-400' : (tx.type === 'remboursement' ? 'text-purple-400' : 'text-red-400')}`}>
                                 {tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? '+' : '-'}{tx.amount.toLocaleString()} F
                               </p>
@@ -3219,16 +3323,16 @@ const Members: React.FC = () => {
                           const isIncoming = tx.destinationAccount === 'epargne' || tx.type === 'depot';
                           return (
                             <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                              <div className="flex items-center gap-4 flex-1 min-w-0">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                   {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <p className="text-sm font-black text-white uppercase">{tx.description}</p>
                                   <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right shrink-0 ml-4">
                                 <p className={`text-base font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
                                 </p>
@@ -3327,16 +3431,19 @@ const Members: React.FC = () => {
                             const isIncoming = tx.type === 'depot' || tx.type === 'cotisation';
                             return (
                               <div key={tx.id} className="bg-[#121c32] p-4 rounded-2xl border border-white/5 shadow-sm flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                     {isIncoming ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                                   </div>
-                                  <div>
-                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
                                     <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                   </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-0.5">
+                                <div className="flex flex-col items-end gap-0.5 shrink-0 ml-4">
+                                  <p className={`text-sm font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                  </p>
                                   <p className="text-[9px] font-bold text-gray-600 uppercase">Avant: {tx.balanceBefore?.toLocaleString() || '---'} F</p>
                                   <p className="text-[9px] font-black text-blue-400 uppercase">Solde: {tx.balance?.toLocaleString() || '---'} F</p>
                                 </div>
@@ -3548,16 +3655,16 @@ const Members: React.FC = () => {
                       {selectedClient.history.filter(tx => tx.account === 'credit').length > 0 ? (
                         selectedClient.history.filter(tx => tx.account === 'credit').map((tx) => (
                           <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${tx.type === 'remboursement' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${tx.type === 'remboursement' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                 {tx.type === 'remboursement' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                               </div>
-                              <div>
-                                <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
                                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                               </div>
                             </div>
-                            <p className={`text-base font-black ${tx.type === 'remboursement' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            <p className={`text-base font-black shrink-0 ml-4 ${tx.type === 'remboursement' ? 'text-emerald-400' : 'text-red-400'}`}>
                               {tx.type === 'remboursement' ? '-' : '+'}{tx.amount.toLocaleString()} F
                             </p>
                           </div>
@@ -3598,16 +3705,16 @@ const Members: React.FC = () => {
                           const isIncoming = tx.destinationAccount === 'garantie' || tx.type === 'depot';
                           return (
                             <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                              <div className="flex items-center gap-4 flex-1 min-w-0">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
                                   {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                                 </div>
-                                <div>
-                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
                                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
                               </div>
-                              <p className={`text-base font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
+                              <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
                               </p>
                             </div>
@@ -3654,16 +3761,16 @@ const Members: React.FC = () => {
                           const isIncoming = tx.destinationAccount === 'partSociale' || tx.type === 'depot';
                           return (
                             <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400'}`}>
+                              <div className="flex items-center gap-4 flex-1 min-w-0">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400'}`}>
                                   {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                                 </div>
-                                <div>
-                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
                                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
                               </div>
-                              <p className={`text-base font-black ${isIncoming ? 'text-emerald-400' : 'text-pink-400'}`}>
+                              <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-pink-400'}`}>
                                 {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
                               </p>
                             </div>

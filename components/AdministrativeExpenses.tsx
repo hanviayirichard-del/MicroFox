@@ -72,7 +72,7 @@ const AdministrativeExpenses: React.FC = () => {
 
     try {
       const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
-      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
       
       if (targetCaisse) {
         const cashKey = `microfox_cash_balance_${targetCaisse}`;

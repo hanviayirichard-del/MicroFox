@@ -15,6 +15,7 @@ const DailyTontine: React.FC = () => {
   const [cotisationAmounts, setCotisationAmounts] = useState<{[key: string]: string}>({});
   const [complementAmounts, setComplementAmounts] = useState<{[key: string]: string}>({});
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   useEffect(() => {
     const user = localStorage.getItem('microfox_current_user');
@@ -59,10 +60,10 @@ const DailyTontine: React.FC = () => {
         const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
         
         const tontineDeposits = clientHistory
-          .filter((h: any) => h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot' || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && !h.description?.toLowerCase().includes('livret'))
+          .filter((h: any) => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && !h.description?.toLowerCase().includes('livret'))
           .reduce((sum: number, h: any) => sum + h.amount, 0);
         const tontineWithdrawals = clientHistory
-          .filter((h: any) => h.account === 'tontine' && (h.type === 'retrait' || (h.type === 'transfert' && h.account === 'tontine')))
+          .filter((h: any) => (h.account === 'tontine' && (h.type === 'retrait' || h.type === 'transfert')))
           .reduce((sum: number, h: any) => sum + h.amount, 0);
         
         const grossBalance = Math.max(0, tontineDeposits - tontineWithdrawals);
@@ -80,12 +81,13 @@ const DailyTontine: React.FC = () => {
 
         // Calcul de la commission pour déterminer le solde disponible
         let totalCommission = 0;
+        let totalCommissionsPaid = 0;
         if (hasTontine && grossBalance > 0) {
           const acc = m.tontineAccounts[0];
           const dailyMise = Number(acc.dailyMise) || 500;
 
           const accountHistory = clientHistory
-            .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
+            .filter((h: any) => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (h.tontineAccountId === acc.id || !h.tontineAccountId) && !h.description?.toLowerCase().includes('livret'))
             .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
           const accountWithdrawals = [
@@ -104,6 +106,7 @@ const DailyTontine: React.FC = () => {
             let currentCycleAmount = 0;
             let totalDecaissable = 0;
             let cycleIdx = 1;
+            totalCommissionsPaid = 0;
 
             const accountWithdrawalsAmount = accountWithdrawals.reduce((sum: number, h: any) => sum + h.amount, 0);
             let remainingWithdrawals = accountWithdrawalsAmount;
@@ -125,6 +128,7 @@ const DailyTontine: React.FC = () => {
 
                 if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
                   const comm = currentCycleAmount > 0 ? dailyMise : 0;
+                  totalCommissionsPaid += comm;
                   const netCycleAmount = Math.max(0, currentCycleAmount - comm);
                   
                   let isRetire = false;
@@ -143,9 +147,16 @@ const DailyTontine: React.FC = () => {
                     }
                   }
 
-                  if (!isRetire) totalDecaissable += netCycleAmount;
-                  
-                  currentCycleFirstDepositDate = txDate;
+            if (!isRetire) {
+              totalDecaissable += netCycleAmount;
+            } else {
+              // If retired, the commission is still "consumed" from the gross balance
+              // but we don't add the net amount to decaissable.
+              // We also don't need to subtract anything from remainingWithdrawals here
+              // because isRetire logic already handles it or it's handled by the final subtraction.
+            }
+            
+            currentCycleFirstDepositDate = txDate;
                   currentCycleCases = 0;
                   currentCycleAmount = 0;
                   cycleIdx++;
@@ -163,6 +174,7 @@ const DailyTontine: React.FC = () => {
                   remainingAmount -= amountUsed;
                   
                   const comm = currentCycleAmount > 0 ? dailyMise : 0;
+                  totalCommissionsPaid += comm;
                   const netCycleAmount = Math.max(0, currentCycleAmount - comm);
                   
                   let isRetire = false;
@@ -181,7 +193,9 @@ const DailyTontine: React.FC = () => {
                     }
                   }
 
-                  if (!isRetire) totalDecaissable += netCycleAmount;
+                  if (!isRetire) {
+                    totalDecaissable += netCycleAmount;
+                  }
                   
                   currentCycleFirstDepositDate = null;
                   currentCycleCases = 0;
@@ -196,6 +210,7 @@ const DailyTontine: React.FC = () => {
             }
             if (currentCycleFirstDepositDate) {
               const comm = currentCycleAmount > 0 ? Math.min(currentCycleAmount, dailyMise) : 0;
+              totalCommissionsPaid += comm;
               const netCycleAmount = Math.max(0, currentCycleAmount - comm);
               
               let isRetire = false;
@@ -209,10 +224,13 @@ const DailyTontine: React.FC = () => {
                 const hasFutureWithdrawal = accountWithdrawals.some((w: any) => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate!);
                 if (hasFutureWithdrawal) {
                   isRetire = true;
+                  remainingWithdrawals -= netCycleAmount;
                 }
               }
 
-              if (!isRetire) totalDecaissable += netCycleAmount;
+              if (!isRetire) {
+                totalDecaissable += netCycleAmount;
+              }
 
               // Restoring canChangeMise logic
               const now = new Date();
@@ -225,7 +243,7 @@ const DailyTontine: React.FC = () => {
                 canChangeMise = false;
               }
             }
-            totalCommission = Math.max(0, totalDecaissable); 
+            totalCommission = Math.max(0, totalDecaissable - remainingWithdrawals);
           }
         }
 
@@ -235,8 +253,8 @@ const DailyTontine: React.FC = () => {
           code: m.code,
           accountNumber: hasTontine ? m.tontineAccounts[0].number : 'SANS COMPTE',
           dailyMise: hasTontine ? m.tontineAccounts[0].dailyMise : 0,
-          tontineBalance: grossBalance,
-          availableBalance: totalCommission, // This is now the sum of decaissable
+          tontineBalance: Math.max(0, grossBalance - totalCommissionsPaid),
+          availableBalance: Math.max(0, grossBalance - totalCommissionsPaid), // This is now the sum of decaissable
           cotiseJour: sessionCotise,
           canChangeMise,
           zone: m.zone
@@ -355,6 +373,10 @@ const DailyTontine: React.FC = () => {
     const savedMembers = localStorage.getItem('microfox_members_data');
     if (savedMembers) {
       const allMembers = JSON.parse(savedMembers);
+      const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+      const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === client.zone);
+      const agentNameForZone = agentForZone ? agentForZone.identifiant : (currentUser?.identifiant || 'N/A');
+
       const updatedMembers = allMembers.map((m: any) => {
         if (m.id === client.id) {
           const newTx = {
@@ -365,7 +387,9 @@ const DailyTontine: React.FC = () => {
             amount: amount,
             date: new Date().toISOString(),
             description: description,
-            userId: currentUser?.id
+            userId: currentUser?.id,
+            cashierName: agentNameForZone,
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
           };
 
           const updatedTontineAccounts = m.tontineAccounts.map((ta: any) => {
@@ -399,13 +423,15 @@ const DailyTontine: React.FC = () => {
         amount: amount,
         date: new Date().toISOString(),
         description: description,
-        userId: currentUser?.id
+        userId: currentUser?.id,
+        cashierName: agentNameForZone,
+        caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
       };
       localStorage.setItem(historyKey, JSON.stringify([newTx, ...history]));
       localStorage.setItem('microfox_pending_sync', 'true');
 
       // 3. Mise à jour des soldes (Caisse ou Agent)
-      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
       if (targetCaisse) {
         const cashKey = `microfox_cash_balance_${targetCaisse}`;
         const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
@@ -434,7 +460,8 @@ const DailyTontine: React.FC = () => {
     }
 
     return c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           c.code.toLowerCase().includes(searchTerm.toLowerCase());
+           c.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           c.accountNumber.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const today = new Date().toLocaleDateString('fr-FR', {
@@ -502,7 +529,7 @@ const DailyTontine: React.FC = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
           <input 
             type="text" 
-            placeholder="Rechercher par nom ou code..." 
+            placeholder="Rechercher par nom, code ou numéro tontine..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-4 bg-[#0a1226] text-white rounded-2xl font-medium outline-none placeholder:text-gray-600 border border-gray-800 focus:border-emerald-500 transition-all"
@@ -529,7 +556,11 @@ const DailyTontine: React.FC = () => {
             <tbody>
               {filteredClients.length > 0 ? (
                 filteredClients.map((client: any) => (
-                  <tr key={client.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors">
+                  <tr 
+                    key={client.id} 
+                    onClick={() => setSelectedClientId(client.id)}
+                    className={`border-b border-gray-800/50 hover:bg-white/5 transition-colors cursor-pointer ${selectedClientId === client.id ? 'bg-[#00c896]/20 border-l-4 border-l-[#00c896]' : ''}`}
+                  >
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-[#00c896] flex items-center justify-center text-white font-black text-xs shrink-0">
@@ -601,13 +632,18 @@ const DailyTontine: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <button 
-                        type="button"
-                        onClick={() => handleEncaisser(client)}
-                        className="bg-[#00c896] text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight shadow-md active:scale-95 transition-all whitespace-nowrap"
-                      >
-                        Encaisser
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button 
+                          type="button"
+                          onClick={() => handleEncaisser(client)}
+                          className="bg-[#00c896] text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight shadow-md active:scale-95 transition-all whitespace-nowrap"
+                        >
+                          Encaisser
+                        </button>
+                        {selectedClientId === client.id && (
+                          <CheckCircle size={20} className="text-[#00c896] shrink-0 animate-in zoom-in duration-300" />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

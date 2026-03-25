@@ -30,6 +30,8 @@ const TontineVerification: React.FC = () => {
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
   const [errorModal, setErrorModal] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = []) => {
     if (dailyMise <= 0) dailyMise = 500;
@@ -442,6 +444,7 @@ const TontineVerification: React.FC = () => {
 
     const validatedRequest = {
       ...request,
+      tontineAccountNumber: tontineNumber,
       amount: finalAmount,
       originalAmount: request.amount,
       status: 'Validé',
@@ -470,6 +473,7 @@ const TontineVerification: React.FC = () => {
       const zoneAgent = allUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === clientZone);
       const responsibleUserId = zoneAgent?.id || request.userId;
 
+      const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
       const newGapEntry = {
         id: `gap_${Date.now()}`,
         date: new Date().toISOString(),
@@ -478,6 +482,7 @@ const TontineVerification: React.FC = () => {
         sourceName: request.clientName,
         sourceCode: tontineNumber,
         userId: responsibleUserId,
+        caisse: zoneAgent?.caisse || currentUser?.caisse,
         declaredAmount: referenceAmount,
         observedAmount: observed ? livretAmount : (disburse ? finalAmount : referenceAmount),
         disbursedAmount: finalAmount,
@@ -485,7 +490,7 @@ const TontineVerification: React.FC = () => {
         status: 'En attente',
         zone: clientZone,
         observation: `Détails: Décaissé=${finalAmount}F, Livret=${livretAmount}F | Raison: ${report}`,
-        validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id
+        validatorId: currentUser.id
       };
       localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
     }
@@ -798,39 +803,91 @@ const TontineVerification: React.FC = () => {
                               <div className="space-y-4">
                                 <div className="flex items-center gap-2 mb-2">
                                   <LayoutGrid size={18} className="text-[#00c896]" />
-                                  <h4 className="text-xs font-black text-[#121c32] uppercase tracking-widest">Grille des cases (Cycle en cours)</h4>
+                                  <h4 className="text-xs font-black text-[#121c32] uppercase tracking-widest">Grille des cases</h4>
                                 </div>
                                 
                                 {tontineStats ? (
-                                  <div className="space-y-4 max-w-sm">
-                                    <div className="grid grid-cols-7 gap-1 lg:gap-1.5">
-                                      {Array.from({ length: 31 }).map((_, i) => {
-                                        const caseNum = i + 1;
-                                        const isPaid = caseNum <= tontineStats.currentCycleCases;
-                                        const isCommission = caseNum === 1;
-                                        const isEmptyCycle = tontineStats.currentCycleCases === 0;
-                                        const isCurrentCycleRetire = tontineStats.cycleDetails[tontineStats.cycleDetails.length - 1]?.isRetire;
+                                  <div className="space-y-6 max-w-sm">
+                                    {(() => {
+                                      const requestedCycles = request.reason?.includes('Cycles:') 
+                                        ? request.reason.split('Cycles:')[1].split(',').map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n))
+                                        : [];
+                                      
+                                      if (requestedCycles.length > 0) {
+                                        return requestedCycles.map((cycleIdx: number) => {
+                                          const cycleData = tontineStats.cycleDetails.find((c: any) => c.index === cycleIdx);
+                                          if (!cycleData) return null;
+                                          return (
+                                            <div key={cycleIdx} className="space-y-2 pb-4 border-b border-gray-50 last:border-0">
+                                              <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-black text-[#121c32] uppercase">Cycle {cycleIdx}</span>
+                                                <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 uppercase">
+                                                  {cycleData.period}
+                                                </span>
+                                              </div>
+                                              <div className="grid grid-cols-7 gap-1 lg:gap-1.5">
+                                                {Array.from({ length: 31 }).map((_, i) => {
+                                                  const caseNum = i + 1;
+                                                  const isPaid = i < cycleData.dates.length;
+                                                  const isCommission = caseNum === 1;
+                                                  return (
+                                                    <div 
+                                                      key={i} 
+                                                      className={`aspect-square rounded-lg flex items-center justify-center text-[8px] lg:text-[9px] font-black transition-all border
+                                                        ${isPaid 
+                                                          ? (isCommission ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm' : 'bg-[#00c896] border-[#00c896] text-white shadow-sm') 
+                                                          : isCommission 
+                                                            ? 'bg-amber-50 border-amber-200 text-amber-500' 
+                                                            : 'bg-white border-gray-100 text-gray-500'
+                                                        }
+                                                      `}
+                                                    >
+                                                      {isPaid ? cycleData.dates[i] : (isCommission ? 'COM' : caseNum)}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          );
+                                        });
+                                      }
 
-                                        return (
-                                          <div 
-                                            key={i} 
-                                            className={`aspect-square rounded-lg flex items-center justify-center text-[8px] lg:text-[9px] font-black transition-all border
-                                              ${isPaid 
-                                                ? (isCommission ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm' : 'bg-[#00c896] border-[#00c896] text-white shadow-sm') 
-                                                : isCommission 
-                                                  ? (isEmptyCycle ? 'bg-amber-400 border-amber-500 text-white animate-pulse' : 'bg-amber-50 border-amber-200 text-amber-500') 
-                                                  : 'bg-white border-gray-100 text-gray-500'
-                                              }
-                                            `}
-                                          >
-                                            {isPaid 
-                                              ? tontineStats.currentCycleDates[i] 
-                                              : (isCurrentCycleRetire ? '' : (isCommission ? 'COM' : caseNum))
-                                            }
+                                      return (
+                                        <div className="space-y-4">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-black text-[#121c32] uppercase">Cycle {tontineStats.cycles} (En cours)</span>
                                           </div>
-                                        );
-                                      })}
-                                    </div>
+                                          <div className="grid grid-cols-7 gap-1 lg:gap-1.5">
+                                            {Array.from({ length: 31 }).map((_, i) => {
+                                              const caseNum = i + 1;
+                                              const isPaid = caseNum <= tontineStats.currentCycleCases;
+                                              const isCommission = caseNum === 1;
+                                              const isEmptyCycle = tontineStats.currentCycleCases === 0;
+                                              const isCurrentCycleRetire = tontineStats.cycleDetails[tontineStats.cycleDetails.length - 1]?.isRetire;
+
+                                              return (
+                                                <div 
+                                                  key={i} 
+                                                  className={`aspect-square rounded-lg flex items-center justify-center text-[8px] lg:text-[9px] font-black transition-all border
+                                                    ${isPaid 
+                                                      ? (isCommission ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm' : 'bg-[#00c896] border-[#00c896] text-white shadow-sm') 
+                                                      : isCommission 
+                                                        ? (isEmptyCycle ? 'bg-amber-400 border-amber-500 text-white animate-pulse' : 'bg-amber-50 border-amber-200 text-amber-500') 
+                                                        : 'bg-white border-gray-100 text-gray-500'
+                                                    }
+                                                  `}
+                                                >
+                                                  {isPaid 
+                                                    ? tontineStats.currentCycleDates[i] 
+                                                    : (isCurrentCycleRetire ? '' : (isCommission ? 'COM' : caseNum))
+                                                  }
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
                                       <div className="flex justify-between items-center">
@@ -875,22 +932,47 @@ const TontineVerification: React.FC = () => {
 
       {validatedHistory.length > 0 && (
         <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden mx-4 lg:mx-0">
-          <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+          <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <h3 className="text-xs font-black text-[#121c32] uppercase tracking-widest flex items-center gap-2">
               <History size={16} /> Historique des vérifications
             </h3>
-            <div className="flex items-center gap-2">
-              {validatedHistory.filter(item => item.gap && item.gap > 0).length > 0 && (
-                <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-md text-[10px] font-black flex items-center gap-1">
-                  <ArrowUpRight size={10} />
-                  {validatedHistory.filter(item => item.gap && item.gap > 0).length} ÉCARTS POSITIFS
-                </span>
-              )}
-              <span className="bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-md text-[10px] font-black">{validatedHistory.length}</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="date" 
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="text-[10px] font-black uppercase border border-gray-200 rounded-md px-2 py-1 outline-none focus:border-blue-500 bg-white text-[#121c32]"
+                />
+                <span className="text-[10px] font-black text-gray-400">AU</span>
+                <input 
+                  type="date" 
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="text-[10px] font-black uppercase border border-gray-200 rounded-md px-2 py-1 outline-none focus:border-blue-500 bg-white text-[#121c32]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                {validatedHistory.filter(item => item.gap && item.gap > 0).length > 0 && (
+                  <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-md text-[10px] font-black flex items-center gap-1">
+                    <ArrowUpRight size={10} />
+                    {validatedHistory.filter(item => item.gap && item.gap > 0).length} ÉCARTS POSITIFS
+                  </span>
+                )}
+                <span className="bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-md text-[10px] font-black">{validatedHistory.length}</span>
+              </div>
             </div>
           </div>
           <div className="divide-y divide-gray-50 max-h-[300px] lg:max-h-[400px] overflow-y-auto custom-scrollbar">
-            {validatedHistory.map(item => (
+            {validatedHistory
+              .filter(item => {
+                if (!startDate && !endDate) return true;
+                const itemDate = new Date(item.validationDate).toISOString().split('T')[0];
+                if (startDate && itemDate < startDate) return false;
+                if (endDate && itemDate > endDate) return false;
+                return true;
+              })
+              .map(item => (
               <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -901,7 +983,7 @@ const TontineVerification: React.FC = () => {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] font-bold text-gray-600 uppercase">
-                          {new Date(item.validationDate).toLocaleDateString()} • Demandé: {item.originalAmount?.toLocaleString() || item.amount.toLocaleString()} F • Validé: {item.amount.toLocaleString()} F • {item.reason}
+                          {new Date(item.validationDate).toLocaleDateString()} • {item.tontineAccountNumber || item.clientCode} • Demandé: {item.originalAmount?.toLocaleString() || item.amount.toLocaleString()} F • Validé: {item.amount.toLocaleString()} F • {item.reason}
                         </p>
                         {item.gap !== undefined && (
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${item.gap < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'} uppercase`}>

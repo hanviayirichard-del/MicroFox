@@ -22,6 +22,7 @@ import FraisPartsSociales from './components/FraisPartsSociales';
 import AccountingAndStates from './components/AccountingAndStates';
 import RegulatoryReports from './components/RegulatoryReports';
 import AdhesionReport from './components/AdhesionReport';
+import Analyse from './components/Analyse';
 import Configuration from './components/Configuration';
 import UserManagement from './components/UserManagement';
 import Permissions from './components/Permissions';
@@ -35,13 +36,14 @@ import MainCashier from './components/MainCashier';
 import VaultAndBank from './components/VaultAndBank';
 import VenteLivrets from './components/VenteLivrets';
 import StocksLivrets from './components/StocksLivrets';
+import Notifications from './components/Notifications';
 import DuplicateAlert from './components/DuplicateAlert';
 import GuidePratique from './components/GuidePratique';
 import MicrofinanceLogin from './components/MicrofinanceLogin';
 import CashGaps from './components/CashGaps';
-import { User } from './types';
+import { User, Microfinance } from './types';
 import { recordAuditLog } from './utils/audit';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Clock, ShieldAlert } from 'lucide-react';
 
 // Capture native storage methods at module load to avoid issues with overrides
 const nativeGetItem = localStorage.getItem.bind(localStorage);
@@ -52,9 +54,16 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [syncVersion, setSyncVersion] = useState(0);
+  const [isOfflineMode, setIsOfflineMode] = useState(() => {
+    return localStorage.getItem('microfox_offline_mode') === 'true';
+  });
   const mfCodeRef = React.useRef<string | null>(localStorage.getItem('microfox_current_mf'));
 
   const pullData = async (mfCode: string) => {
+    if (isOfflineMode) {
+      console.log('Skipping sync due to offline mode');
+      return;
+    }
     setIsSyncing(true);
     setIsBackgroundSyncing(false);
     
@@ -91,12 +100,14 @@ const App: React.FC = () => {
             }
           }
           
-          if (!pushSuccess) {
-            throw new Error('La synchronisation vers le serveur a échoué. Vos modifications locales n\'ont pas pu être sauvegardées. Veuillez vérifier votre connexion.');
+          if (!pushSuccess && import.meta.env.VITE_SUPABASE_URL) {
+            console.warn('La synchronisation vers le serveur a échoué. Vos modifications locales seront synchronisées ultérieurement.');
           }
           
-          // Clear pending sync flag only if all pushed successfully
-          nativeRemoveItem('microfox_pending_sync');
+          if (pushSuccess || !import.meta.env.VITE_SUPABASE_URL) {
+            // Clear pending sync flag only if all pushed successfully or no sync configured
+            nativeRemoveItem('microfox_pending_sync');
+          }
         }
 
         // Pull global data (users)
@@ -154,7 +165,64 @@ const App: React.FC = () => {
       return null;
     }
   });
+  const [isBlockedBySchedule, setIsBlockedBySchedule] = useState(false);
   const currentMF = currentUser?.microfinance || null;
+
+  const checkScheduleBlocking = () => {
+    if (!currentUser || currentUser.role === 'administrateur') {
+      setIsBlockedBySchedule(false);
+      return;
+    }
+
+    const savedConfig = localStorage.getItem('microfox_mf_config');
+    if (!savedConfig) return;
+
+    try {
+      const config: Microfinance = JSON.parse(savedConfig);
+      if (!config.autoDeactivationEnabled) {
+        setIsBlockedBySchedule(false);
+        return;
+      }
+
+      const now = new Date();
+      const daysMap: { [key: number]: string } = { 0: 'D', 1: 'L', 2: 'M', 3: 'Me', 4: 'J', 5: 'V', 6: 'S' };
+      const currentDay = daysMap[now.getDay()];
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      let blocked = false;
+
+      // Check global rules
+      if (config.autoDeactivationDays?.includes(currentDay)) {
+        const start = config.autoDeactivationStartTime || '00:00';
+        const end = config.autoDeactivationEndTime || '23:59';
+        if (currentTime >= start && currentTime <= end) {
+          blocked = true;
+        }
+      }
+
+      // Check specific rules (higher priority or additive)
+      if (!blocked && config.autoDeactivationRules) {
+        for (const rule of config.autoDeactivationRules) {
+          if (rule.enabled && rule.roles.includes(currentUser.role) && rule.days.includes(currentDay)) {
+            if (currentTime >= rule.startTime && currentTime <= rule.endTime) {
+              blocked = true;
+              break;
+            }
+          }
+        }
+      }
+
+      setIsBlockedBySchedule(blocked);
+    } catch (e) {
+      console.error("Error checking schedule:", e);
+    }
+  };
+
+  useEffect(() => {
+    checkScheduleBlocking();
+    const interval = setInterval(checkScheduleBlocking, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [currentUser, syncVersion]);
 
   useEffect(() => {
     // Global storage overrides
@@ -175,8 +243,10 @@ const App: React.FC = () => {
         const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
         const fullKey = isGlobal ? key : prefix + key;
         nativeSetItem(fullKey, value);
-        // Sync to Supabase in background
-        import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
+        // Sync to Supabase in background if not in offline mode
+        if (nativeGetItem('microfox_offline_mode') !== 'true') {
+          import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
+        }
         // Mark as pending sync for UI feedback
         if (key !== 'microfox_pending_sync') {
           nativeSetItem('microfox_pending_sync', 'true');
@@ -194,14 +264,16 @@ const App: React.FC = () => {
         const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
         const fullKey = isGlobal ? key : prefix + key;
         nativeRemoveItem(fullKey);
-        // Remove from Supabase in background
-        import('./src/supabase').then(m => {
-          if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-            m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
-              if (error) console.error('Error removing from Supabase:', error);
-            });
-          }
-        });
+        // Remove from Supabase in background if not in offline mode
+        if (nativeGetItem('microfox_offline_mode') !== 'true') {
+          import('./src/supabase').then(m => {
+            if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
+              m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
+                if (error) console.error('Error removing from Supabase:', error);
+              });
+            }
+          });
+        }
         // Mark as pending sync for UI feedback
         if (key !== 'microfox_pending_sync') {
           nativeSetItem('microfox_pending_sync', 'true');
@@ -240,9 +312,15 @@ const App: React.FC = () => {
     }
     
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (localStorage.getItem('microfox_pending_sync') === 'true') {
+      if (localStorage.getItem('microfox_pending_sync') === 'true' && !isOfflineMode) {
         e.preventDefault();
         e.returnValue = 'Vous avez des données non synchronisées. Voulez-vous vraiment quitter ?';
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'microfox_offline_mode') {
+        setIsOfflineMode(e.newValue === 'true');
       }
     };
 
@@ -253,9 +331,11 @@ const App: React.FC = () => {
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 
@@ -273,6 +353,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Tableau de Bord') {
       return <Dashboard />;
+    }
+
+    if (activeSection === 'Notification') {
+      return <Notifications />;
     }
 
     if (activeSection === 'Carte Géographique') {
@@ -349,6 +433,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Rapport Adhésions') {
       return <AdhesionReport />;
+    }
+
+    if (activeSection === 'Analyse') {
+      return <Analyse />;
     }
 
     if (activeSection === 'Conseils & Formation') {
@@ -473,6 +561,35 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return <MicrofinanceLogin onLogin={handleLogin} />;
+  }
+
+  if (isBlockedBySchedule) {
+    return (
+      <div className="h-screen bg-[#0a1226] flex flex-col items-center justify-center text-white p-6 text-center">
+        <div className="w-24 h-24 bg-red-500/10 rounded-[2.5rem] flex items-center justify-center text-red-500 mb-8 animate-pulse">
+          <Clock size={48} />
+        </div>
+        <h2 className="text-3xl font-black uppercase tracking-tighter mb-4">Accès Restreint</h2>
+        <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl max-w-md space-y-4">
+          <div className="flex items-center justify-center gap-3 text-red-400">
+            <ShieldAlert size={20} />
+            <p className="text-sm font-black uppercase tracking-widest">Planning de Désactivation</p>
+          </div>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            Votre accès est temporairement suspendu selon le planning de désactivation automatique configuré pour votre rôle.
+          </p>
+          <div className="pt-4">
+            <button 
+              onClick={handleLogout}
+              className="px-8 py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95"
+            >
+              Se déconnecter
+            </button>
+          </div>
+        </div>
+        <p className="mt-8 text-gray-600 text-[10px] font-black uppercase tracking-[0.3em]">MicroFoX Security System</p>
+      </div>
+    );
   }
 
   return (

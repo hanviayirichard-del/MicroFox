@@ -19,15 +19,15 @@ const TontineWithdrawal: React.FC = () => {
     if (dailyMise <= 0) dailyMise = 500;
     
     const tontineDeposits = (history || [])
-      .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
+      .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && !h.description?.toLowerCase().includes('livret'))
       .reduce((sum, h) => sum + h.amount, 0);
     const tontineWithdrawals = (history || [])
-      .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert'))
+      .filter(h => (h.account === 'tontine' && (h.type === 'retrait' || h.type === 'transfert')))
       .reduce((sum, h) => sum + h.amount, 0);
     const filteredGrossBalance = tontineDeposits - tontineWithdrawals;
 
     const accountHistory = (history || [])
-      .filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'cotisation' || h.type === 'depot') && h.description?.toLowerCase().includes('livret') !== true)
+      .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (h.tontineAccountId === accountId || !h.tontineAccountId) && h.description?.toLowerCase().includes('livret') !== true)
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     // Merge history withdrawals with pending withdrawals to correctly split cycles
@@ -284,7 +284,7 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     return { 
-      netBalance: cycleDetails.reduce((sum, c) => sum + c.decaissable, 0), 
+      netBalance: Math.max(0, grossBalance - totalComm), 
       cycles: displayCycles, 
       currentCycleCases: displayCycleCases, 
       currentCycleDates: displayCycleDates,

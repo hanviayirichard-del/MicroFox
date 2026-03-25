@@ -55,6 +55,8 @@ export interface Transaction {
   destinationAccount?: 'epargne' | 'tontine' | 'credit' | 'garantie' | 'partSociale';
   balance?: number;
   balanceBefore?: number;
+  cashierName?: string;
+  caisse?: string;
 }
 
 export interface ClientAccount {
@@ -125,6 +127,8 @@ export interface FieldControlReport {
   recommendations: string;
   controllerId: string;
   controllerName: string;
+  adminComments?: string;
+  zone?: string;
 }
 
 export interface Gap {
@@ -145,6 +149,16 @@ export interface Gap {
   observation?: string;
   validatorId?: string;
   userId?: string;
+  caisse?: string;
+}
+
+export interface AutoDeactivationRule {
+  id: string;
+  roles: UserRole[];
+  days: string[];
+  startTime: string;
+  endTime: string;
+  enabled: boolean;
 }
 
 export interface Microfinance {
@@ -163,4 +177,5 @@ export interface Microfinance {
   autoDeactivationDays?: string[];
   autoDeactivationStartTime?: string;
   autoDeactivationEndTime?: string;
+  autoDeactivationRules?: AutoDeactivationRule[];
 }

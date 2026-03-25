@@ -65,11 +65,20 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
     // Fetch current remote value to merge and avoid overwriting other devices' data
-    const { data: remoteItem } = await supabase
+    const { data: remoteItem, error: fetchError } = await supabase
       .from('storage')
       .select('value')
       .eq('key', key)
       .maybeSingle();
+      
+    if (fetchError) {
+      // If table doesn't exist (42P01), we should probably stop trying to sync
+      if (fetchError.code === '42P01') {
+        console.warn('Supabase storage table not found. Please run the SQL schema script.');
+        return false;
+      }
+      console.error(`Error fetching remote value for key ${key}:`, fetchError);
+    }
       
     const finalValue = remoteItem?.value ? mergeJSON(remoteItem.value, value) : value;
 
@@ -82,7 +91,7 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
       }, { onConflict: 'key' });
       
     if (error) {
-      console.error('Error syncing to Supabase:', error);
+      console.error(`Error syncing key ${key} to Supabase:`, error);
       return false;
     }
     return true;

@@ -97,13 +97,27 @@ const AgentPayments: React.FC = () => {
 
     const loadHistory = () => {
       const saved = localStorage.getItem('microfox_agent_payments');
-      if (saved) setPaymentsHistory(JSON.parse(saved));
+      if (saved) {
+        const allPayments = JSON.parse(saved);
+        const userStr = localStorage.getItem('microfox_current_user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user && user.role === 'agent commercial') {
+          setPaymentsHistory(allPayments.filter((p: any) => p.agentId === user.id));
+        } else {
+          setPaymentsHistory(allPayments);
+        }
+      }
+    };
+
+    const handleStorage = () => {
+      loadDailyStats();
+      loadHistory();
     };
 
     loadDailyStats();
     loadHistory();
-    window.addEventListener('storage', loadDailyStats);
-    return () => window.removeEventListener('storage', loadDailyStats);
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const handleVersement = () => {
@@ -130,10 +144,15 @@ const AgentPayments: React.FC = () => {
 
     setIsSubmitting(true);
     setTimeout(() => {
+      const saved = localStorage.getItem('microfox_agent_payments');
+      const allPayments = saved ? JSON.parse(saved) : [];
+
       const newPayment = {
         id: Date.now().toString(),
         agentId: currentUser?.id,
         agentName: currentUser?.identifiant,
+        zone: currentUser?.zoneCollecte || currentUser?.zone,
+        cashierName: currentUser?.identifiant,
         amountCotisations: totalCotisations,
         amountLivrets: totalLivrets,
         totalAmount: totalAmount,
@@ -147,8 +166,8 @@ const AgentPayments: React.FC = () => {
         authorizedBy: gap < 0 ? 'Directeur/Admin (Code: ' + authCode + ')' : null
       };
 
-      const updatedHistory = [newPayment, ...paymentsHistory];
-      localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedHistory));
+      const updatedAllPayments = [newPayment, ...allPayments];
+      localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedAllPayments));
       window.dispatchEvent(new Event('storage'));
       
       // Deduct from agent balance
@@ -157,7 +176,13 @@ const AgentPayments: React.FC = () => {
       localStorage.setItem(agentBalanceKey, (currentAgentBalance - totalAmount).toString());
       
       localStorage.setItem('microfox_pending_sync', 'true');
-      setPaymentsHistory(updatedHistory);
+      
+      if (currentUser?.role === 'agent commercial') {
+        setPaymentsHistory(updatedAllPayments.filter((p: any) => p.agentId === currentUser.id));
+      } else {
+        setPaymentsHistory(updatedAllPayments);
+      }
+      
       setAgentBalance(0);
       
       setSuccessMessage(`Versement de ${totalAmount} FCFA soumis à la ${selectedCaisse} avec succès.`);
@@ -359,7 +384,10 @@ const AgentPayments: React.FC = () => {
                 <div key={p.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-black text-[#121c32] uppercase">{new Date(p.date).toLocaleDateString()} - {new Date(p.date).toLocaleTimeString()}</p>
+                      <p className="text-xs font-black text-[#121c32] uppercase">
+                        {new Date(p.date).toLocaleDateString()} - {new Date(p.date).toLocaleTimeString()}
+                        {p.zone && <span className="ml-2 text-blue-600">(ZONE {p.zone})</span>}
+                      </p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total: {p.totalAmount.toLocaleString()} F</p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
@@ -373,7 +401,7 @@ const AgentPayments: React.FC = () => {
                     <div className="pt-2 border-t border-gray-200">
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Détails Billetage</p>
                       <div className="grid grid-cols-3 gap-2">
-                        {[10000, 5000, 2000, 1000, 500].map(val => p.billetage[val] > 0 && (
+                        {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map(val => p.billetage[val] > 0 && (
                           <div key={val} className="bg-white p-1.5 rounded-lg border border-gray-100 text-center">
                             <p className="text-[8px] font-bold text-gray-400">{val.toLocaleString()}</p>
                             <p className="text-[10px] font-black text-[#121c32]">x{p.billetage[val]}</p>

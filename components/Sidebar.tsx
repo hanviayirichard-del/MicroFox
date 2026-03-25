@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   Scale,
   MessageSquare,
+  Bell,
   LogOut,
   RefreshCw,
   X,
@@ -85,6 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       title: "Pilotage",
       items: [
         { id: 'Tableau de Bord', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} /> },
+        { id: 'Notification', label: 'Notification', icon: <Bell size={20} /> },
         { id: 'Carte Géographique', label: 'Carte Géographique', icon: <Map size={20} /> },
       ]
     },
@@ -127,6 +129,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
     {
       title: "Comptabilité & Analyse",
       items: [
+        { id: 'Analyse', label: 'Analyse', icon: <TrendingUp size={20} /> },
         { id: 'Journal Global', label: 'Journal Global', icon: <BookOpen size={20} />, badge: 0 },
         { id: 'Reçu de caisse', label: 'Reçu de caisse', icon: <Printer size={20} /> },
         { id: 'Comptabilité & États', label: 'Comptabilité & États', icon: <Calculator size={20} /> },
@@ -192,23 +195,24 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
 
               // Fallback to hardcoded defaults if no permissions stored yet
               if (userRole === 'gestionnaire de crédit') {
-                return (item.label.toLowerCase().includes('crédit') || item.id.toLowerCase().includes('crédit')) && item.label !== 'Déblocage de crédit';
+                return ((item.label.toLowerCase().includes('crédit') || item.id.toLowerCase().includes('crédit')) && item.label !== 'Déblocage de crédit') || item.id === 'Notification';
               }
               if (userRole === 'directeur') {
                 const allowedIds = [
-                  'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Demande de crédit', 
+                  'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 
                   'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 
                   'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 
                   'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Gestion Crédits', 
                   'Commissions', 'Journal Global', 'Comptabilité & États', 'États Réglementaires', 
                   'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Reçu de caisse', 'Contrôle Terrain', 
-                  'Conformité (Ratios & LAB)', 'Conseils & Formation'
+                  'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'
                 ];
                 return allowedIds.includes(item.id);
               }
               if (userRole === 'caissier') {
                 const allowedIds = [
                   'Membres',
+                  'Analyse',
                   'Déblocage de crédit',
                   'Crédit actif',
                   'Tontine Journalière',
@@ -221,12 +225,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Journal Global',
                   'Reçu de caisse',
                   'Etats des écarts',
-                  'Rapports Financiers'
+                  'Rapports Financiers',
+                  'Notification'
                 ];
                 return allowedIds.includes(item.id);
               }
               if (userRole === 'contrôleur') {
-                const allowedIds = ['Carte Géographique', 'Contrôle Terrain'];
+                const allowedIds = ['Carte Géographique', 'Contrôle Terrain', 'Notification'];
                 return allowedIds.includes(item.id);
               }
               if (userRole === 'auditeur') {
@@ -234,7 +239,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Carte Géographique',
                   'Alerte Doublons',
                   'Réclamations Clients',
-                  'Vérification de retrait tontine'
+                  'Vérification de retrait tontine',
+                  'Notification'
                 ];
                 return allowedIds.includes(item.id);
               }
@@ -243,6 +249,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Tableau de Bord',
                   'Carte Géographique',
                   'Membres',
+                  'Analyse',
                   'Alerte Doublons',
                   'Crédit actif',
                   'Tontine Journalière',
@@ -252,7 +259,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Commissions',
                   'Journal Global',
                   'Reçu de caisse',
-                  'Etats des écarts'
+                  'Etats des écarts',
+                  'Notification'
                 ];
                 return allowedIds.includes(item.id);
               }

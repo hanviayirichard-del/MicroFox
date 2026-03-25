@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Download, Printer, FileText, TrendingUp, Wallet, CreditCard, BookOpen, MapPin, Calculator, CheckSquare, Square, UserPlus, Users, Lock, AlertTriangle, X, History as HistoryIcon } from 'lucide-react';
+import { Search, Calendar, Download, Printer, FileText, TrendingUp, Wallet, CreditCard, BookOpen, MapPin, Calculator, CheckSquare, Square, UserPlus, Users, Lock, AlertTriangle, X, History as HistoryIcon, Landmark } from 'lucide-react';
 
 const FinancialReports: React.FC = () => {
   const [startDate, setStartDate] = useState(() => {
@@ -11,6 +11,13 @@ const FinancialReports: React.FC = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
   });
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedCaisse, setSelectedCaisse] = useState('all');
+
+  const savedUsers = localStorage.getItem('microfox_users');
+  const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
+  const availableCaisses = Array.from(new Set([...allUsers.filter((u: any) => u.role === 'caissier' && u.caisse).map((u: any) => u.caisse), 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'])) as string[];
 
   const [data, setData] = useState<{
     epargneDepots: any[];
@@ -27,6 +34,7 @@ const FinancialReports: React.FC = () => {
     agentPayments: any[];
     vaultTransactions: any[];
     validatedWithdrawals: any[];
+    openingBalance: number;
   }>({
     epargneDepots: [],
     epargneRetraits: [],
@@ -41,7 +49,8 @@ const FinancialReports: React.FC = () => {
     adminExpenses: [],
     agentPayments: [],
     vaultTransactions: [],
-    validatedWithdrawals: []
+    validatedWithdrawals: [],
+    openingBalance: 0
   });
 
   const zones = ['01A', '01', '02A', '02', '03A', '03', '04A', '04', '05A', '05', '06A', '06', '07A', '07', '08A', '08', '09A', '09'];
@@ -74,7 +83,15 @@ const FinancialReports: React.FC = () => {
       garantieRetraits: [],
       adminExpenses: [],
       agentPayments: [],
-      vaultTransactions: []
+      vaultTransactions: [],
+      validatedWithdrawals: [],
+      openingBalance: 0
+    };
+
+    const getCaisseDelta = (tx: any) => {
+      if (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement') return tx.amount;
+      if (tx.type === 'retrait' || tx.type === 'deblocage') return -tx.amount;
+      return 0;
     };
 
     zones.forEach(z => {
@@ -94,10 +111,21 @@ const FinancialReports: React.FC = () => {
         const memberZone = member.zone || getZoneFromCode(member.code || '');
 
         history.forEach((tx: any) => {
+          const txUser = allUsers.find((u: any) => u.id === tx.userId);
+          const txCaisse = txUser?.caisse || 'N/A';
+          
           if (isCaissier && tx.userId !== user.id) return;
+          if (selectedCaisse !== 'all' && txCaisse !== selectedCaisse) return;
           
           const txDate = tx.date.split('T')[0];
-          if (txDate < startDate || txDate > endDate) return;
+          
+          // Calculate opening balance
+          if (txDate < startDate) {
+            newData.openingBalance += getCaisseDelta(tx);
+            return;
+          }
+
+          if (txDate > endDate) return;
 
           const desc = (tx.description || '').toLowerCase();
           let tontineAccountNumber = '';
@@ -109,14 +137,14 @@ const FinancialReports: React.FC = () => {
 
           // Épargne & Frais & Part Sociale
           if (tx.account === 'epargne' || tx.account === 'frais' || tx.account === 'partSociale') {
-            if (tx.type === 'depot' || (tx.type === 'transfert' && tx.destinationAccount === 'epargne')) newData.epargneDepots.push(txWithMember);
-            if (tx.type === 'retrait' || (tx.type === 'transfert' && tx.account === 'epargne')) newData.epargneRetraits.push(txWithMember);
+            if (tx.type === 'depot') newData.epargneDepots.push(txWithMember);
+            if (tx.type === 'retrait' || tx.type === 'transfert') newData.epargneRetraits.push(txWithMember);
           }
 
           // Tontine
           if (tx.account === 'tontine') {
             const txZone = tontineAccountNumber ? getZoneFromCode(tontineAccountNumber) : memberZone;
-            if ((tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount === 'tontine')) && !desc.includes('livret')) {
+            if ((tx.type === 'depot' || tx.type === 'cotisation') && !desc.includes('livret')) {
               newData.tontineDepotsByZone[txZone].push(txWithMember);
             }
             if (tx.type === 'retrait' || tx.type === 'transfert') {
@@ -133,7 +161,20 @@ const FinancialReports: React.FC = () => {
           // Garantie
           if (tx.account === 'garantie') {
             if (tx.type === 'depot') newData.garantieDepots.push(txWithMember);
-            if (tx.type === 'retrait') newData.garantieRetraits.push(txWithMember);
+            if (tx.type === 'retrait' || tx.type === 'transfert') newData.garantieRetraits.push(txWithMember);
+          }
+
+          // Destination side of transfer
+          if (tx.type === 'transfert' && tx.destinationAccount) {
+            const destTx = { ...txWithMember, account: tx.destinationAccount, type: 'depot' };
+            if (tx.destinationAccount === 'epargne' || tx.destinationAccount === 'frais' || tx.destinationAccount === 'partSociale') {
+              newData.epargneDepots.push(destTx);
+            } else if (tx.destinationAccount === 'garantie') {
+              newData.garantieDepots.push(destTx);
+            } else if (tx.destinationAccount === 'tontine') {
+              const txZone = tontineAccountNumber ? getZoneFromCode(tontineAccountNumber) : memberZone;
+              newData.tontineDepotsByZone[txZone].push(destTx);
+            }
           }
 
           // Livrets
@@ -153,61 +194,120 @@ const FinancialReports: React.FC = () => {
     const savedExpenses = localStorage.getItem('microfox_admin_expenses');
     if (savedExpenses) {
       const allExpenses = JSON.parse(savedExpenses);
-      const filteredExpenses = allExpenses.filter((e: any) => {
+      allExpenses.forEach((e: any) => {
         const eDate = e.date.split('T')[0];
-        const dateMatch = eDate >= startDate && eDate <= endDate;
-        if (isCaissier) {
-          return dateMatch && e.recordedBy === user.identifiant;
+        const expUser = allUsers.find((u: any) => u.identifiant === e.recordedBy);
+        const expCaisse = expUser?.caisse || 'N/A';
+
+        if (isCaissier && e.recordedBy !== user.identifiant) return;
+        if (selectedCaisse !== 'all' && expCaisse !== selectedCaisse) return;
+
+        if (eDate < startDate) {
+          newData.openingBalance -= e.amount;
+        } else if (eDate <= endDate) {
+          newData.adminExpenses.push(e);
         }
-        return dateMatch;
       });
-      newData.adminExpenses = filteredExpenses;
     }
 
     // Load Agent Payments
     const savedPayments = localStorage.getItem('microfox_agent_payments');
     if (savedPayments) {
       const allPayments = JSON.parse(savedPayments);
-      const filteredPayments = allPayments.filter((p: any) => {
+      allPayments.forEach((p: any) => {
         const pDate = p.date.split('T')[0];
-        const dateMatch = pDate >= startDate && pDate <= endDate && p.status === 'Validé';
-        if (isCaissier) {
-          return dateMatch && p.validatorId === user.id;
+        const amount = p.observedAmount || p.totalAmount;
+
+        if (p.status !== 'Validé') return;
+        if (isCaissier && p.validatorId !== user.id) return;
+        if (selectedCaisse !== 'all' && p.caisse !== selectedCaisse) return;
+
+        if (pDate < startDate) {
+          newData.openingBalance += amount;
+        } else if (pDate <= endDate) {
+          newData.agentPayments.push(p);
         }
-        return dateMatch;
       });
-      newData.agentPayments = filteredPayments;
     }
 
     // Load Vault Transactions
     const savedVault = localStorage.getItem('microfox_vault_transactions');
     if (savedVault) {
       const allVaultTxs = JSON.parse(savedVault);
-      const filteredVault = allVaultTxs.filter((v: any) => {
+      allVaultTxs.forEach((v: any) => {
         const vDate = v.date.split('T')[0];
-        const dateMatch = vDate >= startDate && vDate <= endDate;
+        
+        let isRelevant = false;
+        let delta = 0;
+
         if (isCaissier) {
-          return dateMatch && v.userId === user.id;
+          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && v.to?.toUpperCase() === user.caisse?.toUpperCase()) {
+            isRelevant = true;
+            delta = v.amount;
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') && v.from === user.caisse) {
+            isRelevant = true;
+            delta = -v.amount;
+          } else if (v.userId === user.id) {
+            isRelevant = true;
+            delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement')) ? v.amount : -v.amount;
+          }
+        } else if (selectedCaisse !== 'all') {
+          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && v.to?.toUpperCase() === selectedCaisse?.toUpperCase()) {
+            isRelevant = true;
+            delta = v.amount;
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') && v.from?.toUpperCase() === selectedCaisse?.toUpperCase()) {
+            isRelevant = true;
+            delta = -v.amount;
+          } else {
+            const vUser = allUsers.find((u: any) => u.id === v.userId);
+            if (vUser?.caisse?.toUpperCase() === selectedCaisse?.toUpperCase()) {
+              isRelevant = true;
+              delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement')) ? v.amount : -v.amount;
+            }
+          }
+        } else {
+          // All caisses
+          if (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') {
+            isRelevant = true;
+            delta = v.amount;
+          } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') {
+            isRelevant = true;
+            delta = -v.amount;
+          }
         }
-        return dateMatch;
+
+        if (isRelevant) {
+          if (vDate < startDate) {
+            newData.openingBalance += delta;
+          } else if (vDate <= endDate) {
+            newData.vaultTransactions.push({
+              ...v,
+              type: (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') ? 'Approvisionnement Caisse' : v.type
+            });
+          }
+        }
       });
-      newData.vaultTransactions = filteredVault;
     }
 
     // Load Validated Withdrawals for Gaps
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
     if (savedValidated) {
       const allValidated = JSON.parse(savedValidated).filter((w: any) => !w.isDeleted);
-      newData.validatedWithdrawals = allValidated.filter((v: any) => {
+      allValidated.forEach((v: any) => {
         const vDate = v.validationDate.split('T')[0];
-        const dateMatch = vDate >= startDate && vDate <= endDate;
-        if (isCaissier) {
-          return dateMatch && v.userId === user.id;
+        const vUser = allUsers.find((u: any) => u.id === v.userId);
+        const vCaisse = vUser?.caisse || 'N/A';
+        const gap = v.gap || 0;
+
+        if (isCaissier && v.userId !== user.id) return;
+        if (selectedCaisse !== 'all' && vCaisse !== selectedCaisse) return;
+
+        if (vDate < startDate) {
+          newData.openingBalance -= gap;
+        } else if (vDate <= endDate) {
+          newData.validatedWithdrawals.push(v);
         }
-        return dateMatch;
       });
-    } else {
-      newData.validatedWithdrawals = [];
     }
 
     setData(newData);
@@ -217,7 +317,7 @@ const FinancialReports: React.FC = () => {
     loadData();
     window.addEventListener('storage', loadData);
     return () => window.removeEventListener('storage', loadData);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedCaisse]);
 
   const calculateTotal = (list: any[]) => list.reduce((sum, item) => sum + (item.amount || 0), 0);
 
@@ -249,12 +349,19 @@ const FinancialReports: React.FC = () => {
   const totalAdminExpenses = calculateTotal(data.adminExpenses);
   const totalVersementAgents = calculateTotal(data.agentPayments.map(p => ({ amount: p.observedAmount || p.totalAmount })));
   
-  const totalPartSociale = data.epargneDepots.filter(tx => 
-    tx.description?.toLowerCase().includes('part sociale')
+  const totalPartSocialeDepot = data.epargneDepots.filter(tx => 
+    tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
   ).reduce((acc, tx) => acc + tx.amount, 0);
+
+  const totalPartSocialeRetrait = data.epargneRetraits.filter(tx => 
+    tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
+  ).reduce((acc, tx) => acc + tx.amount, 0);
+
+  const totalPartSociale = totalPartSocialeDepot - totalPartSocialeRetrait;
 
   const totalAdhesion = data.epargneDepots.filter(tx => 
     tx.description?.toLowerCase().includes('adhésion') && 
+    tx.account !== 'partSociale' &&
     !tx.description?.toLowerCase().includes('part sociale')
   ).reduce((acc, tx) => acc + tx.amount, 0);
 
@@ -276,8 +383,6 @@ const FinancialReports: React.FC = () => {
   ).reduce((acc, tx) => acc + tx.amount, 0);
 
   // Identification des agents commerciaux
-  const savedUsers = localStorage.getItem('microfox_users');
-  const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
   const agentIds = allUsers.filter((u: any) => u.role === 'agent commercial').map((u: any) => u.id);
 
   // Filtrer les opérations pour exclure celles des agents (elles sont comptées via les versements validés)
@@ -287,18 +392,19 @@ const FinancialReports: React.FC = () => {
   const totalVenteLivretTontineNonAgent = Object.values(data.livretsTontineByZone).reduce((acc: number, list) => acc + calculateTotal(filterNonAgentOps(list as any[])), 0) as number;
 
   const totalVaultInflow = data.vaultTransactions
-    .filter(v => v.type === 'Approvisionnement Caisse')
+    .filter(v => v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse')
     .reduce((acc, v) => acc + v.amount, 0);
   
-  const startingBalance = totalVaultInflow;
+  const startingBalance = data.openingBalance;
   
   const totalVaultOutflow = data.vaultTransactions
-    .filter(v => v.type === 'Versement au Coffre')
+    .filter(v => v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée')
     .reduce((acc, v) => acc + v.amount, 0);
 
   const totalGapTontine = data.validatedWithdrawals.reduce((acc, v) => acc + (v.gap || 0), 0);
 
   const pureDepotEpargne = data.epargneDepots.filter(tx => 
+    tx.account !== 'partSociale' &&
     !tx.description?.toLowerCase().includes('part sociale') &&
     !tx.description?.toLowerCase().includes('adhésion') &&
     !tx.description?.toLowerCase().includes('adhesion') &&
@@ -309,16 +415,18 @@ const FinancialReports: React.FC = () => {
   );
 
   const partSocialeList = data.epargneDepots.filter(tx => 
-    tx.description?.toLowerCase().includes('part sociale')
+    tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
   );
 
   const adhesionList = data.epargneDepots.filter(tx => 
     tx.description?.toLowerCase().includes('adhésion') && 
+    tx.account !== 'partSociale' &&
     !tx.description?.toLowerCase().includes('part sociale')
   );
 
   const fraisDossierList = data.epargneDepots.filter(tx => 
     (tx.description?.toLowerCase().includes('frais de dossier crédit') || tx.account === 'frais') &&
+    tx.account !== 'partSociale' &&
     !tx.description?.toLowerCase().includes('adhésion') &&
     !tx.description?.toLowerCase().includes('adhesion') &&
     !tx.description?.toLowerCase().includes('livret') &&
@@ -330,7 +438,8 @@ const FinancialReports: React.FC = () => {
     tx.description?.toLowerCase().includes('tenue de compte')
   );
 
-  const displayDepotMemb = totalDepotMemb - (totalPartSociale + totalAdhesion + totalVenteLivretCompte + totalFraisDossierCredit + totalFraisTenueCompte);
+  const displayDepotMemb = totalDepotMemb - (totalPartSocialeDepot + totalAdhesion + totalVenteLivretCompte + totalFraisDossierCredit + totalFraisTenueCompte);
+  const displayRetraitMemb = totalRetraitMemb - totalPartSocialeRetrait;
   const displayDepotTont = totalDepotTontNonAgent;
 
   const [physicalBalance, setPhysicalBalance] = useState(0);
@@ -425,7 +534,6 @@ const FinancialReports: React.FC = () => {
     }
     return 'all';
   });
-  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     const user = localStorage.getItem('microfox_current_user');
@@ -451,8 +559,8 @@ const FinancialReports: React.FC = () => {
     { id: 'tontine_gaps', label: 'Écarts sur retrait tontine' },
   ];
 
-  const totalInflow = totalDepotMemb + totalDepotTontNonAgent + totalVenteLivretTontineNonAgent + totalCreditRemb + totalVersementAgents + totalDepotGarantie;
-  const totalOutflow = totalRetraitMemb + totalRetraitTont + totalCreditAccor + totalAdminExpenses + totalVaultOutflow + totalRetraitGarantie;
+  const totalInflow = totalDepotMemb + totalDepotTontNonAgent + totalVenteLivretTontineNonAgent + totalCreditRemb + totalVersementAgents + totalDepotGarantie + totalVaultInflow;
+  const totalOutflow = totalRetraitMemb + totalRetraitTont + totalCreditAccor + totalAdminExpenses + totalVaultOutflow + totalRetraitGarantie + totalGapTontine;
   const currentBalance = startingBalance + totalInflow - totalOutflow;
 
   useEffect(() => {
@@ -465,10 +573,10 @@ const FinancialReports: React.FC = () => {
     const dateRange = `DU ${new Date(startDate).toLocaleDateString()} AU ${new Date(endDate).toLocaleDateString()}`;
     
     const headerHtml = `
-      <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 10px;">
-        <h1 style="font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0;">${mfConfig.nom}</h1>
-        <p style="font-size: 12px; font-weight: bold; color: #666; margin: 5px 0;">${mfConfig.adresse}</p>
-        <p style="font-size: 12px; font-weight: bold; color: #666; margin: 5px 0;">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+      <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px;">
+        <h1 style="font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32;">${mfConfig.nom}</h1>
+        <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0;">${mfConfig.adresse}</p>
+        <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0;">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
       </div>
     `;
 
@@ -481,7 +589,7 @@ const FinancialReports: React.FC = () => {
       if (id === 'all' || id === 'recapitulatif') {
         const rows = [
           ['DEPOT SUR COMPTE ÉPARGNE', displayDepotMemb],
-          ['RETRAIT SUR COMPTE ÉPARGNE', totalRetraitMemb],
+          ['RETRAIT SUR COMPTE ÉPARGNE', displayRetraitMemb],
           ['DEPOT TONTINE', displayDepotTont],
           ['RETRAIT TONTINE', totalRetraitTont],
           ['DÉPÔT GARANTIE', totalDepotGarantie],
@@ -495,13 +603,15 @@ const FinancialReports: React.FC = () => {
           ['VERSEMENT DES AGENTS COMMERCIAUX', totalVersementAgents],
           ['FRAIS DE DOSSIER DE CRÉDIT', totalFraisDossierCredit],
           ['FRAIS DE TENUE DE COMPTE', totalFraisTenueCompte],
-          ['PART SOCIALE', totalPartSociale],
+          ['DEPOT PART SOCIALE', totalPartSocialeDepot],
+          ['RETRAIT PART SOCIALE', totalPartSocialeRetrait],
           ['ADHÉSION', totalAdhesion],
           ['VENTE LIVRET DE COMPTE', totalVenteLivretCompte],
           ['VENTE LIVRET TONTINE', totalVenteLivretTontineNonAgent],
+          ['APPROVISIONNEMENT CAISSE', totalVaultInflow],
           ['VERSEMENT AU COFFRE', totalVaultOutflow],
           ['', ''],
-          ['Fonds de caisse', startingBalance],
+          ['Solde Initial', startingBalance],
           ['Solde Actuel (Théorique)', currentBalance],
           ['Solde Physique (Réel)', physicalBalance],
           ['Écart de Caisse', physicalBalance - currentBalance]
@@ -513,15 +623,15 @@ const FinancialReports: React.FC = () => {
           <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
               <tr>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background-color: #f8f9fa; font-weight: bold;">Libellé</th>
-                <th style="border: 1px solid #ddd; padding: 12px; text-align: right; background-color: #f8f9fa; font-weight: bold;">Montant (F)</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Libellé</th>
+                <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Montant (F)</th>
               </tr>
             </thead>
             <tbody>
               ${rows.map(r => `
                 <tr>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: left; ${r[0] === '' ? '' : 'font-weight: bold;'}">${r[0]}</td>
-                  <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-weight: bold;">${r[1] !== '' ? Number(r[1]).toLocaleString() : ''}</td>
+                  <td style="border: 1px solid #ddd; padding: 12px; text-align: center; ${r[0] === '' ? '' : 'font-weight: bold;'}">${r[0]}</td>
+                  <td style="border: 1px solid #ddd; padding: 12px; text-align: center; font-weight: bold;">${r[1] !== '' ? Number(r[1]).toLocaleString() : ''}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -650,23 +760,23 @@ const FinancialReports: React.FC = () => {
             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
               <thead>
                 <tr>
-                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background-color: #f8f9fa; font-weight: bold;">Date</th>
-                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background-color: #f8f9fa; font-weight: bold;">Client</th>
-                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background-color: #f8f9fa; font-weight: bold;">Code</th>
-                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background-color: #f8f9fa; font-weight: bold;">N° Compte Tontine</th>
-                  <th style="border: 1px solid #ddd; padding: 12px; text-align: right; background-color: #f8f9fa; font-weight: bold;">Montant (F)</th>
-                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left; background-color: #f8f9fa; font-weight: bold;">Description</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Date</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Client</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Code</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">N° Compte Tontine</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Montant (F)</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Description</th>
                 </tr>
               </thead>
               <tbody>
                 ${listToExport.map(tx => `
                   <tr>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: left;">${new Date(tx.date).toLocaleDateString()}</td>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: left;">${tx.memberName || tx.label || ''}</td>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: left;">${tx.memberCode || ''}</td>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: left;">${tx.tontineAccountNumber || ''}</td>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">${Number(tx.amount).toLocaleString()}</td>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: left;">${tx.description || ''}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${new Date(tx.date).toLocaleDateString()}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.memberName || tx.label || ''}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.memberCode || ''}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.tontineAccountNumber || ''}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${Number(tx.amount).toLocaleString()}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.description || ''}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -859,6 +969,24 @@ const FinancialReports: React.FC = () => {
             </div>
           </div>
         )}
+        {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'superviseur') && (
+          <div className="space-y-1 md:col-span-3">
+            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Filtrer par Caisse</label>
+            <div className="relative">
+              <select 
+                value={selectedCaisse} 
+                onChange={(e) => setSelectedCaisse(e.target.value)} 
+                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] appearance-none"
+              >
+                <option value="all">Toutes les caisses</option>
+                {availableCaisses.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <Landmark className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* État Récapitulatif */}
@@ -888,7 +1016,7 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-sm font-black text-[#121c32] text-right">{displayDepotMemb.toLocaleString()}</div>
                 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">RETRAIT SUR COMPTE ÉPARGNE</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalRetraitMemb.toLocaleString()}</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{displayRetraitMemb.toLocaleString()}</div>
                 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">DEPOT TONTINE</div>
                 <div className="bg-white p-4 text-sm font-black text-[#121c32] text-right">{displayDepotTont.toLocaleString()}</div>
@@ -929,8 +1057,11 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Frais de tenue de compte</div>
                 <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalFraisTenueCompte.toLocaleString()}</div>
 
-                <div className="bg-white p-4 text-xs font-bold text-gray-700">PART SOCIALE</div>
-                <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalPartSociale.toLocaleString()}</div>
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">DEPOT PART SOCIALE</div>
+                <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalPartSocialeDepot.toLocaleString()}</div>
+
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">RETRAIT PART SOCIALE</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalPartSocialeRetrait.toLocaleString()}</div>
 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">ADHÉSION</div>
                 <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalAdhesion.toLocaleString()}</div>
@@ -941,6 +1072,9 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">VENTE LIVRET TONTINE</div>
                 <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalVenteLivretTontineNonAgent.toLocaleString()}</div>
 
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Approvisionnement Caisse</div>
+                <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalVaultInflow.toLocaleString()}</div>
+
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Versement au Coffre</div>
                 <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalVaultOutflow.toLocaleString()}</div>
               </div>
@@ -949,9 +1083,9 @@ const FinancialReports: React.FC = () => {
             {/* Colonne Droite: Soldes */}
             <div className="space-y-6">
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-6 bg-amber-50 rounded-3xl border border-amber-100">
-                  <span className="text-xs font-black text-amber-800 uppercase tracking-widest">Fonds de caisse</span>
-                  <span className="text-2xl font-black text-amber-900">{startingBalance.toLocaleString()} F</span>
+                <div className="flex flex-col gap-1 p-6 bg-amber-50 rounded-3xl border border-amber-100">
+                  <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Approvisionnement caisse</span>
+                  <span className="text-2xl font-black text-amber-900">{totalVaultInflow.toLocaleString()} F</span>
                 </div>
 
                 <div className="flex items-center justify-between p-6 bg-blue-600 rounded-3xl shadow-lg shadow-blue-200">
@@ -1236,7 +1370,7 @@ const FinancialReports: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {[10000, 5000, 2000, 1000, 500].map((denom) => (
+                    {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map((denom) => (
                       <tr key={denom}>
                         <td className="px-4 py-2 font-bold text-gray-600">{denom.toLocaleString()} F</td>
                         <td className="px-4 py-2 text-center font-black text-[#121c32]">

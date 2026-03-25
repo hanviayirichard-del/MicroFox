@@ -17,7 +17,7 @@ const MainCashier: React.FC = () => {
         return [user.caisse];
       }
     }
-    return ['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2'];
+    return ['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'];
   });
   const [selectedCaisse, setSelectedCaisse] = useState(() => {
     const userStr = localStorage.getItem('microfox_current_user');
@@ -151,6 +151,7 @@ const MainCashier: React.FC = () => {
               gapAmount: gap,
               status: 'En attente',
               zone: agentZone,
+              caisse: selectedCaisse,
               observation: observation,
               validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id
             };
@@ -186,11 +187,21 @@ const MainCashier: React.FC = () => {
 
   const handleTransferToVault = () => {
     const physicalAmount = calculateTotalBilletage();
-    const theoreticalAmount = cashBalance;
+    const theoreticalAmount = Number(transferAmount) || 0;
     const gap = physicalAmount - theoreticalAmount;
 
     if (cashBalance === 0) {
       alert(`Opération impossible : Le solde de la ${selectedCaisse} est à zéro.`);
+      return;
+    }
+
+    if (theoreticalAmount <= 0) {
+      alert("Le montant à verser doit être supérieur à 0.");
+      return;
+    }
+
+    if (theoreticalAmount > cashBalance) {
+      alert("Le montant à verser ne peut pas être supérieur au solde de la caisse.");
       return;
     }
 
@@ -219,6 +230,7 @@ const MainCashier: React.FC = () => {
         id: `transfer_${Date.now()}`,
         agentId: selectedCaisse,
         agentName: selectedCaisse,
+        cashierName: currentUser.identifiant,
         amountCotisations: 0,
         amountLivrets: 0,
         totalAmount: physicalAmount,
@@ -234,7 +246,7 @@ const MainCashier: React.FC = () => {
       localStorage.setItem('microfox_agent_payments', JSON.stringify([transferPayment, ...allPayments]));
     }
     
-    const newCashBalance = 0; // On vide la caisse après versement
+    const newCashBalance = cashBalance - theoreticalAmount;
     localStorage.setItem(`microfox_cash_balance_${selectedCaisse}`, newCashBalance.toString());
     
     // Enregistrer l'écart si présent
@@ -259,7 +271,8 @@ const MainCashier: React.FC = () => {
         gapAmount: gap,
         status: 'En attente',
         zone: 'SIÈGE',
-        observation: `Écart de versement fin de journée (${selectedCaisse})`,
+        caisse: selectedCaisse,
+        observation: `Écart de versement (${selectedCaisse})`,
         userId: responsibleUserId
       };
       localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
@@ -270,7 +283,7 @@ const MainCashier: React.FC = () => {
     const transactions = transactionsSaved ? JSON.parse(transactionsSaved) : [];
     const newTx = {
       id: Date.now().toString(),
-      type: 'Versement Fin de Journée',
+      type: 'Versement Caisse',
       from: selectedCaisse,
       to: targetDestination,
       amount: physicalAmount,
@@ -285,11 +298,8 @@ const MainCashier: React.FC = () => {
     setCashBalance(newCashBalance);
     setIsTransferModalOpen(false);
     setDenominations({
-      '10000': 0,
-      '5000': 0,
-      '2000': 0,
-      '1000': 0,
-      '500': 0,
+      '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0,
+      '250': 0, '200': 0, '100': 0, '50': 0, '25': 0, '10': 0, '5': 0,
       'monnaie': 0
     });
     window.dispatchEvent(new Event('storage'));
@@ -379,10 +389,26 @@ const MainCashier: React.FC = () => {
             </div>
 
             <div className="space-y-6">
-              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex justify-between items-center">
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Solde Théorique (Système)</p>
-                  <p className="text-xl font-black text-[#121c32]">{cashBalance.toLocaleString()} F</p>
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Solde Théorique (Système)</p>
+                    <p className="text-xl font-black text-[#121c32]">{cashBalance.toLocaleString()} F</p>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-gray-200">
+                  <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Montant à verser</label>
+                  <div className="relative mt-1">
+                    <input 
+                      type="number" 
+                      value={transferAmount}
+                      onChange={(e) => setTransferAmount(e.target.value)}
+                      className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-xl font-black text-[#121c32] outline-none focus:border-amber-500 transition-all"
+                      placeholder="0"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-gray-400">F</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 font-bold mt-2 italic">* Par défaut : solde total pour clôture</p>
                 </div>
               </div>
 
@@ -553,13 +579,16 @@ const MainCashier: React.FC = () => {
                     filteredPayments.map((p) => (
                       <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-5">
-                          <p className="text-xs font-black text-[#121c32] uppercase">{p.agentName}</p>
+                          <p className="text-xs font-black text-[#121c32] uppercase">
+                            {p.agentName} {p.zone ? `(ZONE ${p.zone})` : ''} - VERSEMENT
+                            {p.cashierName && <span className="block text-[9px] text-gray-400 lowercase italic">par {p.cashierName}</span>}
+                          </p>
                           <p className="text-[10px] font-bold text-gray-400 mb-2">{new Date(p.date).toLocaleString()}</p>
                           {p.billetage && p.status === 'En attente' && (
                             <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
                               <p className="text-[9px] font-black text-gray-400 uppercase mb-2 tracking-widest">Billetage Agent</p>
                               <div className="space-y-1.5">
-                                {[10000, 5000, 2000, 1000, 500].map(val => p.billetage[val] > 0 && (
+                                {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map(val => p.billetage[val] > 0 && (
                                   <div key={val} className="flex justify-between items-center text-[10px] whitespace-nowrap">
                                     <span className="text-gray-400 font-bold">{val.toLocaleString()} :</span>
                                     <span className="font-black text-[#121c32] ml-2">x{p.billetage[val]}</span>

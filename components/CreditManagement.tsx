@@ -246,24 +246,27 @@ export default function CreditManagement() {
         <meta charset="UTF-8">
         <title>Portefeuille Crédits - ${mfConfig.nom}</title>
         <style>
-          body { font-family: sans-serif; padding: 20px; color: #121c32; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 10px; }
-          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
-          .mf-address { font-size: 12px; font-weight: bold; color: #666; margin: 5px 0; }
-          h2 { color: #00c896; margin-top: 20px; text-transform: uppercase; }
+          body { font-family: sans-serif; padding: 40px; color: #121c32; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32; }
+          .mf-info { font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0; }
+          .report-title { font-size: 18px; font-weight: 800; margin: 20px 0; text-transform: uppercase; text-align: center; }
+          .period { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 30px; font-weight: bold; }
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #121c32; color: white; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: uppercase; }
-          td { border-bottom: 1px solid #eee; padding: 10px 8px; font-size: 13px; }
+          th { background: #f8fafc; padding: 12px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+          td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; text-align: center; }
           tr:nth-child(even) { background-color: #f9fafb; }
+          .text-right { text-align: center; }
         </style>
       </head>
       <body>
         <div class="header">
           <h1 class="mf-name">${mfConfig.nom}</h1>
-          <p class="mf-address">${mfConfig.adresse}</p>
-          <p class="mf-address">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+          <p class="mf-info">${mfConfig.adresse}</p>
+          <p class="mf-info">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
         </div>
-        <h2>Portefeuille des Crédits Actifs</h2>
+        <h2 class="report-title">Portefeuille des Crédits Actifs</h2>
+        <p class="period">Généré le ${new Date().toLocaleDateString()}</p>
         <table>
           <thead>
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
@@ -273,9 +276,9 @@ export default function CreditManagement() {
               <tr>
                 <td>${c.name}</td>
                 <td>${c.code}</td>
-                <td>${c.capital.toLocaleString()} F</td>
-                <td>${c.interet.toLocaleString()} F</td>
-                <td>${c.penalite.toLocaleString()} F</td>
+                <td class="text-right">${c.capital.toLocaleString()} F</td>
+                <td class="text-right">${c.interet.toLocaleString()} F</td>
+                <td class="text-right">${c.penalite.toLocaleString()} F</td>
                 <td>${c.status}</td>
               </tr>
             `).join('')}

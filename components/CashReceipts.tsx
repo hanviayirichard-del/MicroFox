@@ -23,14 +23,25 @@ const CashReceipts: React.FC = () => {
       const user = savedUser ? JSON.parse(savedUser) : {};
 
       let allTxs: any[] = [];
+      const isRestricted = user.role !== 'administrateur' && user.role !== 'superviseur';
+
       allMembers.forEach((member: any) => {
         if (member.history) {
           member.history.forEach((tx: any) => {
-            // Strict filter for cashier: only their own operations
-            if (user.role === 'caissier' && String(tx.userId) !== String(user.id)) return;
+            // Strict filter for user: only their own operations
+            if (isRestricted && String(tx.userId) !== String(user.id)) return;
             
+            let tontineAccountNumber = tx.tontineAccountNumber || '';
+            if (!tontineAccountNumber && tx.tontineAccountId) {
+              const acc = member.tontineAccounts?.find((a: any) => a.id === tx.tontineAccountId);
+              if (acc) tontineAccountNumber = acc.number;
+            }
+
             allTxs.push({
               ...tx,
+              tontineAccountNumber,
+              epargneAccountNumber: member.epargneAccountNumber || '',
+              zone: tx.zone || member.zone || '',
               memberName: member.name,
               memberCode: member.code,
               category: 'CLIENT'
@@ -45,8 +56,8 @@ const CashReceipts: React.FC = () => {
         const payments = JSON.parse(savedPayments);
         payments.forEach((p: any) => {
           if (p.status === 'Validé') {
-            // Strict filter for cashier: only their own validated payments
-            if (user.role === 'caissier' && String(p.validatorId) !== String(user.id)) return;
+            // Strict filter for user: only their own operations (as agent or validator)
+            if (isRestricted && String(p.agentId) !== String(user.id) && String(p.validatorId) !== String(user.id)) return;
             
             allTxs.push({
               id: p.id,
@@ -57,7 +68,8 @@ const CashReceipts: React.FC = () => {
               memberName: p.agentName,
               memberCode: p.agentId || 'AGENT',
               account: 'caisse',
-              category: 'AGENT'
+              category: 'AGENT',
+              zone: p.zone
             });
           }
         });
@@ -68,8 +80,8 @@ const CashReceipts: React.FC = () => {
       if (savedVault) {
         const vaultTxs = JSON.parse(savedVault);
         vaultTxs.forEach((v: any) => {
-          // Strict filter for cashier: only their own vault operations
-          if (user.role === 'caissier' && String(v.userId) !== String(user.id)) return;
+          // Strict filter for user: only their own vault operations
+          if (isRestricted && String(v.userId) !== String(user.id)) return;
 
           allTxs.push({
             id: v.id,
@@ -90,8 +102,8 @@ const CashReceipts: React.FC = () => {
       if (savedExpenses) {
         const expenses = JSON.parse(savedExpenses);
         expenses.forEach((e: any) => {
-          // Strict filter for cashier: only their own recorded expenses
-          if (user.role === 'caissier' && String(e.recordedBy) !== String(user.identifiant)) return;
+          // Strict filter for user: only their own recorded expenses
+          if (isRestricted && String(e.recordedBy) !== String(user.identifiant)) return;
 
           allTxs.push({
             id: e.id,
@@ -236,6 +248,28 @@ const CashReceipts: React.FC = () => {
                   <span class="info-label">Compte</span>
                   <span class="info-value">${tx.account.toUpperCase()}</span>
                 </div>
+                <div class="info-row">
+                  <span class="info-label">Caissier</span>
+                  <span class="info-value">${tx.cashierName || 'Système'}</span>
+                </div>
+                ${isCredit && tx.zone ? `
+                <div class="info-row">
+                  <span class="info-label">Zone</span>
+                  <span class="info-value">${tx.zone}</span>
+                </div>
+                ` : ''}
+                ${tx.tontineAccountNumber ? `
+                <div class="info-row">
+                  <span class="info-label">N° Tontine</span>
+                  <span class="info-value">${tx.tontineAccountNumber}</span>
+                </div>
+                ` : ''}
+                ${tx.epargneAccountNumber ? `
+                <div class="info-row">
+                  <span class="info-label">N° Compte Épargne</span>
+                  <span class="info-value">${tx.epargneAccountNumber}</span>
+                </div>
+                ` : ''}
                 <div class="amount-box">
                   ${tx.amount.toLocaleString()} FCFA
                 </div>
@@ -245,7 +279,7 @@ const CashReceipts: React.FC = () => {
                 <div class="signature-box">
                   <div class="signature-label">Signature Caissier</div>
                   <div class="signature-space"></div>
-                  <p style="font-size: 9px; margin-top: 5px;">${currentUser.identifiant || 'Caissier'}</p>
+                  <p style="font-size: 9px; margin-top: 5px;">${tx.cashierName || currentUser.identifiant || 'Caissier'}</p>
                 </div>
                 <div class="signature-box">
                   <div class="signature-label">Signature ${clientLabel}</div>

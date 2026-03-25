@@ -13,14 +13,27 @@ const GlobalJournal: React.FC = () => {
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedCaisse, setSelectedCaisse] = useState('Toutes les caisses');
+
+  const savedUser = localStorage.getItem('microfox_current_user');
+  const user = savedUser ? JSON.parse(savedUser) : {};
+  const isAdminOrDirector = user.role === 'administrateur' || user.role === 'directeur';
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
     if (saved) {
       const allMembers = JSON.parse(saved);
       
-      const savedUser = localStorage.getItem('microfox_current_user');
-      const user = savedUser ? JSON.parse(savedUser) : {};
+      const savedUsers = localStorage.getItem('microfox_users');
+      const users = savedUsers ? JSON.parse(savedUsers) : [];
+      const userCaisseMap = users.reduce((acc: any, u: any) => {
+        acc[u.id] = u.caisse;
+        return acc;
+      }, {});
+      const userIdentifiantCaisseMap = users.reduce((acc: any, u: any) => {
+        acc[u.identifiant] = u.caisse;
+        return acc;
+      }, {});
 
       let allTxs: any[] = [];
       allMembers.forEach((member: any) => {
@@ -39,7 +52,8 @@ const GlobalJournal: React.FC = () => {
             allTxs.push({
               ...tx,
               memberName: member.name,
-              memberCode: member.code
+              memberCode: member.code,
+              caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A'
             });
           });
         }
@@ -62,7 +76,9 @@ const GlobalJournal: React.FC = () => {
                 description: `Versement Agent: ${p.agentName}`,
                 memberName: 'CAISSE',
                 memberCode: p.caisse || 'N/A',
-                account: 'caisse'
+                account: 'caisse',
+                caisse: p.caisse || 'N/A',
+                cashierName: p.cashierName || 'N/A'
               });
             }
           });
@@ -72,17 +88,26 @@ const GlobalJournal: React.FC = () => {
         if (savedVault) {
           const vaultTxs = JSON.parse(savedVault);
           vaultTxs.forEach((v: any) => {
-            if (user.role === 'caissier' && v.userId !== user.id) return;
+            if (user.role === 'caissier') {
+              const isToMyCaisse = v.to && user.caisse && v.to.toUpperCase() === user.caisse.toUpperCase();
+              const isFromMyCaisse = v.from && user.caisse && v.from.toUpperCase() === user.caisse.toUpperCase();
+              if (v.userId !== user.id && !isToMyCaisse && !isFromMyCaisse) return;
+            }
+
+            const isToCaisse = v.to && v.to.toUpperCase().startsWith('CAISSE');
+            const isFromCaisse = v.from && v.from.toUpperCase().startsWith('CAISSE');
 
             allTxs.push({
               id: v.id,
               date: v.date,
-              type: 'retrait',
+              type: isToCaisse ? 'depot' : (isFromCaisse ? 'retrait' : (v.type.toLowerCase().includes('versement') ? 'depot' : 'retrait')),
               amount: v.amount,
-              description: v.type,
-              memberName: 'COFFRE',
-              memberCode: v.from,
-              account: 'coffre'
+              description: v.type === 'Fonds de caisse' ? 'Approvisionnement Caisse' : v.type,
+              memberName: 'COFFRE/BANQUE',
+              memberCode: isToCaisse ? v.to : (isFromCaisse ? v.from : v.from),
+              account: 'coffre',
+              caisse: isToCaisse ? v.to : (isFromCaisse ? v.from : 'COFFRE'),
+              cashierName: v.cashierName || 'Système'
             });
           });
         }
@@ -103,7 +128,9 @@ const GlobalJournal: React.FC = () => {
               description: `Dépense: ${e.description} (${e.category})`,
               memberName: 'ADMIN',
               memberCode: e.recordedBy,
-              account: 'dépense'
+              account: 'dépense',
+              caisse: userIdentifiantCaisseMap[e.recordedBy] || 'N/A',
+              cashierName: e.recordedBy
             });
           });
         }
@@ -117,7 +144,7 @@ const GlobalJournal: React.FC = () => {
 
   const generateHTMLContent = (isForPrint = false) => {
     if (filteredTxs.length === 0) return null;
-    const headers = ["Date", "Client", "Code", "Opération", "Compte", "Type", "Montant"];
+    const headers = ["Date", "Client", "Code", "Opération", "Compte", "Auteur", "Type", "Montant"];
     
     const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
 
@@ -128,30 +155,29 @@ const GlobalJournal: React.FC = () => {
         <meta charset="UTF-8">
         <title>Journal Global - ${mfConfig.nom}</title>
         <style>
-          body { font-family: sans-serif; padding: 20px; color: #121c32; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 10px; }
-          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
-          .mf-address { font-size: 12px; font-weight: bold; color: #666; margin: 5px 0; }
-          h2 { color: #00c896; margin-top: 20px; text-transform: uppercase; }
+          body { font-family: sans-serif; padding: 40px; color: #121c32; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32; }
+          .mf-info { font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0; }
+          .report-title { font-size: 18px; font-weight: 800; margin: 20px 0; text-transform: uppercase; text-align: center; }
+          .period { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 30px; font-weight: bold; }
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #121c32; color: white; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: uppercase; }
-          td { border-bottom: 1px solid #eee; padding: 10px 8px; font-size: 13px; }
+          th { background: #f8fafc; padding: 12px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+          td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; text-align: center; }
           tr:nth-child(even) { background-color: #f9fafb; }
           .credit { color: #059669; font-weight: bold; }
           .debit { color: #dc2626; font-weight: bold; }
+          .text-right { text-align: center; }
         </style>
       </head>
       <body>
         <div class="header">
           <h1 class="mf-name">${mfConfig.nom}</h1>
-          <p class="mf-address">${mfConfig.adresse}</p>
-          <p class="mf-address">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+          <p class="mf-info">${mfConfig.adresse}</p>
+          <p class="mf-info">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
         </div>
-        <h2>Journal Global des Opérations</h2>
-        <div style="margin-bottom: 20px;">
-          <p>Extraits de compte consolidés</p>
-          <p>Période: ${startDate || 'Début'} au ${endDate || 'Aujourd\'hui'}</p>
-        </div>
+        <h2 class="report-title">Journal Global des Opérations</h2>
+        <p class="period">Période: DU ${new Date(startDate).toLocaleDateString()} AU ${new Date(endDate).toLocaleDateString()}</p>
         <table>
           <thead>
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
@@ -168,8 +194,9 @@ const GlobalJournal: React.FC = () => {
                 <td>${tx.memberCode}</td>
                 <td>${tx.description}</td>
                 <td>${tx.account.toUpperCase()}</td>
+                <td>${tx.cashierName || 'N/A'}</td>
                 <td class="${isCredit ? 'credit' : (isDebit ? 'debit' : '')}">${typeLabel}</td>
-                <td class="${isCredit ? 'credit' : (isDebit ? 'debit' : '')}">${isCredit ? '+' : (isDebit ? '-' : '')}${tx.amount.toLocaleString()} F</td>
+                <td class="text-right ${isCredit ? 'credit' : (isDebit ? 'debit' : '')}">${isCredit ? '+' : (isDebit ? '-' : '')}${tx.amount.toLocaleString()} F</td>
               </tr>
             `}).join('')}
           </tbody>
@@ -225,12 +252,13 @@ const GlobalJournal: React.FC = () => {
     const txDate = tx.date.split('T')[0];
     const matchesStartDate = !startDate || txDate >= startDate;
     const matchesEndDate = !endDate || txDate <= endDate;
-    return matchesSearch && matchesStartDate && matchesEndDate;
+    const matchesCaisse = selectedCaisse === 'Toutes les caisses' || (tx.caisse && tx.caisse.toUpperCase() === selectedCaisse.toUpperCase());
+    return matchesSearch && matchesStartDate && matchesEndDate && matchesCaisse;
   });
 
   const totals = filteredTxs.reduce((acc, tx) => {
     const isCredit = tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
-    const isDebit = tx.type === 'retrait' || tx.type === 'transfert' || tx.type === 'deblocage';
+    const isDebit = tx.type === 'retrait' || tx.type === 'deblocage'; // Exclude 'transfert' from cash flow
     if (isCredit) acc.credit += tx.amount;
     else if (isDebit) acc.debit += tx.amount;
     return acc;
@@ -287,7 +315,7 @@ const GlobalJournal: React.FC = () => {
       </div>
 
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 ${isAdminOrDirector ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
            <div className="space-y-1">
             <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Début</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm" />
@@ -296,6 +324,23 @@ const GlobalJournal: React.FC = () => {
             <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Fin</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm" />
           </div>
+          {isAdminOrDirector && (
+            <div className="space-y-1">
+              <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Caisse</label>
+              <select 
+                value={selectedCaisse} 
+                onChange={(e) => setSelectedCaisse(e.target.value)} 
+                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm uppercase"
+              >
+                <option value="Toutes les caisses">Toutes les caisses</option>
+                <option value="CAISSE PRINCIPALE">CAISSE PRINCIPALE</option>
+                <option value="CAISSE 1">CAISSE 1</option>
+                <option value="CAISSE 2">CAISSE 2</option>
+                <option value="CAISSE 3">CAISSE 3</option>
+                <option value="CAISSE 4">CAISSE 4</option>
+              </select>
+            </div>
+          )}
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4 items-center">
@@ -339,6 +384,7 @@ const GlobalJournal: React.FC = () => {
                 <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Date / Opération</th>
                 <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Client</th>
                 <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Compte</th>
+                <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Auteur</th>
                 <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Montant</th>
               </tr>
             </thead>
@@ -372,6 +418,9 @@ const GlobalJournal: React.FC = () => {
                     </td>
                     <td className="px-4 py-5">
                       <span className="px-2 py-1 bg-gray-100 rounded-lg text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">{tx.account}</span>
+                    </td>
+                    <td className="px-4 py-5">
+                      <p className="text-sm font-black text-[#121c32] uppercase whitespace-nowrap">{tx.cashierName || 'N/A'}</p>
                     </td>
                     <td className="px-4 py-5 text-right">
                       <span className={`text-sm font-black whitespace-nowrap ${tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'text-emerald-600' : 'text-red-600'}`}>

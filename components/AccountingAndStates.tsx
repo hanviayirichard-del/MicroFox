@@ -65,6 +65,9 @@ const AccountingAndStates: React.FC = () => {
     const user = userStr ? JSON.parse(userStr) : null;
     const isCaissier = user?.role === 'caissier';
 
+    const savedUsers = localStorage.getItem('microfox_users');
+    const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
+
     const saved = localStorage.getItem('microfox_members_data');
     if (saved) {
       const parsed = JSON.parse(saved);
@@ -157,13 +160,28 @@ const AccountingAndStates: React.FC = () => {
         vaultTxs.forEach((v: any) => {
           const vDate = new Date(v.date);
           if (vDate >= start && vDate <= end) {
-            if (isCaissier && v.userId !== user.id) return;
-            if (selectedCaisse !== 'TOUT' && v.caisse && v.caisse !== selectedCaisse) return;
+            if (isCaissier) {
+              if (v.type === 'Approvisionnement Caisse') {
+                if (v.to !== user.caisse) return;
+              } else if (v.userId !== user.id) {
+                return;
+              }
+            }
+            if (selectedCaisse !== 'TOUT') {
+              if (v.type === 'Approvisionnement Caisse') {
+                if (v.to !== selectedCaisse) return;
+              } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') {
+                if (v.from !== selectedCaisse) return;
+              } else {
+                const vUser = allUsers.find((u: any) => u.id === v.userId);
+                if (vUser?.caisse !== selectedCaisse) return;
+              }
+            }
             const date = vDate.toLocaleDateString();
             if (v.type === 'Approvisionnement Caisse') {
               allEntries.push({ date, account: '571100', label: 'Caisse', desc: v.type, debit: v.amount, credit: 0 });
               allEntries.push({ date, account: '571200', label: 'Coffre', desc: v.type, debit: 0, credit: v.amount });
-            } else if (v.type === 'Versement au Coffre') {
+            } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') {
               allEntries.push({ date, account: '571200', label: 'Coffre', desc: v.type, debit: v.amount, credit: 0 });
               allEntries.push({ date, account: '571100', label: 'Caisse', desc: v.type, debit: 0, credit: v.amount });
             }
@@ -459,7 +477,15 @@ const AccountingAndStates: React.FC = () => {
       <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden animate-in fade-in duration-500">
         <div className="bg-[#121c32] p-6 text-white flex items-center justify-between">
           <h3 className="text-sm font-black uppercase tracking-widest">Balance Générale des Comptes</h3>
-          <button className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"><Printer size={18} /></button>
+          <button 
+            onClick={() => {
+              const table = document.querySelector('table')?.outerHTML || '';
+              generateHTMLReport('Balance Générale des Comptes', table);
+            }}
+            className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
+          >
+            <Printer size={18} />
+          </button>
         </div>
         <div className="p-0 overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[800px]">
@@ -503,7 +529,15 @@ const AccountingAndStates: React.FC = () => {
           <p className="text-[10px] font-bold opacity-60 uppercase mt-1">Flux financiers consolidés</p>
         </div>
         <div className="flex gap-2">
-          <button className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"><Printer size={18} /></button>
+          <button 
+            onClick={() => {
+              const table = document.querySelector('table')?.outerHTML || '';
+              generateHTMLReport('Journal des Écritures Comptables', table);
+            }}
+            className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
+          >
+            <Printer size={18} />
+          </button>
           <button 
             onClick={exportJournalToHTML}
             className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
@@ -549,8 +583,69 @@ const AccountingAndStates: React.FC = () => {
     </div>
   );
 
+  const generateHTMLReport = (title: string, content: string) => {
+    const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="UTF-8">
+        <title>${title} - ${mfConfig.nom}</title>
+        <style>
+          body { font-family: sans-serif; padding: 40px; color: #121c32; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32; }
+          .mf-info { font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0; }
+          .report-title { font-size: 18px; font-weight: 800; margin: 20px 0; text-transform: uppercase; text-align: center; }
+          .period { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 30px; font-weight: bold; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #f8fafc; padding: 12px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+          td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; text-align: center; }
+          tr:nth-child(even) { background-color: #f9fafb; }
+          .text-right { text-align: center; }
+          .font-bold { font-weight: bold; }
+          .bg-gray-50 { background-color: #f9fafb; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="mf-name">${mfConfig.nom}</h1>
+          <p class="mf-info">${mfConfig.adresse}</p>
+          <p class="mf-info">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+        </div>
+        <h2 class="report-title">${title}</h2>
+        <p class="period">Période: DU ${new Date(startDate || 0).toLocaleDateString()} AU ${new Date(endDate || Date.now()).toLocaleDateString()}</p>
+        ${content}
+        <script>
+          window.onload = () => {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    }
+  };
+
   const renderBilan = () => (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex justify-end mb-4">
+        <button 
+          onClick={() => {
+            const tables = Array.from(document.querySelectorAll('table')).map(t => t.outerHTML).join('<br/>');
+            generateHTMLReport('Bilan Comptable', tables);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-[#121c32] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+        >
+          <Printer size={16} />
+          Imprimer le Bilan
+        </button>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* ACTIF */}
         <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
@@ -655,7 +750,15 @@ const AccountingAndStates: React.FC = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <button className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"><Printer size={18} /></button>
+            <button 
+              onClick={() => {
+                const table = document.querySelector('table')?.outerHTML || '';
+                generateHTMLReport('Compte de Résultat', table);
+              }}
+              className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
+            >
+              <Printer size={18} />
+            </button>
             <button 
               onClick={exportResultatToHTML}
               className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"

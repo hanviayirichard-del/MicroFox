@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Upload, Settings, ShieldCheck, Database, Building2, Save } from 'lucide-react';
-import { Microfinance } from '../types';
+import { Download, Upload, Settings, ShieldCheck, Database, Building2, Save, Plus, Trash2 } from 'lucide-react';
+import { Microfinance, UserRole, AutoDeactivationRule } from '../types';
 
 const Configuration: React.FC = () => {
   const [isOfflineMode, setIsOfflineMode] = useState(() => {
@@ -15,9 +15,61 @@ const Configuration: React.FC = () => {
       autoDeactivationEnabled: config.autoDeactivationEnabled ?? false,
       autoDeactivationDays: config.autoDeactivationDays ?? [],
       autoDeactivationStartTime: config.autoDeactivationStartTime ?? '00:00',
-      autoDeactivationEndTime: config.autoDeactivationEndTime ?? '23:59'
+      autoDeactivationEndTime: config.autoDeactivationEndTime ?? '23:59',
+      autoDeactivationRules: config.autoDeactivationRules ?? []
     };
   });
+
+  const [newRule, setNewRule] = useState<Partial<AutoDeactivationRule>>({
+    roles: [],
+    days: [],
+    startTime: '18:00',
+    endTime: '23:59',
+    enabled: true
+  });
+
+  const roles: UserRole[] = [
+    'administrateur',
+    'directeur',
+    'gestionnaire de crédit',
+    'caissier',
+    'contrôleur',
+    'auditeur',
+    'agent commercial'
+  ];
+
+  const addRule = () => {
+    if (!newRule.roles?.length || !newRule.days?.length) {
+      alert("Veuillez sélectionner au moins un rôle et un jour.");
+      return;
+    }
+    const rule: AutoDeactivationRule = {
+      id: Date.now().toString(),
+      roles: newRule.roles as UserRole[],
+      days: newRule.days as string[],
+      startTime: newRule.startTime || '00:00',
+      endTime: newRule.endTime || '23:59',
+      enabled: true
+    };
+    setMfConfig({
+      ...mfConfig,
+      autoDeactivationRules: [...(mfConfig.autoDeactivationRules || []), rule]
+    });
+    setNewRule({
+      roles: [],
+      days: [],
+      startTime: '18:00',
+      endTime: '23:59',
+      enabled: true
+    });
+  };
+
+  const removeRule = (id: string) => {
+    setMfConfig({
+      ...mfConfig,
+      autoDeactivationRules: (mfConfig.autoDeactivationRules || []).filter(r => r.id !== id)
+    });
+  };
 
   const toggleDay = (day: string) => {
     const currentDays = mfConfig.autoDeactivationDays || [];
@@ -27,22 +79,57 @@ const Configuration: React.FC = () => {
     setMfConfig({ ...mfConfig, autoDeactivationDays: newDays });
   };
 
+  const toggleNewRuleDay = (day: string) => {
+    const currentDays = newRule.days || [];
+    const newDays = currentDays.includes(day)
+      ? currentDays.filter(d => d !== day)
+      : [...currentDays, day];
+    setNewRule({ ...newRule, days: newDays });
+  };
+
+  const toggleNewRuleRole = (role: UserRole) => {
+    const currentRoles = newRule.roles || [];
+    const newRoles = currentRoles.includes(role)
+      ? currentRoles.filter(r => r !== role)
+      : [...currentRoles, role];
+    setNewRule({ ...newRule, roles: newRoles });
+  };
+
   const timeOptions = Array.from({ length: 24 }, (_, i) => {
     const h = i.toString().padStart(2, '0');
     return [`${h}:00`, `${h}:30`];
   }).flat();
 
   const [newMfForm, setNewMfForm] = useState({ nom: '', code: '' });
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [microfinances, setMicrofinances] = useState<Microfinance[]>(() => {
+    const saved = localStorage.getItem('microfox_microfinances');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const handleCreateMf = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMfForm.nom || !newMfForm.code) return;
     
+    const newMf: Microfinance = {
+      nom: newMfForm.nom,
+      code: newMfForm.code,
+      adresse: '',
+      telephone: ''
+    };
+
+    const updatedList = [...microfinances, newMf];
+    setMicrofinances(updatedList);
+    localStorage.setItem('microfox_microfinances', JSON.stringify(updatedList));
+
     const updatedConfig = { ...mfConfig, nom: newMfForm.nom, code: newMfForm.code };
     setMfConfig(updatedConfig);
     localStorage.setItem('microfox_mf_config', JSON.stringify(updatedConfig));
     localStorage.setItem('microfox_current_mf', updatedConfig.nom);
     setNewMfForm({ nom: '', code: '' });
+    setShowConfirmation(true);
+    setTimeout(() => setShowConfirmation(false), 3000);
     alert("Microfinance créée avec succès !");
     window.dispatchEvent(new Event('storage'));
   };
@@ -51,6 +138,8 @@ const Configuration: React.FC = () => {
     e.preventDefault();
     localStorage.setItem('microfox_mf_config', JSON.stringify(mfConfig));
     localStorage.setItem('microfox_current_mf', mfConfig.nom);
+    setShowSaveConfirmation(true);
+    setTimeout(() => setShowSaveConfirmation(false), 3000);
     alert("Configuration de la microfinance enregistrée !");
     window.dispatchEvent(new Event('storage'));
   };
@@ -238,6 +327,13 @@ const Configuration: React.FC = () => {
         {/* Ajouter une Microfinance (Image 1) */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-2xl font-black text-[#00c896] uppercase tracking-tight mb-8">AJOUTER UNE MICROFINANCE</h2>
+          
+          {showConfirmation && (
+            <div className="mb-6 p-4 bg-emerald-50 text-emerald-600 rounded-2xl text-center font-bold border border-emerald-100">
+              Microfinance ajoutée avec succès !
+            </div>
+          )}
+
           <form onSubmit={handleCreateMf} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-black text-gray-400 uppercase tracking-widest">NOM DE L'INSTITUTION</label>
@@ -263,11 +359,35 @@ const Configuration: React.FC = () => {
               CRÉER L'INSTITUTION
             </button>
           </form>
+
+          {microfinances.length > 0 && (
+            <div className="mt-8 pt-8 border-t border-gray-100">
+              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">LISTE DES INSTITUTIONS</h3>
+              <div className="space-y-3">
+                {microfinances.map((mf, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[#121c32]">{mf.nom}</span>
+                      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Code: {mf.code}</span>
+                    </div>
+                    <Building2 size={20} className="text-gray-300" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Configuration de l'Institution (Image 2) */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-4xl font-black text-[#121c32] uppercase tracking-tight mb-8 leading-tight">Configuration de l'Institution</h2>
+          
+          {showSaveConfirmation && (
+            <div className="mb-6 p-4 bg-emerald-50 text-emerald-600 rounded-2xl text-center font-bold border border-emerald-100">
+              Configuration enregistrée avec succès !
+            </div>
+          )}
+
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-black text-gray-400 uppercase tracking-widest">NOM DE L'INSTITUTION</label>
@@ -311,6 +431,13 @@ const Configuration: React.FC = () => {
         {/* Gestion des Tarifs */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-4xl font-black text-[#121c32] uppercase tracking-tight mb-8 leading-tight">Gestion des Tarifs</h2>
+          
+          {showSaveConfirmation && (
+            <div className="mb-6 p-4 bg-emerald-50 text-emerald-600 rounded-2xl text-center font-bold border border-emerald-100">
+              Tarifs enregistrés avec succès !
+            </div>
+          )}
+
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -401,82 +528,207 @@ const Configuration: React.FC = () => {
         <div className="bg-[#0f172a] p-8 rounded-[2.5rem] shadow-sm border border-gray-100 md:col-span-2">
           <h2 className="text-2xl font-black text-[#00c896] uppercase tracking-tight mb-8">DÉSACTIVATION AUTOMATIQUE</h2>
           
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Statut du Planning */}
-            <div className="bg-[#1e293b] p-8 rounded-[2rem] flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-black text-white">Statut du Planning</h3>
-                <p className="text-gray-400 text-sm font-medium mt-1">Activer le blocage automatique</p>
+          {showSaveConfirmation && (
+            <div className="mb-6 p-4 bg-emerald-500/10 text-emerald-500 rounded-2xl text-center font-bold border border-emerald-500/20">
+              Planning enregistré avec succès !
+            </div>
+          )}
+
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Statut du Planning */}
+              <div className="bg-[#1e293b] p-8 rounded-[2rem] flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-black text-white">Statut Global</h3>
+                  <p className="text-gray-400 text-sm font-medium mt-1">Activer le blocage automatique</p>
+                </div>
+                <button 
+                  onClick={() => setMfConfig({...mfConfig, autoDeactivationEnabled: !mfConfig.autoDeactivationEnabled})}
+                  className={`w-16 h-8 rounded-full relative transition-colors ${mfConfig.autoDeactivationEnabled ? 'bg-[#00c896]' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${mfConfig.autoDeactivationEnabled ? 'right-1' : 'left-1'}`}></div>
+                </button>
               </div>
-              <button 
-                onClick={() => setMfConfig({...mfConfig, autoDeactivationEnabled: !mfConfig.autoDeactivationEnabled})}
-                className={`w-16 h-8 rounded-full relative transition-colors ${mfConfig.autoDeactivationEnabled ? 'bg-[#00c896]' : 'bg-gray-600'}`}
-              >
-                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${mfConfig.autoDeactivationEnabled ? 'right-1' : 'left-1'}`}></div>
-              </button>
+
+              {/* Jours de Désactivation Globale */}
+              <div className="bg-[#1e293b] p-8 rounded-[2rem] lg:col-span-2">
+                <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">JOURS DE DÉSACTIVATION GLOBALE</h3>
+                <div className="flex flex-wrap gap-4">
+                  {['D', 'L', 'M', 'Me', 'J', 'V', 'S'].map(day => (
+                    <button
+                      key={day}
+                      onClick={() => toggleDay(day)}
+                      className={`w-12 h-12 rounded-xl font-black text-lg transition-all ${
+                        (mfConfig.autoDeactivationDays || []).includes(day)
+                          ? 'bg-[#00c896] text-white'
+                          : 'bg-[#0f172a] text-gray-500'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Début Global */}
+              <div className="bg-[#1e293b] p-8 rounded-[2rem]">
+                <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">DÉBUT GLOBAL</h3>
+                <div className="relative">
+                  <select 
+                    value={mfConfig.autoDeactivationStartTime || '00:00'}
+                    onChange={e => setMfConfig({...mfConfig, autoDeactivationStartTime: e.target.value})}
+                    className="w-full bg-transparent text-[#00c896] text-2xl font-black outline-none appearance-none cursor-pointer"
+                  >
+                    {timeOptions.map(t => <option key={t} value={t} className="bg-[#1e293b] text-white">{t}</option>)}
+                  </select>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-[#00c896]">
+                    <Settings size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Fin Global */}
+              <div className="bg-[#1e293b] p-8 rounded-[2rem]">
+                <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">FIN GLOBAL</h3>
+                <div className="relative">
+                  <select 
+                    value={mfConfig.autoDeactivationEndTime || '23:59'}
+                    onChange={e => setMfConfig({...mfConfig, autoDeactivationEndTime: e.target.value})}
+                    className="w-full bg-transparent text-[#00c896] text-2xl font-black outline-none appearance-none cursor-pointer"
+                  >
+                    {timeOptions.map(t => <option key={t} value={t} className="bg-[#1e293b] text-white">{t}</option>)}
+                    <option value="23:59" className="bg-[#1e293b] text-white">23:59</option>
+                  </select>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-[#00c896]">
+                    <Settings size={16} />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Jours de Désactivation */}
-            <div className="bg-[#1e293b] p-8 rounded-[2rem] lg:col-span-2">
-              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">JOURS DE DÉSACTIVATION</h3>
-              <div className="flex flex-wrap gap-4">
-                {['D', 'L', 'M', 'Me', 'J', 'V', 'S'].map(day => (
-                  <button
-                    key={day}
-                    onClick={() => toggleDay(day)}
-                    className={`w-12 h-12 rounded-xl font-black text-lg transition-all ${
-                      (mfConfig.autoDeactivationDays || []).includes(day)
-                        ? 'bg-[#00c896] text-white'
-                        : 'bg-[#0f172a] text-gray-500'
-                    }`}
+            {/* Règles par Rôle */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Programmation par Rôle</h3>
+                <div className="h-px flex-1 bg-gray-800 mx-6"></div>
+              </div>
+
+              {/* Formulaire Nouvelle Règle */}
+              <div className="bg-[#1e293b] p-8 rounded-[2.5rem] border border-emerald-500/20 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">1. Sélectionner les Rôles</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {roles.map(role => (
+                        <button
+                          key={role}
+                          onClick={() => toggleNewRuleRole(role)}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            (newRule.roles || []).includes(role)
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                              : 'bg-[#0f172a] text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">2. Sélectionner les Jours</h4>
+                    <div className="flex gap-2">
+                      {['D', 'L', 'M', 'Me', 'J', 'V', 'S'].map(day => (
+                        <button
+                          key={day}
+                          onClick={() => toggleNewRuleDay(day)}
+                          className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                            (newRule.days || []).includes(day)
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                              : 'bg-[#0f172a] text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-end">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Heure de Début</label>
+                    <select 
+                      value={newRule.startTime}
+                      onChange={e => setNewRule({...newRule, startTime: e.target.value})}
+                      className="w-full p-4 bg-[#0f172a] border-none rounded-2xl outline-none text-emerald-500 text-lg font-black appearance-none"
+                    >
+                      {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Heure de Fin</label>
+                    <select 
+                      value={newRule.endTime}
+                      onChange={e => setNewRule({...newRule, endTime: e.target.value})}
+                      className="w-full p-4 bg-[#0f172a] border-none rounded-2xl outline-none text-emerald-500 text-lg font-black appearance-none"
+                    >
+                      {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                      <option value="23:59">23:59</option>
+                    </select>
+                  </div>
+                  <button 
+                    onClick={addRule}
+                    className="flex items-center justify-center gap-3 bg-emerald-500 text-white p-4 rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-600 transition-all active:scale-95"
                   >
-                    {day}
+                    <Plus size={20} />
+                    Ajouter la Règle
                   </button>
+                </div>
+              </div>
+
+              {/* Liste des Règles */}
+              <div className="space-y-4">
+                {(mfConfig.autoDeactivationRules || []).map(rule => (
+                  <div key={rule.id} className="bg-[#1e293b] p-6 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-6 group hover:bg-[#243147] transition-all border border-transparent hover:border-emerald-500/10">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {rule.roles.map(role => (
+                          <span key={role} className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                            {role}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex gap-1">
+                          {['D', 'L', 'M', 'Me', 'J', 'V', 'S'].map(day => (
+                            <span key={day} className={`text-[10px] font-black ${rule.days.includes(day) ? 'text-white' : 'text-gray-600'}`}>
+                              {day}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="w-1 h-1 rounded-full bg-gray-700"></div>
+                        <span className="text-sm font-black text-emerald-500">{rule.startTime} — {rule.endTime}</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => removeRule(rule.id)}
+                      className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Début */}
-            <div className="bg-[#1e293b] p-8 rounded-[2rem]">
-              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">DÉBUT</h3>
-              <div className="relative">
-                <select 
-                  value={mfConfig.autoDeactivationStartTime || '00:00'}
-                  onChange={e => setMfConfig({...mfConfig, autoDeactivationStartTime: e.target.value})}
-                  className="w-full bg-transparent text-[#00c896] text-2xl font-black outline-none appearance-none cursor-pointer"
-                >
-                  {timeOptions.map(t => <option key={t} value={t} className="bg-[#1e293b] text-white">{t}</option>)}
-                </select>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-[#00c896]">
-                  <Settings size={16} />
-                </div>
-              </div>
-            </div>
-
-            {/* Fin */}
-            <div className="bg-[#1e293b] p-8 rounded-[2rem]">
-              <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">FIN</h3>
-              <div className="relative">
-                <select 
-                  value={mfConfig.autoDeactivationEndTime || '23:59'}
-                  onChange={e => setMfConfig({...mfConfig, autoDeactivationEndTime: e.target.value})}
-                  className="w-full bg-transparent text-[#00c896] text-2xl font-black outline-none appearance-none cursor-pointer"
-                >
-                  {timeOptions.map(t => <option key={t} value={t} className="bg-[#1e293b] text-white">{t}</option>)}
-                  <option value="23:59" className="bg-[#1e293b] text-white">23:59</option>
-                </select>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-[#00c896]">
-                  <Settings size={16} />
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:col-span-1 flex items-end">
+            <div className="flex justify-end pt-4">
               <button 
                 onClick={handleSaveMfConfig}
-                className="w-full bg-[#00c896] text-white py-6 rounded-3xl font-black text-xl uppercase tracking-widest shadow-lg hover:bg-[#00a87d] transition-all active:scale-95"
+                className="bg-[#00c896] text-white px-12 py-6 rounded-3xl font-black text-xl uppercase tracking-widest shadow-lg hover:bg-[#00a87d] transition-all active:scale-95 flex items-center gap-4"
               >
-                Enregistrer Planning
+                <Save size={24} />
+                Enregistrer Tout le Planning
               </button>
             </div>
           </div>

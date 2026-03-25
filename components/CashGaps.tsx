@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, TrendingUp, TrendingDown, Cloud, FileText, Download, Printer, Calendar, User, ChevronDown, CheckCircle2, XCircle, AlertCircle, CreditCard } from 'lucide-react';
+import { Search, AlertTriangle, TrendingUp, TrendingDown, Cloud, FileText, Download, Printer, Calendar, User, ChevronDown, CheckCircle2, XCircle, AlertCircle, CreditCard, Landmark } from 'lucide-react';
 import { Gap } from '../types';
 
 const CashGaps: React.FC = () => {
@@ -14,6 +14,7 @@ const CashGaps: React.FC = () => {
   });
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [selectedCaisse, setSelectedCaisse] = useState('all');
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -52,13 +53,18 @@ const CashGaps: React.FC = () => {
             (item.type === 'CAISSIER' && item.sourceName === selectedUserCaisse) ||
             (item.type === 'TONTINE' && item.zone === selectedUserZone)
           ));
+
+        const matchesCaisse = selectedCaisse === 'all' || 
+          item.caisse === selectedCaisse ||
+          (item.type === 'CAISSIER' && item.sourceName === selectedCaisse) ||
+          (item.userId && usersList.find((u: any) => u.id === item.userId)?.caisse === selectedCaisse);
         
         // Filtrage par zone pour l'agent commercial
         if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
-          return matchesStartDate && matchesEndDate && item.zone === currentUser.zoneCollecte && matchesUser;
+          return matchesStartDate && matchesEndDate && item.zone === currentUser.zoneCollecte && matchesUser && matchesCaisse;
         }
         
-        return matchesStartDate && matchesEndDate && matchesUser;
+        return matchesStartDate && matchesEndDate && matchesUser && matchesCaisse;
       });
       
       setGaps(gapsList);
@@ -176,7 +182,7 @@ const CashGaps: React.FC = () => {
     loadGaps();
     window.addEventListener('storage', loadGaps);
     return () => window.removeEventListener('storage', loadGaps);
-  }, [startDate, endDate, selectedUserId]);
+  }, [startDate, endDate, selectedUserId, selectedCaisse]);
 
   const generateHTMLContent = (isForPrint = false) => {
     if (gaps.length === 0) return null;
@@ -371,6 +377,22 @@ const CashGaps: React.FC = () => {
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
           </div>
+          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'superviseur') && (
+            <div className="relative w-full md:w-64">
+              <Landmark className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <select
+                value={selectedCaisse}
+                onChange={(e) => setSelectedCaisse(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:border-red-500 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm appearance-none cursor-pointer transition-all"
+              >
+                <option value="all">Toutes les caisses</option>
+                {Array.from(new Set([...allUsers.filter((u: any) => u.role === 'caissier' && u.caisse).map((u: any) => u.caisse), 'CAISSE 1', 'CAISSE 2'])).map(c => (
+                  <option key={c as string} value={c as string}>{c as string}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+            </div>
+          )}
           <div className="relative flex-1 w-full">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input 

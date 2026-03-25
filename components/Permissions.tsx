@@ -50,7 +50,8 @@ const ALL_TABS = [
   'Audit & Accès Sécurité',
   'Gestion des Utilisateurs',
   'Conseils & Formation',
-  'Configuration'
+  'Configuration',
+  'Notification'
 ];
 
 const Permissions: React.FC = () => {
@@ -64,12 +65,12 @@ const Permissions: React.FC = () => {
     } else {
       // Initialize with current hardcoded defaults if none exist
       const defaults: Record<string, string[]> = {
-        'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Demande de crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Gestion Crédits', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation'],
-        'caissier': ['Membres', 'Déblocage de crédit', 'Crédit actif', 'Tontine Journalière', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Dépenses administratives', 'Frais & Parts Sociales', 'Gestion Crédits', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers'],
-        'contrôleur': ['Carte Géographique', 'Contrôle Terrain'],
-        'auditeur': ['Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine'],
-        'agent commercial': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Etats des écarts'],
-        'gestionnaire de crédit': ['Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Crédit actif', 'Autres opérations crédit']
+        'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Demande de crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Gestion Crédits', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'],
+        'caissier': ['Membres', 'Déblocage de crédit', 'Crédit actif', 'Tontine Journalière', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Dépenses administratives', 'Frais & Parts Sociales', 'Gestion Crédits', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification'],
+        'contrôleur': ['Carte Géographique', 'Contrôle Terrain', 'Notification'],
+        'auditeur': ['Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification'],
+        'agent commercial': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Notification'],
+        'gestionnaire de crédit': ['Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Crédit actif', 'Autres opérations crédit', 'Notification']
       };
       setPermissions(defaults);
       localStorage.setItem('microfox_permissions', JSON.stringify(defaults));

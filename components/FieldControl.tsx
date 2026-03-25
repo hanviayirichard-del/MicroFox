@@ -12,7 +12,9 @@ import {
   MessageSquare,
   TrendingDown,
   TrendingUp,
-  Minus
+  Minus,
+  Trash2,
+  Send
 } from 'lucide-react';
 import { ClientAccount, TontineAccount, FieldControlReport, User as UserType } from '../types';
 import { recordAuditLog } from '../utils/audit';
@@ -27,6 +29,12 @@ const FieldControl: React.FC = () => {
   const [recommendations, setRecommendations] = useState('');
   const [reports, setReports] = useState<FieldControlReport[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [adminComment, setAdminComment] = useState('');
+  const [selectedZone, setSelectedZone] = useState('');
+  const [historyZone, setHistoryZone] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const currentUser: UserType | null = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
 
@@ -48,14 +56,27 @@ const FieldControl: React.FC = () => {
       c.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
+    const matchesZone = !selectedZone || c.zone === selectedZone;
+    
     if (currentUser?.role === 'agent commercial' && currentUser?.zoneCollecte) {
       return matchesSearch && c.zone === currentUser.zoneCollecte;
     }
     
-    return matchesSearch;
+    return matchesSearch && matchesZone;
   });
 
+  const filteredReports = reports.filter(r => {
+    const matchesZone = !historyZone || r.zone === historyZone;
+    const reportDate = new Date(r.date).toISOString().split('T')[0];
+    const matchesStart = !startDate || reportDate >= startDate;
+    const matchesEnd = !endDate || reportDate <= endDate;
+    return matchesZone && matchesStart && matchesEnd;
+  });
+
+  const zones = Array.from(new Set(clients.map(c => c.zone).filter(Boolean)));
+
   const handleSelectClient = (client: ClientAccount) => {
+    if (selectedClient?.id === client.id) return;
     setSelectedClient(client);
     setSelectedTontine(null);
     setBookletBalance('');
@@ -64,8 +85,16 @@ const FieldControl: React.FC = () => {
   };
 
   const handleSaveReport = () => {
-    if (!selectedClient || !selectedTontine || !currentUser) {
-      alert("Veuillez sélectionner un client et un compte tontine.");
+    if (!selectedClient) {
+      alert("Veuillez sélectionner un client.");
+      return;
+    }
+    if (!selectedTontine) {
+      alert("Veuillez sélectionner un compte tontine.");
+      return;
+    }
+    if (!currentUser) {
+      alert("Erreur: Utilisateur non connecté.");
       return;
     }
 
@@ -91,7 +120,8 @@ const FieldControl: React.FC = () => {
       observations: observations,
       recommendations: recommendations,
       controllerId: currentUser.id,
-      controllerName: currentUser.identifiant
+      controllerName: currentUser.identifiant,
+      zone: selectedClient.zone
     };
 
     const updatedReports = [newReport, ...reports];
@@ -116,44 +146,56 @@ const FieldControl: React.FC = () => {
     setSearchTerm('');
   };
 
-  const handleRegularize = () => {
-    if (!selectedClient || !selectedTontine || !currentUser) return;
+  const handleSaveAdminComment = (reportId: string) => {
+    const updatedReports = reports.map(r => {
+      if (r.id === reportId) {
+        return { ...r, adminComments: adminComment };
+      }
+      return r;
+    });
+    setReports(updatedReports);
+    localStorage.setItem('microfox_field_control_reports', JSON.stringify(updatedReports));
+    setEditingCommentId(null);
+    setAdminComment('');
+    
+    recordAuditLog(
+      'MODIFICATION',
+      'CONTRÔLE TERRAIN',
+      `Ajout d'un commentaire administrateur sur le rapport ${reportId}`
+    );
+  };
 
-    const bookletVal = parseFloat(bookletBalance) || 0;
-    const difference = selectedTontine.balance - bookletVal;
-
-    if (difference >= 0) return; // Only for negative difference (system < booklet)
-
-    const amountToPay = Math.abs(difference);
-
-    if (confirm(`Confirmer le paiement de ${amountToPay.toLocaleString()} FCFA pour régulariser le solde système ?`)) {
-      const updatedClients = clients.map(c => {
-        if (c.id === selectedClient.id) {
-          const updatedTontineAccounts = c.tontineAccounts.map(acc => {
-            if (acc.id === selectedTontine.id) {
-              return { ...acc, balance: bookletVal };
-            }
-            return acc;
-          });
-          return { ...c, tontineAccounts: updatedTontineAccounts };
+  const handleDeleteAdminComment = (reportId: string) => {
+    if (confirm("Supprimer ce commentaire ?")) {
+      const updatedReports = reports.map(r => {
+        if (r.id === reportId) {
+          const { adminComments, ...rest } = r;
+          return rest as FieldControlReport;
         }
-        return c;
+        return r;
       });
-
-      setClients(updatedClients);
-      localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-      localStorage.setItem('microfox_pending_sync', 'true');
-
-      // Update selected tontine for UI
-      setSelectedTontine({ ...selectedTontine, balance: bookletVal });
-
+      setReports(updatedReports);
+      localStorage.setItem('microfox_field_control_reports', JSON.stringify(updatedReports));
+      
       recordAuditLog(
-        'MODIFICATION',
+        'SUPPRESSION',
         'CONTRÔLE TERRAIN',
-        `Régularisation du solde système pour ${selectedClient.name} (${selectedClient.code}). Paiement de ${amountToPay} FCFA. Nouveau solde: ${bookletVal} FCFA`
+        `Suppression du commentaire administrateur sur le rapport ${reportId}`
       );
+    }
+  };
 
-      alert("Le solde système a été régularisé avec succès.");
+  const handleDeleteReport = (reportId: string) => {
+    if (confirm("Êtes-vous sûr de vouloir supprimer ce rapport de contrôle ? Cette action est irréversible.")) {
+      const updatedReports = reports.filter(r => r.id !== reportId);
+      setReports(updatedReports);
+      localStorage.setItem('microfox_field_control_reports', JSON.stringify(updatedReports));
+      
+      recordAuditLog(
+        'SUPPRESSION',
+        'CONTRÔLE TERRAIN',
+        `Suppression du rapport de contrôle terrain ${reportId}`
+      );
     }
   };
 
@@ -187,50 +229,166 @@ const FieldControl: React.FC = () => {
       {showHistory ? (
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight mb-6 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <History size={20} className="text-indigo-600" />
             Historique des Contrôles
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-gray-50 bg-gray-50/50">
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date / Contrôleur</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Solde Système</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Solde Livret</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Écart</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Observations</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {reports.length > 0 ? (
-                  reports.map((report) => (
-                    <tr key={report.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-black text-[#121c32]">{new Date(report.date).toLocaleDateString()}</span>
-                          <span className="text-[10px] font-bold text-gray-400 uppercase">{report.controllerName}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Zone</label>
+              <select
+                value={historyZone}
+                onChange={(e) => setHistoryZone(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
+              >
+                <option value="">Toutes les zones</option>
+                {zones.map(z => <option key={z} value={z}>{z}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Début</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Fin</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
+              />
+            </div>
+          </div>
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-50 bg-gray-50/50">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date / Contrôleur</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client / Zone</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Solde Système</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Solde Livret</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Écart</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Observations / Recommandations</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Commentaires Admin</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filteredReports.length > 0 ? (
+                filteredReports.map((report) => (
+                  <tr key={report.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-[#121c32]">{new Date(report.date).toLocaleDateString()}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">{report.controllerName}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-[#121c32] uppercase">{report.clientName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase">CLT: {report.clientCode}</span>
+                          <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">TONTINE: {report.tontineAccountNumber}</span>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-black text-[#121c32] uppercase">{report.clientName}</span>
-                          <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">Compte: {report.tontineAccountNumber}</span>
-                        </div>
-                      </td>
+                        {report.zone && <span className="text-[9px] font-bold text-amber-500 uppercase mt-1">Zone: {report.zone}</span>}
+                      </div>
+                    </td>
                       <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">{report.systemBalance.toLocaleString()} FCFA</td>
                       <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">{report.bookletBalance.toLocaleString()} FCFA</td>
                       <td className={`px-6 py-4 text-right text-xs font-black ${getDifferenceColor(report.difference)}`}>
                         {report.difference > 0 ? '+' : ''}{report.difference.toLocaleString()} FCFA
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-[10px] font-medium text-gray-700 max-w-[200px] line-clamp-2">{report.observations}</p>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Observations:</p>
+                          <p className="text-[10px] font-medium text-gray-700 max-w-[200px] line-clamp-2">{report.observations}</p>
+                          {report.recommendations && (
+                            <>
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter mt-2">Recommandations:</p>
+                              <p className="text-[10px] font-medium text-gray-700 max-w-[200px] line-clamp-2">{report.recommendations}</p>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-2">
+                          {report.adminComments ? (
+                            <div className="group relative bg-amber-50 p-3 rounded-xl border border-amber-100">
+                              <p className="text-[10px] font-medium text-amber-900 leading-relaxed">{report.adminComments}</p>
+                              {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+                                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => handleDeleteAdminComment(report.id)}
+                                    className="p-1 text-red-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+                              editingCommentId === report.id ? (
+                                <div className="flex flex-col gap-2">
+                                  <textarea
+                                    value={adminComment}
+                                    onChange={(e) => setAdminComment(e.target.value)}
+                                    placeholder="Saisir un commentaire..."
+                                    className="w-full p-2 bg-white border border-amber-200 rounded-lg text-[10px] outline-none focus:border-amber-400"
+                                    rows={2}
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button 
+                                      onClick={() => setEditingCommentId(null)}
+                                      className="text-[9px] font-black text-gray-400 uppercase"
+                                    >
+                                      Annuler
+                                    </button>
+                                    <button 
+                                      onClick={() => handleSaveAdminComment(report.id)}
+                                      className="flex items-center gap-1 px-2 py-1 bg-amber-500 text-white rounded-md text-[9px] font-black uppercase"
+                                    >
+                                      <Send size={10} /> Enregistrer
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => {
+                                    setEditingCommentId(report.id);
+                                    setAdminComment('');
+                                  }}
+                                  className="flex items-center gap-1 text-[10px] font-black text-amber-600 uppercase hover:text-amber-700 transition-colors"
+                                >
+                                  <MessageSquare size={12} /> Ajouter un commentaire
+                                </button>
+                              )
+                            )
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+                          <button 
+                            onClick={() => handleDeleteReport(report.id)}
+                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90"
+                            title="Supprimer le rapport"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-20 text-center">
+                    <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3 opacity-20">
                         <History size={48} />
                         <p className="text-sm font-black uppercase tracking-widest text-gray-600">Aucun rapport trouvé</p>
@@ -251,15 +409,25 @@ const FieldControl: React.FC = () => {
                 <User size={20} className="text-indigo-600" />
                 Sélection Client
               </h2>
-              <div className="relative mb-4">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="Nom ou Code Client..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-black focus:border-indigo-400 rounded-2xl outline-none text-sm font-medium text-[#121c32] transition-all"
-                />
+              <div className="space-y-3 mb-4">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Nom ou Code Client..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-black focus:border-indigo-400 rounded-2xl outline-none text-sm font-medium text-[#121c32] transition-all"
+                  />
+                </div>
+                <select
+                  value={selectedZone}
+                  onChange={(e) => setSelectedZone(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-black focus:border-indigo-400 rounded-2xl outline-none text-sm font-bold text-[#121c32] transition-all"
+                >
+                  <option value="">Toutes les zones</option>
+                  {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
               </div>
               <div className="flex-1 overflow-y-auto max-h-[400px] space-y-2 pr-2 custom-scrollbar">
                 {filteredClients.map(client => (
@@ -273,7 +441,12 @@ const FieldControl: React.FC = () => {
                     }`}
                   >
                     <p className="text-xs font-black text-[#121c32] uppercase">{client.name}</p>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{client.code}</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <span className="text-[9px] font-black bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded uppercase tracking-tighter">CLT: {client.code}</span>
+                      {client.tontineAccounts.map(acc => (
+                        <span key={acc.id} className="text-[9px] font-black bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded uppercase tracking-tighter">TONTINE: {acc.number}</span>
+                      ))}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -287,7 +460,12 @@ const FieldControl: React.FC = () => {
                 <div className="flex justify-between items-center border-b border-gray-50 pb-6">
                   <div>
                     <h2 className="text-xl font-black text-[#121c32] uppercase tracking-tight">{selectedClient.name}</h2>
-                    <p className="text-xs font-bold text-indigo-500 uppercase tracking-[0.2em]">{selectedClient.code}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-xs font-bold text-indigo-500 uppercase tracking-[0.2em]">CLT: {selectedClient.code}</p>
+                      {selectedClient.epargneAccountNumber && (
+                        <p className="text-xs font-bold text-blue-500 uppercase tracking-[0.2em]">EP: {selectedClient.epargneAccountNumber}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date du contrôle</p>
@@ -359,16 +537,6 @@ const FieldControl: React.FC = () => {
                               </span>
                             </div>
                           </div>
-
-                          {(selectedTontine.balance - (parseFloat(bookletBalance) || 0)) < 0 && (
-                            <button 
-                              onClick={handleRegularize}
-                              className="w-full mt-4 py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-all flex items-center justify-center gap-2"
-                            >
-                              <TrendingDown size={14} />
-                              Régulariser à la caisse
-                            </button>
-                          )}
                         </div>
                       </div>
 
