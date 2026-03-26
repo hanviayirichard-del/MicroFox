@@ -120,12 +120,20 @@ export const pullFromSupabase = async (
     }
     
     if (data) {
+      let changed = false;
       data.forEach(item => {
         const localValue = originalGetItem(item.key);
-        const finalValue = localValue ? mergeJSON(localValue, item.value) : item.value;
-        originalSetItem(item.key, finalValue);
+        if (localValue !== item.value) {
+          const finalValue = localValue ? mergeJSON(localValue, item.value) : item.value;
+          if (finalValue !== localValue) {
+            originalSetItem(item.key, finalValue);
+            changed = true;
+          }
+        }
       });
+      return changed;
     }
+    return false;
   } catch (e) {
     console.error('Supabase pull failed:', e);
   }

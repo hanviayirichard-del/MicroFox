@@ -53,7 +53,7 @@ const FinancialReports: React.FC = () => {
     openingBalance: 0
   });
 
-  const zones = ['01A', '01', '02A', '02', '03A', '03', '04A', '04', '05A', '05', '06A', '06', '07A', '07', '08A', '08', '09A', '09'];
+  const zones = ['01', '01A', '02', '02A', '03', '03A', '04', '04A', '05', '05A', '06', '06A', '07', '07A', '08', '08A', '09', '09A'];
 
   const getZoneFromCode = (code: string) => {
     if (!code) return 'Inconnue';

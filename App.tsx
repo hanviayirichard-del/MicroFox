@@ -44,6 +44,7 @@ import CashGaps from './components/CashGaps';
 import { User, Microfinance } from './types';
 import { recordAuditLog } from './utils/audit';
 import { Loader2, Clock, ShieldAlert } from 'lucide-react';
+import { supabase } from './src/supabase';
 
 // Capture native storage methods at module load to avoid issues with overrides
 const nativeGetItem = localStorage.getItem.bind(localStorage);
@@ -74,31 +75,28 @@ const App: React.FC = () => {
         // Push local changes first to avoid overwriting them
         if (nativeGetItem('microfox_pending_sync') === 'true') {
           const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-          let pushSuccess = true;
+          
+          const pushPromises: Promise<boolean>[] = [];
           
           // Push global data
           const usersData = nativeGetItem('microfox_users');
           if (usersData) {
-            const ok = await syncToSupabase('microfox_users', usersData);
-            if (!ok) pushSuccess = false;
+            pushPromises.push(syncToSupabase('microfox_users', usersData));
           }
           
           // Push all tenant-specific data
-          if (pushSuccess) {
-            for (let i = 0; i < localStorage.length; i++) {
-              const key = localStorage.key(i);
-              if (key && key.startsWith(prefix)) {
-                const value = nativeGetItem(key);
-                if (value) {
-                  const ok = await syncToSupabase(key, value);
-                  if (!ok) {
-                    pushSuccess = false;
-                    break;
-                  }
-                }
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(prefix)) {
+              const value = nativeGetItem(key);
+              if (value) {
+                pushPromises.push(syncToSupabase(key, value));
               }
             }
           }
+          
+          const results = await Promise.all(pushPromises);
+          const pushSuccess = results.every(ok => ok);
           
           if (!pushSuccess && import.meta.env.VITE_SUPABASE_URL) {
             console.warn('La synchronisation vers le serveur a échoué. Vos modifications locales seront synchronisées ultérieurement.');
@@ -110,14 +108,16 @@ const App: React.FC = () => {
           }
         }
 
-        // Pull global data (users)
-        await pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
-        
-        // Pull tenant data
+        // Pull global and tenant data in parallel
         const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-        await pullFromSupabase(prefix, nativeSetItem, nativeGetItem);
+        const [globalChanged, tenantChanged] = await Promise.all([
+          pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem),
+          pullFromSupabase(prefix, nativeSetItem, nativeGetItem)
+        ]);
         
-        setSyncVersion(v => v + 1);
+        if (globalChanged || tenantChanged) {
+          setSyncVersion(v => v + 1);
+        }
         return 'success';
       } catch (error) {
         console.error('Background sync error:', error);
@@ -223,6 +223,70 @@ const App: React.FC = () => {
     const interval = setInterval(checkScheduleBlocking, 60000); // Check every minute
     return () => clearInterval(interval);
   }, [currentUser, syncVersion]);
+
+  // Real-time sync subscription
+  useEffect(() => {
+    if (!currentUser || isOfflineMode || !supabase || !import.meta.env.VITE_SUPABASE_URL) return;
+
+    const mfCode = localStorage.getItem('microfox_current_mf');
+    if (!mfCode) return;
+
+    const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+
+    const channel = supabase
+      .channel('storage_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'storage',
+        },
+        async (payload) => {
+          if (payload.new && (payload.new as any).key) {
+            const key = (payload.new as any).key;
+            if (key === 'microfox_users' || key.startsWith(prefix)) {
+              const remoteValue = (payload.new as any).value;
+              const localValue = nativeGetItem(key);
+              
+              if (remoteValue && remoteValue !== localValue) {
+                const { mergeJSON } = await import('./src/utils/supabaseSync');
+                const finalValue = localValue ? mergeJSON(localValue, remoteValue) : remoteValue;
+                
+                if (finalValue !== localValue) {
+                  nativeSetItem(key, finalValue);
+                  setSyncVersion(v => v + 1);
+                }
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Periodic background pull as fallback
+    const pullInterval = setInterval(() => {
+      const currentMfCode = localStorage.getItem('microfox_current_mf');
+      if (currentMfCode) {
+        const currentPrefix = `mf_${currentMfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+        setIsBackgroundSyncing(true);
+        import('./src/utils/supabaseSync').then(async (m) => {
+          const globalChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
+          const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem);
+          if (globalChanged || tenantChanged) {
+            setSyncVersion(v => v + 1);
+          }
+        }).finally(() => {
+          setIsBackgroundSyncing(false);
+        });
+      }
+    }, 30000); // Every 30 seconds
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pullInterval);
+    };
+  }, [currentUser, isOfflineMode]);
 
   useEffect(() => {
     // Global storage overrides

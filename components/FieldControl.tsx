@@ -76,7 +76,7 @@ const FieldControl: React.FC = () => {
     return matchesZone && matchesStart && matchesEnd;
   });
 
-  const zones = Array.from(new Set(clients.map(c => c.zone).filter(Boolean)));
+  const zones = ['01', '01A', '02', '02A', '03', '03A', '04', '04A', '05', '05A', '06', '06A', '07', '07A', '08', '08A', '09', '09A'];
 
   const handleSelectClient = (client: ClientAccount) => {
     if (selectedClient?.id === client.id) return;
