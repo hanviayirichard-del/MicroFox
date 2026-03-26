@@ -254,6 +254,7 @@ const DailyTontine: React.FC = () => {
           id: m.id,
           name: m.name,
           code: m.code,
+          tontineAccountId: hasTontine ? m.tontineAccounts[0].id : null,
           accountNumber: hasTontine ? m.tontineAccounts[0].number : 'SANS COMPTE',
           dailyMise: hasTontine ? m.tontineAccounts[0].dailyMise : 0,
           tontineBalance: Math.max(0, grossBalance - totalCommissionsPaid),
@@ -401,8 +402,7 @@ const DailyTontine: React.FC = () => {
             if (savedHistory) fullHistory = JSON.parse(savedHistory);
           }
 
-          const targetAccount = m.tontineAccounts.find((ta: any) => ta.number === client.accountNumber);
-          const targetAccountId = targetAccount ? targetAccount.id : m.tontineAccounts[0].id;
+          const targetAccountId = client.tontineAccountId || (m.tontineAccounts[0]?.id);
 
           createdTx = {
             id: Date.now().toString(),
@@ -420,7 +420,7 @@ const DailyTontine: React.FC = () => {
           };
 
           const updatedTontineAccounts = m.tontineAccounts.map((ta: any) => {
-            if (ta.number === client.accountNumber) {
+            if (ta.id === targetAccountId) {
               return { ...ta, balance: ta.balance + amount };
             }
             return ta;
