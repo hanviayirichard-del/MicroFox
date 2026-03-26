@@ -338,7 +338,7 @@ const OperationCorrections: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-[10px] font-medium text-gray-700 max-w-[200px] truncate" title={op.description}>{op.description}</p>
+                      <p className="text-[10px] font-medium text-gray-700" title={op.description}>{op.description}</p>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className={`text-sm font-black ${op.type === 'depot' || op.type === 'cotisation' || op.type === 'remboursement' ? 'text-emerald-600' : 'text-red-600'}`}>

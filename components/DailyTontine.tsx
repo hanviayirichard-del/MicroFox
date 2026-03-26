@@ -48,11 +48,8 @@ const DailyTontine: React.FC = () => {
         .filter((m: any) => m.tontineAccounts && m.tontineAccounts.length > 0)
         .map((m: any) => {
           // Récupération de l'historique (soit depuis l'objet membre, soit depuis localStorage direct si besoin)
-        let clientHistory = m.history || [];
-        if (clientHistory.length === 0) {
-          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-          if (savedHistory) clientHistory = JSON.parse(savedHistory);
-        }
+        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+        let clientHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
 
         // Récupérer le montant cotisé aujourd'hui depuis l'historique
         const todayStr = new Date().toISOString().split('T')[0];
@@ -327,11 +324,8 @@ const DailyTontine: React.FC = () => {
       const allMembers = JSON.parse(savedMembers);
       const updatedMembers = allMembers.map((m: any) => {
         if (m.id === clientId) {
-          let fullHistory = m.history || [];
-          if (fullHistory.length === 0) {
-            const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-            if (savedHistory) fullHistory = JSON.parse(savedHistory);
-          }
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          let fullHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
 
           if (m.tontineAccounts && m.tontineAccounts.length > 0) {
             const updatedTontineAccounts = [...m.tontineAccounts];
@@ -396,11 +390,8 @@ const DailyTontine: React.FC = () => {
       const updatedMembers = allMembers.map((m: any) => {
         if (m.id === client.id) {
           // Load full history to avoid losing it when updating members data
-          let fullHistory = m.history || [];
-          if (fullHistory.length === 0) {
-            const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-            if (savedHistory) fullHistory = JSON.parse(savedHistory);
-          }
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          let fullHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
 
           const targetAccountId = client.tontineAccountId || (m.tontineAccounts[0]?.id);
 

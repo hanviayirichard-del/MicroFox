@@ -3468,7 +3468,7 @@ const Members: React.FC = () => {
                                     {isIncoming ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
+                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
                                     <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                   </div>
                                 </div>
@@ -3692,7 +3692,7 @@ const Members: React.FC = () => {
                                 {tx.type === 'remboursement' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
+                                <p className="text-sm font-black text-white uppercase">{tx.description}</p>
                                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                               </div>
                             </div>
@@ -3742,7 +3742,7 @@ const Members: React.FC = () => {
                                   {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
+                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
                                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
                               </div>
@@ -3798,7 +3798,7 @@ const Members: React.FC = () => {
                                   {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-sm font-black text-white uppercase truncate">{tx.description}</p>
+                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
                                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
                               </div>

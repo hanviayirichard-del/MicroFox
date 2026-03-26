@@ -742,7 +742,7 @@ const TontineWithdrawal: React.FC = () => {
                               <ArrowDownLeft size={14} />
                             </div>
                             <div>
-                              <p className="text-[10px] font-black text-[#121c32] uppercase truncate max-w-[120px]">{tx.description}</p>
+                              <p className="text-[10px] font-black text-[#121c32] uppercase">{tx.description}</p>
                               <p className="text-[8px] font-bold text-gray-400 uppercase">{new Date(tx.date).toLocaleDateString()}</p>
                             </div>
                           </div>

@@ -14,7 +14,9 @@ import {
   TrendingUp,
   Minus,
   Trash2,
-  Send
+  Send,
+  Printer,
+  Download
 } from 'lucide-react';
 import { ClientAccount, TontineAccount, FieldControlReport, User as UserType } from '../types';
 import { recordAuditLog } from '../utils/audit';
@@ -202,6 +204,109 @@ const FieldControl: React.FC = () => {
     }
   };
 
+  const generateHTMLReport = (isForPrint: boolean) => {
+    const headerHtml = `
+      <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 20px;">
+        <h1 style="margin: 0; color: #121c32; text-transform: uppercase; font-size: 24px;">MicroFox - Rapport de Contrôle Terrain</h1>
+        <p style="margin: 5px 0; color: #666; font-weight: bold;">Historique des Contrôles</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #888;">Période: ${startDate || 'Début'} au ${endDate || 'Fin'} | Zone: ${historyZone || 'Toutes'}</p>
+        <p style="margin: 5px 0; font-size: 10px; color: #aaa;">Généré le: ${new Date().toLocaleString()}</p>
+      </div>
+    `;
+
+    const tableHtml = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+        <thead>
+          <tr style="background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+            <th style="padding: 12px; text-align: left; text-transform: uppercase;">Date / Contrôleur</th>
+            <th style="padding: 12px; text-align: left; text-transform: uppercase;">Client / Zone</th>
+            <th style="padding: 12px; text-align: right; text-transform: uppercase;">Solde Système</th>
+            <th style="padding: 12px; text-align: right; text-transform: uppercase;">Solde Livret</th>
+            <th style="padding: 12px; text-align: right; text-transform: uppercase;">Écart</th>
+            <th style="padding: 12px; text-align: left; text-transform: uppercase;">Observations</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredReports.map(report => `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px;">
+                <strong>${new Date(report.date).toLocaleDateString()}</strong><br/>
+                <span style="color: #666; text-transform: uppercase; font-size: 9px;">${report.controllerName}</span>
+              </td>
+              <td style="padding: 10px;">
+                <strong style="text-transform: uppercase;">${report.clientName}</strong><br/>
+                <span style="color: #888; font-size: 9px;">CODE: ${report.clientCode} | TONTINE: ${report.tontineAccountNumber}</span><br/>
+                ${report.zone ? `<span style="color: #f59e0b; font-size: 9px; text-transform: uppercase;">Zone: ${report.zone}</span>` : ''}
+              </td>
+              <td style="padding: 10px; text-align: right;">${report.systemBalance.toLocaleString()} F</td>
+              <td style="padding: 10px; text-align: right;">${report.bookletBalance.toLocaleString()} F</td>
+              <td style="padding: 10px; text-align: right; font-weight: bold; color: ${report.difference === 0 ? '#10b981' : '#ef4444'};">
+                ${report.difference > 0 ? '+' : ''}${report.difference.toLocaleString()} F
+              </td>
+              <td style="padding: 10px;">
+                <div style="font-size: 9px;">
+                  <strong>OBS:</strong> ${report.observations}<br/>
+                  ${report.recommendations ? `<strong>REC:</strong> ${report.recommendations}` : ''}
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Historique Contrôle Terrain</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; color: #333; }
+            @media print {
+              .no-print { display: none; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${headerHtml}
+          ${tableHtml}
+          ${isForPrint ? `
+            <script>
+              window.onload = () => {
+                window.print();
+                setTimeout(() => window.close(), 500);
+              };
+            </script>
+          ` : ''}
+        </body>
+      </html>
+    `;
+  };
+
+  const handleExport = () => {
+    const htmlContent = generateHTMLReport(false);
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Historique_Controle_Terrain_${new Date().toISOString().split('T')[0]}.html`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePrint = () => {
+    const htmlContent = generateHTMLReport(true);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    }
+  };
+
   const getDifferenceColor = (diff: number) => {
     if (diff === 0) return 'text-emerald-500';
     return 'text-red-500';
@@ -265,6 +370,22 @@ const FieldControl: React.FC = () => {
                 onChange={(e) => setEndDate(e.target.value)}
                 className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
               />
+            </div>
+            <div className="flex items-end gap-2 pb-0.5">
+              <button 
+                onClick={handlePrint}
+                className="p-2 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-indigo-600 transition-all shadow-sm"
+                title="Imprimer l'historique"
+              >
+                <Printer size={16} />
+              </button>
+              <button 
+                onClick={handleExport}
+                className="p-2 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-emerald-600 transition-all shadow-sm"
+                title="Exporter l'historique"
+              >
+                <Download size={16} />
+              </button>
             </div>
           </div>
         </h2>

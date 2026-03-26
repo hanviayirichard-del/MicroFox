@@ -55,6 +55,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [syncVersion, setSyncVersion] = useState(0);
+  const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(() => {
     return localStorage.getItem('microfox_offline_mode') === 'true';
   });
@@ -583,6 +584,8 @@ const App: React.FC = () => {
     sessionStorage.setItem('microfox_session_active', 'true');
     setupStorageIsolation(user.codeMF); // Apply isolation immediately without reload
     recordAuditLog('CONNEXION', 'AUTHENTIFICATION', `Connexion réussie de ${user.identifiant} (Code MF: ${user.codeMF})`, 'SUCCES', user);
+    setWelcomeMessage(`Bienvenue ${user.identifiant}`);
+    setTimeout(() => setWelcomeMessage(null), 3000);
     setCurrentUser(user);
   };
 
@@ -658,6 +661,11 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#0a1226] overflow-hidden relative text-gray-100">
+      {welcomeMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl animate-bounce">
+          {welcomeMessage}
+        </div>
+      )}
       {/* Overlay pour mobile */}
       {isSidebarOpen && (
         <div 

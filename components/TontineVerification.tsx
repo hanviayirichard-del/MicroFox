@@ -792,7 +792,7 @@ const TontineVerification: React.FC = () => {
                                             {tx.type === 'cotisation' || tx.type === 'depot' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                                           </div>
                                           <div>
-                                            <p className="text-[10px] font-black text-[#121c32] uppercase truncate max-w-[150px]">{tx.description}</p>
+                                            <p className="text-[10px] font-black text-[#121c32] uppercase">{tx.description}</p>
                                             <p className="text-[8px] font-bold text-gray-600 uppercase">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                           </div>
                                         </div>

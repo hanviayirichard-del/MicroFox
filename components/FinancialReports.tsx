@@ -883,7 +883,7 @@ const FinancialReports: React.FC = () => {
               <tr key={tx.id || idx} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{new Date(tx.date).toLocaleDateString()}</td>
                 <td className="px-4 py-4">
-                  <p className="text-[10px] sm:text-xs font-black text-[#121c32] uppercase truncate max-w-[150px]">{tx.memberName}</p>
+                  <p className="text-[10px] sm:text-xs font-black text-[#121c32] uppercase">{tx.memberName}</p>
                   <p className="text-[8px] sm:text-[9px] font-bold text-gray-400">{tx.memberCode}</p>
                 </td>
                 <td className="px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{tx.tontineAccountNumber || '-'}</td>

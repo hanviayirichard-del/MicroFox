@@ -407,7 +407,7 @@ const GlobalJournal: React.FC = () => {
                           {tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-black text-[#121c32] uppercase truncate max-w-[200px]">{tx.description}</p>
+                          <p className="text-sm font-black text-[#121c32] uppercase">{tx.description}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(tx.date).toLocaleDateString()} {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</p>
                         </div>
                       </div>

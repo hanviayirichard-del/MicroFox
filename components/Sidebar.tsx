@@ -43,16 +43,25 @@ interface MenuCategory {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout, onSync, isSyncing }) => {
   const [hasPendingSync, setHasPendingSync] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
-    const checkSync = () => {
+    const updateState = () => {
       setHasPendingSync(localStorage.getItem('microfox_pending_sync') === 'true' || !!isSyncing);
+      const savedPerms = localStorage.getItem('microfox_permissions');
+      if (savedPerms) {
+        try {
+          setPermissions(JSON.parse(savedPerms));
+        } catch (e) {
+          console.error("Error parsing permissions:", e);
+        }
+      }
     };
-    checkSync();
-    window.addEventListener('storage', checkSync);
-    const interval = setInterval(checkSync, 2000);
+    updateState();
+    window.addEventListener('storage', updateState);
+    const interval = setInterval(updateState, 2000);
     return () => {
-      window.removeEventListener('storage', checkSync);
+      window.removeEventListener('storage', updateState);
       clearInterval(interval);
     };
   }, [isSyncing]);
@@ -186,14 +195,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
               if (item.id === 'Guide Pratique') return true;
               if (userRole === 'administrateur') return true;
 
-              const savedPerms = localStorage.getItem('microfox_permissions');
-              if (savedPerms) {
-                const perms = JSON.parse(savedPerms);
-                const rolePerms = perms[userRole] || [];
-                return rolePerms.includes(item.id);
+              if (permissions[userRole]) {
+                return permissions[userRole].includes(item.id);
               }
 
-              // Fallback to hardcoded defaults if no permissions stored yet
+              // Fallback to hardcoded defaults if no permissions stored yet for this role
               if (userRole === 'gestionnaire de crédit') {
                 return ((item.label.toLowerCase().includes('crédit') || item.id.toLowerCase().includes('crédit')) && item.label !== 'Déblocage de crédit') || item.id === 'Notification';
               }

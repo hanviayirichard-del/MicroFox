@@ -59,6 +59,7 @@ const ALL_TABS = [
 const Permissions: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState(ROLES[1]); // Default to second role as admin has all
   const [permissions, setPermissions] = useState<Record<string, string[]>>({});
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('microfox_permissions');
@@ -91,7 +92,8 @@ const Permissions: React.FC = () => {
 
   const handleSave = () => {
     localStorage.setItem('microfox_permissions', JSON.stringify(permissions));
-    alert("Permissions enregistrées avec succès.");
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
     window.dispatchEvent(new Event('storage'));
   };
 
@@ -130,13 +132,20 @@ const Permissions: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Onglets Disponibles</label>
-            <button 
-              onClick={handleSave}
-              className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
-            >
-              <Save size={16} />
-              Enregistrer
-            </button>
+            <div className="flex items-center gap-4">
+              {showSuccess && (
+                <span className="text-emerald-600 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                  Permissions enregistrées !
+                </span>
+              )}
+              <button 
+                onClick={handleSave}
+                className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
+              >
+                <Save size={16} />
+                Enregistrer
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
