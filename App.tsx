@@ -662,8 +662,10 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#0a1226] overflow-hidden relative text-gray-100">
       {welcomeMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl animate-bounce">
-          {welcomeMessage}
+        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+          <div className="bg-emerald-600 text-white px-12 py-8 rounded-[3rem] font-black uppercase tracking-[0.2em] shadow-[0_0_100px_rgba(16,185,129,0.4)] animate-in fade-in zoom-in duration-500 text-2xl sm:text-4xl text-center">
+            {welcomeMessage}
+          </div>
         </div>
       )}
       {/* Overlay pour mobile */}

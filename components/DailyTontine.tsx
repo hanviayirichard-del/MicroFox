@@ -572,7 +572,7 @@ const DailyTontine: React.FC = () => {
                           {client.name.split(' ').map((n: string) => n[0]).join('')}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-black text-white uppercase truncate max-w-[150px]">{client.name}</span>
+                          <span className="text-sm font-black text-white uppercase">{client.name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-gray-500">{client.code}</span>
                             <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 rounded">{client.accountNumber}</span>

@@ -413,7 +413,7 @@ const GlobalJournal: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-5">
-                      <p className="text-sm font-black text-[#121c32] uppercase whitespace-nowrap">{tx.memberName}</p>
+                      <p className="text-sm font-black text-[#121c32] uppercase">{tx.memberName}</p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{tx.memberCode}</p>
                     </td>
                     <td className="px-4 py-5">
@@ -431,7 +431,7 @@ const GlobalJournal: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-20 text-center">
+                  <td colSpan={6} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-3 opacity-20">
                       <History size={48} />
                       <p className="text-sm font-black uppercase tracking-widest">Aucune opération trouvée</p>

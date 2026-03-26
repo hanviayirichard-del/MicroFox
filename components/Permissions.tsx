@@ -134,9 +134,10 @@ const Permissions: React.FC = () => {
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Onglets Disponibles</label>
             <div className="flex items-center gap-4">
               {showSuccess && (
-                <span className="text-emerald-600 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                <div className="fixed top-20 right-8 z-[100] bg-emerald-600 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest shadow-2xl animate-bounce flex items-center gap-2">
+                  <ShieldCheck size={18} />
                   Permissions enregistrées !
-                </span>
+                </div>
               )}
               <button 
                 onClick={handleSave}
