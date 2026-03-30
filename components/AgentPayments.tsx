@@ -66,7 +66,6 @@ const AgentPayments: React.FC = () => {
       const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
       setAgentBalance(currentAgentBalance);
 
-      const todayStr = new Date().toISOString().split('T')[0];
       const savedMembers = localStorage.getItem('microfox_members_data');
       let cotisations = 0;
       let livrets = 0;
@@ -74,19 +73,22 @@ const AgentPayments: React.FC = () => {
       if (savedMembers) {
         const allMembers = JSON.parse(savedMembers);
         allMembers.forEach((m: any) => {
-          const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
-          if (user?.role === 'agent commercial' && agentZones.length > 0 && !agentZones.includes(m.zone)) {
-            return;
-          }
-          const history = m.history || [];
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+          
           history.forEach((tx: any) => {
-            if (tx.date.startsWith(todayStr)) {
+            // Filtrer par l'ID de l'agent ou par son nom dans la description pour plus de robustesse
+            const isAgentTx = String(tx.userId) === String(user.id) || 
+                             (tx.description && tx.description.toLowerCase().includes(`agent ${user.identifiant.toLowerCase()}`));
+            
+            if (isAgentTx) {
               const desc = (tx.description || '').toLowerCase();
-              if (tx.account === 'tontine' && (tx.type === 'cotisation' || tx.type === 'depot')) {
+              // On prend en compte les cotisations et dépôts (ventes livrets)
+              if (tx.type === 'cotisation' || tx.type === 'depot') {
                 if (desc.includes('livret')) {
-                  livrets += tx.amount;
+                  livrets += Number(tx.amount || 0);
                 } else {
-                  cotisations += tx.amount;
+                  cotisations += Number(tx.amount || 0);
                 }
               }
             }
@@ -99,15 +101,27 @@ const AgentPayments: React.FC = () => {
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
-          if (p.agentId === user.id && p.date.startsWith(todayStr) && p.status !== 'Annulé') {
-            paidCotisations += p.amountCotisations || 0;
-            paidLivrets += p.amountLivrets || 0;
+          // Soustraire tous les versements déjà soumis ou validés pour cet agent
+          if (String(p.agentId) === String(user.id) && p.status !== 'Annulé') {
+            paidCotisations += Number(p.amountCotisations || 0);
+            paidLivrets += Number(p.amountLivrets || 0);
           }
         });
       }
 
-      setTotalCotisations(Math.max(0, cotisations - paidCotisations));
-      setTotalLivrets(Math.max(0, livrets - paidLivrets));
+      // Le montant à verser doit correspondre au solde réel de l'agent
+      const calculatedCotisations = Math.max(0, cotisations - paidCotisations);
+      const calculatedLivrets = Math.max(0, livrets - paidLivrets);
+      
+      // Si le solde agent est supérieur au total calculé par l'historique (reliquat), 
+      // on ajuste pour que le total théorique reflète exactement ce qui doit être versé.
+      if (currentAgentBalance > (calculatedCotisations + calculatedLivrets)) {
+        setTotalCotisations(currentAgentBalance - calculatedLivrets);
+        setTotalLivrets(calculatedLivrets);
+      } else {
+        setTotalCotisations(calculatedCotisations);
+        setTotalLivrets(calculatedLivrets);
+      }
     };
 
     const loadHistory = () => {
