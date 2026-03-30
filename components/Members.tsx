@@ -2160,18 +2160,21 @@ const Members: React.FC = () => {
           continue; 
         }
 
-        let casesToAdd = Math.floor(remainingAmount / dailyMise);
-        let space = 31 - currentCycleCases;
-        if (space <= 0) space = 31; 
+        const amountToCompleteCycle = (31 * dailyMise) - currentCycleAmount;
+        const casesToAddFromTx = Math.floor(remainingAmount / dailyMise);
+        const space = 31 - currentCycleCases;
 
-        if (casesToAdd >= space) {
-          const amountUsed = space * dailyMise;
-          currentCycleAmount += amountUsed;
-          for (let m = 0; m < space; m++) {
+        if (casesToAddFromTx >= space || remainingAmount >= amountToCompleteCycle) {
+          const oldTotalCases = Math.floor(currentCycleAmount / dailyMise);
+          currentCycleAmount += amountToCompleteCycle;
+          const newTotalCases = 31;
+          const casesToAdd = newTotalCases - oldTotalCases;
+          
+          for (let m = 0; m < casesToAdd; m++) {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
           }
-          currentCycleCases += space;
-          remainingAmount -= amountUsed;
+          currentCycleCases = 31;
+          remainingAmount -= amountToCompleteCycle;
 
           let isRetire = false;
           let retraitDate = null;
@@ -2205,11 +2208,12 @@ const Members: React.FC = () => {
             disponible: isRetire ? 0 : currentCycleAmount,
             commission: comm,
             decaissable: isRetire ? 0 : netCycleAmount,
-            cases: isRetire ? 0 : Math.floor(currentCycleAmount / dailyMise),
+            cases: isRetire ? 0 : 31,
             period: `${fmt(currentCycleFirstDepositDate!)} au ${fmt(txDate)}`,
             isRetire: isRetire,
             retraitDate: retraitDate,
-            montantRetire: mRetire
+            montantRetire: mRetire,
+            dates: [...currentCycleDates]
           });
           totalComm += dailyMise;
           cycleIdx++;
@@ -2218,7 +2222,11 @@ const Members: React.FC = () => {
           currentCycleAmount = 0;
           currentCycleDates = [];
         } else {
+          const oldTotalCases = Math.floor(currentCycleAmount / dailyMise);
           currentCycleAmount += remainingAmount;
+          const newTotalCases = Math.floor(currentCycleAmount / dailyMise);
+          const casesToAdd = newTotalCases - oldTotalCases;
+          
           for (let m = 0; m < casesToAdd; m++) {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
           }
@@ -2266,35 +2274,24 @@ const Members: React.FC = () => {
         }
       }
 
-      if (today >= cycleEndDateLimit) {
-        cycleDetails.push({
-          index: cycleIdx,
-          amount: currentCycleAmount,
-          disponible: isRetire ? 0 : Math.max(0, currentCycleAmount - withdrawalValue),
-          commission: comm,
-          decaissable: isRetire ? 0 : Math.max(0, (currentCycleAmount - withdrawalValue) - comm),
-          cases: isRetire ? 0 : Math.floor(Math.max(0, currentCycleAmount - withdrawalValue) / dailyMise),
-          period: `${fmt(currentCycleFirstDepositDate)} au ${fmt(cycleEndDateLimit)}`,
-          isRetire: isRetire,
-          retraitDate: retraitDate,
-          montantRetire: mRetire
-        });
-        if (currentCycleAmount > 0) totalComm += comm;
-      } else {
-        if (currentCycleAmount > 0) totalComm += comm;
-        cycleDetails.push({
-          index: cycleIdx,
-          amount: currentCycleAmount,
-          disponible: isRetire ? 0 : Math.max(0, currentCycleAmount - withdrawalValue),
-          commission: comm,
-          decaissable: isRetire ? 0 : Math.max(0, (currentCycleAmount - withdrawalValue) - comm),
-          cases: isRetire ? 0 : Math.floor(Math.max(0, currentCycleAmount - withdrawalValue) / dailyMise),
-          period: `${fmt(currentCycleFirstDepositDate)} au ${fmt(today)}`,
-          isRetire: isRetire,
-          retraitDate: retraitDate,
-          montantRetire: mRetire
-        });
-      }
+      const now = new Date();
+      const isExpired = now >= cycleEndDateLimit;
+
+      cycleDetails.push({
+        index: cycleIdx,
+        amount: currentCycleAmount,
+        disponible: isRetire ? 0 : Math.max(0, currentCycleAmount - withdrawalValue),
+        commission: comm,
+        decaissable: isRetire ? 0 : Math.max(0, (currentCycleAmount - withdrawalValue) - comm),
+        cases: (isRetire || isExpired) ? 0 : Math.floor(Math.max(0, currentCycleAmount - withdrawalValue) / dailyMise),
+        period: `${fmt(currentCycleFirstDepositDate)} au ${isExpired ? fmt(cycleEndDateLimit) : fmt(today)}`,
+        isRetire: isRetire,
+        isExpired: isExpired,
+        retraitDate: retraitDate,
+        montantRetire: mRetire,
+        dates: [...currentCycleDates]
+      });
+      if (currentCycleAmount > 0) totalComm += comm;
     }
 
     const lastCycle = cycleDetails[cycleDetails.length - 1];

@@ -163,15 +163,14 @@ const DailyTontine: React.FC = () => {
                   continue;
                 }
 
-                let casesToAdd = Math.floor(remainingAmount / dailyMise);
-                let space = 31 - currentCycleCases;
-                if (space <= 0) space = 31;
+                const amountToCompleteCycle = (31 * dailyMise) - currentCycleAmount;
+                const casesToAddFromTx = Math.floor(remainingAmount / dailyMise);
+                const space = 31 - currentCycleCases;
 
-                if (casesToAdd >= space) {
-                  const amountUsed = space * dailyMise;
-                  currentCycleAmount += amountUsed;
-                  currentCycleCases += space;
-                  remainingAmount -= amountUsed;
+                if (casesToAddFromTx >= space || remainingAmount >= amountToCompleteCycle) {
+                  currentCycleAmount += amountToCompleteCycle;
+                  currentCycleCases = 31;
+                  remainingAmount -= amountToCompleteCycle;
                   
                   const comm = currentCycleAmount > 0 ? dailyMise : 0;
                   totalCommissionsPaid += comm;
@@ -203,7 +202,8 @@ const DailyTontine: React.FC = () => {
                   cycleIdx++;
                 } else {
                   currentCycleAmount += remainingAmount;
-                  currentCycleCases += casesToAdd;
+                  const newTotalCases = Math.floor(currentCycleAmount / dailyMise);
+                  currentCycleCases = newTotalCases;
                   remainingAmount = 0;
                 }
               }
