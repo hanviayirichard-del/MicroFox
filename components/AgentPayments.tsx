@@ -93,8 +93,21 @@ const AgentPayments: React.FC = () => {
           });
         });
       }
-      setTotalCotisations(cotisations);
-      setTotalLivrets(livrets);
+      const savedPayments = localStorage.getItem('microfox_agent_payments');
+      let paidCotisations = 0;
+      let paidLivrets = 0;
+      if (savedPayments) {
+        const allPayments = JSON.parse(savedPayments);
+        allPayments.forEach((p: any) => {
+          if (p.agentId === user.id && p.date.startsWith(todayStr) && p.status !== 'Annulé') {
+            paidCotisations += p.amountCotisations || 0;
+            paidLivrets += p.amountLivrets || 0;
+          }
+        });
+      }
+
+      setTotalCotisations(Math.max(0, cotisations - paidCotisations));
+      setTotalLivrets(Math.max(0, livrets - paidLivrets));
     };
 
     const loadHistory = () => {

@@ -8,6 +8,7 @@ import {
   History,
   ChevronDown
 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 const CreditRequest: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
@@ -25,7 +26,40 @@ const CreditRequest: React.FC = () => {
   const [dueDate, setDueDate] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'confirm' | 'alert' | 'success' | 'error';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'confirm'
+  });
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const showAlert = (title: string, message: string, type: 'alert' | 'success' | 'error' = 'alert') => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+      type
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: onConfirm,
+      type: 'confirm'
+    });
+  };
 
   useEffect(() => {
     const loadData = () => {
@@ -70,79 +104,86 @@ const CreditRequest: React.FC = () => {
   const handleCancelRequest = (memberId: string) => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     if (!['administrateur', 'directeur', 'gestionnaire de crédit'].includes(currentUser.role)) {
-      alert("Seul l'administrateur, le directeur ou le gestionnaire de crédit peut annuler une demande de crédit.");
+      showAlert("Accès refusé", "Seul l'administrateur, le directeur ou le gestionnaire de crédit peut annuler une demande de crédit.", "error");
       return;
     }
 
-    const saved = localStorage.getItem('microfox_members_data');
-    let clients = saved ? JSON.parse(saved) : members;
+    showConfirm(
+      "Annulation de demande",
+      "Voulez-vous vraiment annuler cette demande de crédit ?",
+      () => {
+        const saved = localStorage.getItem('microfox_members_data');
+        let clients = saved ? JSON.parse(saved) : members;
 
-    const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId && c.lastCreditRequest?.status === 'En attente') {
-        let fullHistory = c.history || [];
-        if (fullHistory.length === 0) {
-          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
-          if (savedHistory) fullHistory = JSON.parse(savedHistory);
-        }
+        const updatedClients = clients.map((c: any) => {
+          if (c.id === memberId && c.lastCreditRequest?.status === 'En attente') {
+            let fullHistory = c.history || [];
+            if (fullHistory.length === 0) {
+              const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+              if (savedHistory) fullHistory = JSON.parse(savedHistory);
+            }
 
-        const newTx = {
-          id: Date.now().toString(),
-          type: 'annulation',
-          account: 'credit',
-          amount: c.lastCreditRequest.capital,
-          date: new Date().toISOString(),
-          description: `Demande de crédit annulée par ${currentUser.identifiant || 'Inconnu'}`,
-          operator: currentUser.identifiant || 'Inconnu',
-          cashierName: currentUser.identifiant || 'Inconnu'
-        };
+            const newTx = {
+              id: Date.now().toString(),
+              type: 'annulation',
+              account: 'credit',
+              amount: c.lastCreditRequest.capital,
+              date: new Date().toISOString(),
+              description: `Demande de crédit annulée par ${currentUser.identifiant || 'Inconnu'}`,
+              operator: currentUser.identifiant || 'Inconnu',
+              cashierName: currentUser.identifiant || 'Inconnu'
+            };
 
-        const newHistory = [newTx, ...fullHistory];
-        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+            const newHistory = [newTx, ...fullHistory];
+            localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
 
-        return {
-          ...c,
-          history: newHistory,
-          lastCreditRequest: {
-            ...c.lastCreditRequest,
-            status: 'Annulé',
-            cancelledBy: currentUser.identifiant || 'Inconnu',
-            cancelDate: new Date().toISOString()
+            return {
+              ...c,
+              history: newHistory,
+              lastCreditRequest: {
+                ...c.lastCreditRequest,
+                status: 'Annulé',
+                cancelledBy: currentUser.identifiant || 'Inconnu',
+                cancelDate: new Date().toISOString()
+              }
+            };
           }
-        };
-      }
-      return c;
-    });
+          return c;
+        });
 
-    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-    setMembers(updatedClients);
-    localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
-    alert("Demande de crédit annulée.");
+        localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+        setMembers(updatedClients);
+        localStorage.setItem('microfox_pending_sync', 'true');
+        window.dispatchEvent(new Event('storage'));
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        showAlert("Succès", "Demande de crédit annulée.", "success");
+      }
+    );
   };
 
   const handleSave = () => {
     if (!selectedMemberId) {
       const msg = "La demande de crédit n'a pas été enregistrée. Raison : Aucun membre n'a été sélectionné.";
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
     if (!amount || Number(amount) <= 0) {
       const msg = "La demande de crédit n'a pas été enregistrée. Raison : Le montant du crédit est invalide ou manquant.";
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
     if (!creditNumber) {
       const msg = "La demande de crédit n'a pas été enregistrée. Raison : Le numéro de crédit est manquant.";
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
     if (!dueDate) {
       const msg = "La demande de crédit n'a pas été enregistrée. Raison : La date d'échéance est manquante.";
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
 
@@ -153,7 +194,7 @@ const CreditRequest: React.FC = () => {
     if (!selectedMember?.epargneAccountNumber) {
       const msg = "La demande de crédit n'a pas été enregistrée. Raison : Ce client ne possède pas de compte épargne. Un compte épargne est obligatoire pour toute demande de crédit.";
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
 
@@ -161,14 +202,14 @@ const CreditRequest: React.FC = () => {
     if (selectedMember.balances?.credit > 0) {
       const msg = "La demande de crédit n'a pas été enregistrée. Raison : Ce client a déjà un crédit en cours non soldé.";
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
 
     if (selectedMember.lastCreditRequest && (selectedMember.lastCreditRequest.status === 'En attente' || selectedMember.lastCreditRequest.status === 'Validé')) {
       const msg = `La demande de crédit n'a pas été enregistrée. Raison : Une demande de crédit est déjà ${selectedMember.lastCreditRequest.status.toLowerCase()} pour ce client.`;
       setStatusMessage({ text: msg, type: 'error' });
-      alert(msg);
+      showAlert("Erreur", msg, "error");
       return;
     }
 
@@ -225,7 +266,7 @@ const CreditRequest: React.FC = () => {
     
     const successMsg = "Demande de crédit enregistrée avec succès.";
     setStatusMessage({ text: successMsg, type: 'success' });
-    alert(successMsg);
+    showAlert("Succès", successMsg, "success");
     
     // Reset form
     setSelectedMemberId('');
@@ -535,6 +576,15 @@ const CreditRequest: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        type={confirmModal.type}
+      />
     </div>
   );
 };

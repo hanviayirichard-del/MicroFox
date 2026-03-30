@@ -7,10 +7,44 @@ import {
   X,
   FileCheck
 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 const CreditValidation: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'confirm' | 'alert' | 'success' | 'error';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'confirm'
+  });
+
+  const showAlert = (title: string, message: string, type: 'alert' | 'success' | 'error' = 'alert') => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+      type
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: onConfirm,
+      type: 'confirm'
+    });
+  };
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -35,88 +69,100 @@ const CreditValidation: React.FC = () => {
   const handleValidate = (memberId: string) => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     if (!['administrateur', 'directeur'].includes(currentUser.role)) {
-      alert("Seul l'administrateur ou le directeur peut valider une demande de crédit.");
+      showAlert("Accès refusé", "Seul l'administrateur ou le directeur peut valider une demande de crédit.", "error");
       return;
     }
 
-    const saved = localStorage.getItem('microfox_members_data');
-    let clients = saved ? JSON.parse(saved) : [];
-    
-    const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId) {
-        let fullHistory = c.history || [];
-        if (fullHistory.length === 0) {
-          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
-          if (savedHistory) fullHistory = JSON.parse(savedHistory);
-        }
+    showConfirm(
+      "Validation de crédit",
+      "Voulez-vous vraiment valider cette demande de crédit ?",
+      () => {
+        const saved = localStorage.getItem('microfox_members_data');
+        let clients = saved ? JSON.parse(saved) : [];
+        
+        const updatedClients = clients.map((c: any) => {
+          if (c.id === memberId) {
+            let fullHistory = c.history || [];
+            if (fullHistory.length === 0) {
+              const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+              if (savedHistory) fullHistory = JSON.parse(savedHistory);
+            }
 
-        const newTx = {
-          id: Date.now().toString(),
-          type: 'validation',
-          account: 'credit',
-          amount: c.lastCreditRequest.capital,
-          date: new Date().toISOString(),
-          description: `Demande de crédit validée par ${currentUser.identifiant || 'Inconnu'}`,
-          operator: currentUser.identifiant || 'Inconnu',
-          cashierName: currentUser.identifiant || 'Inconnu'
-        };
+            const newTx = {
+              id: Date.now().toString(),
+              type: 'validation',
+              account: 'credit',
+              amount: c.lastCreditRequest.capital,
+              date: new Date().toISOString(),
+              description: `Demande de crédit validée par ${currentUser.identifiant || 'Inconnu'}`,
+              operator: currentUser.identifiant || 'Inconnu',
+              cashierName: currentUser.identifiant || 'Inconnu'
+            };
 
-        const newHistory = [newTx, ...fullHistory];
-        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+            const newHistory = [newTx, ...fullHistory];
+            localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
 
-        return {
-          ...c,
-          history: newHistory,
-          lastCreditRequest: {
-            ...c.lastCreditRequest,
-            status: 'Validé',
-            validatedBy: currentUser.identifiant || 'Inconnu',
-            validationDate: new Date().toISOString()
+            return {
+              ...c,
+              history: newHistory,
+              lastCreditRequest: {
+                ...c.lastCreditRequest,
+                status: 'Validé',
+                validatedBy: currentUser.identifiant || 'Inconnu',
+                validationDate: new Date().toISOString()
+              }
+            };
           }
-        };
-      }
-      return c;
-    });
+          return c;
+        });
 
-    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
-    loadData();
-    alert("Demande de crédit validée avec succès.");
+        localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+        localStorage.setItem('microfox_pending_sync', 'true');
+        window.dispatchEvent(new Event('storage'));
+        loadData();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        showAlert("Succès", "Demande de crédit validée avec succès.", "success");
+      }
+    );
   };
 
   const handleCancelRequest = (memberId: string) => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     if (!['administrateur', 'directeur'].includes(currentUser.role)) {
-      alert("Seul l'administrateur ou le directeur peut annuler une demande de crédit.");
+      showAlert("Accès refusé", "Seul l'administrateur ou le directeur peut annuler une demande de crédit.", "error");
       return;
     }
 
-    if (!window.confirm("Voulez-vous vraiment annuler cette demande de crédit ?")) return;
-
-    const saved = localStorage.getItem('microfox_members_data');
-    let clients = saved ? JSON.parse(saved) : [];
-    
-    const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId) {
-        return {
-          ...c,
-          lastCreditRequest: {
-            ...c.lastCreditRequest,
-            status: 'Annulé',
-            cancelledBy: currentUser.identifiant || 'Inconnu',
-            cancelledAt: new Date().toISOString()
+    showConfirm(
+      "Annulation de demande",
+      "Voulez-vous vraiment annuler cette demande de crédit ?",
+      () => {
+        const saved = localStorage.getItem('microfox_members_data');
+        let clients = saved ? JSON.parse(saved) : [];
+        
+        const updatedClients = clients.map((c: any) => {
+          if (c.id === memberId) {
+            return {
+              ...c,
+              lastCreditRequest: {
+                ...c.lastCreditRequest,
+                status: 'Annulé',
+                cancelledBy: currentUser.identifiant || 'Inconnu',
+                cancelledAt: new Date().toISOString()
+              }
+            };
           }
-        };
-      }
-      return c;
-    });
+          return c;
+        });
 
-    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
-    loadData();
-    alert("Demande de crédit annulée avec succès.");
+        localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+        localStorage.setItem('microfox_pending_sync', 'true');
+        window.dispatchEvent(new Event('storage'));
+        loadData();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        showAlert("Succès", "Demande de crédit annulée avec succès.", "success");
+      }
+    );
   };
 
   return (
@@ -209,6 +255,15 @@ const CreditValidation: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        type={confirmModal.type}
+      />
     </div>
   );
 };

@@ -8,11 +8,45 @@ import {
   ShieldCheck,
   X
 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 const CreditDisbursement: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'confirm' | 'alert' | 'success' | 'error';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'confirm'
+  });
+
+  const showAlert = (title: string, message: string, type: 'alert' | 'success' | 'error' = 'alert') => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+      type
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: onConfirm,
+      type: 'confirm'
+    });
+  };
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -54,227 +88,237 @@ const CreditDisbursement: React.FC = () => {
     const penalty = Number(request.penalty || 0);
 
     if (request.status !== 'Validé') {
-      setStatusMessage({ type: 'error', text: "Le crédit doit être validé avant d'être décaissé." });
-      setTimeout(() => setStatusMessage(null), 6000);
+      showAlert("Erreur", "Le crédit doit être validé avant d'être décaissé.", "error");
       return;
     }
 
-    if (!window.confirm(`Voulez-vous vraiment débloquer ce crédit de ${capital.toLocaleString()} F pour ${client.name} ?`)) {
-      return;
-    }
-
-    const targetCaisse = currentUser.role === 'agent commercial' ? null : (currentUser.caisse || (currentUser.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
-    
-    if (targetCaisse) {
-      const cashKey = `microfox_cash_balance_${targetCaisse}`;
-      const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
-      if (currentCashBalance < capital) {
-        setStatusMessage({ 
-          type: 'error', 
-          text: `Opération impossible : Le solde de la ${targetCaisse} est de ${currentCashBalance.toLocaleString()} F. Solde insuffisant pour décaisser ${capital.toLocaleString()} F.` 
-        });
-        setTimeout(() => setStatusMessage(null), 6000);
-        return;
-      }
-      // Mise à jour du solde de la caisse : on décaisse le capital et on encaisse les frais
-      localStorage.setItem(cashKey, (currentCashBalance - capital + fees).toString());
-    } else if (currentUser.role === 'agent commercial') {
-      const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
-      const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
-      // Pour un agent, on impacte aussi son solde
-      localStorage.setItem(agentBalanceKey, (currentAgentBalance - capital + fees).toString());
-    }
-
-    const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId) {
-        let fullHistory = c.history || [];
-        if (fullHistory.length === 0) {
-          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
-          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+    showConfirm(
+      "Confirmation de déblocage",
+      `Voulez-vous vraiment débloquer ce crédit de ${capital.toLocaleString()} F pour ${client.name} ?`,
+      () => {
+        const targetCaisse = currentUser.role === 'agent commercial' ? null : (currentUser.caisse || (currentUser.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+        
+        if (targetCaisse) {
+          const cashKey = `microfox_cash_balance_${targetCaisse}`;
+          const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
+          if (currentCashBalance < capital) {
+            showAlert("Solde insuffisant", `Opération impossible : Le solde de la ${targetCaisse} est de ${currentCashBalance.toLocaleString()} F. Solde insuffisant pour décaisser ${capital.toLocaleString()} F.`, "error");
+            return;
+          }
+          // Mise à jour du solde de la caisse : on décaisse le capital et on encaisse les frais
+          localStorage.setItem(cashKey, (currentCashBalance - capital + fees).toString());
+        } else if (currentUser.role === 'agent commercial') {
+          const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
+          const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+          // Pour un agent, on impacte aussi son solde
+          localStorage.setItem(agentBalanceKey, (currentAgentBalance - capital + fees).toString());
         }
 
-        const currentCredit = Number(c.balances?.credit || 0);
-        const newTotal = currentCredit + capital + interest + penalty;
-        
-        const newTx = {
-          id: Date.now().toString(),
-          type: 'deblocage',
-          account: 'credit',
-          amount: capital,
-          date: new Date().toISOString(),
-          description: `Déblocage de crédit approuvé par ${currentUser.identifiant || 'Inconnu'} - Échéance: ${request.dueDate}`,
-          operator: currentUser.identifiant || 'Inconnu',
-          cashierName: currentUser.identifiant || 'Inconnu'
-        };
+        const updatedClients = clients.map((c: any) => {
+          if (c.id === memberId) {
+            let fullHistory = c.history || [];
+            if (fullHistory.length === 0) {
+              const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+              if (savedHistory) fullHistory = JSON.parse(savedHistory);
+            }
 
-        const feesTx = fees > 0 ? {
-          id: `fees-${Date.now()}`,
-          type: 'depot',
-          account: 'frais',
-          amount: fees,
-          date: new Date().toISOString(),
-          description: `Frais de dossier crédit encaissés par ${currentUser.identifiant || 'Inconnu'} - Échéance: ${request.dueDate}`,
-          operator: currentUser.identifiant || 'Inconnu',
-          cashierName: currentUser.identifiant || 'Inconnu'
-        } : null;
-        
-        const addedHistory = [newTx];
-        if (feesTx) addedHistory.push(feesTx);
+            const currentCredit = Number(c.balances?.credit || 0);
+            const newTotal = currentCredit + capital + interest + penalty;
+            
+            const newTx = {
+              id: Date.now().toString(),
+              type: 'deblocage',
+              account: 'credit',
+              amount: capital,
+              date: new Date().toISOString(),
+              description: `Déblocage de crédit approuvé par ${currentUser.identifiant || 'Inconnu'} - Échéance: ${request.dueDate}`,
+              operator: currentUser.identifiant || 'Inconnu',
+              cashierName: currentUser.identifiant || 'Inconnu'
+            };
 
-        const newHistory = [...addedHistory, ...fullHistory];
-        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+            const feesTx = fees > 0 ? {
+              id: `fees-${Date.now()}`,
+              type: 'depot',
+              account: 'frais',
+              amount: fees,
+              date: new Date().toISOString(),
+              description: `Frais de dossier crédit encaissés par ${currentUser.identifiant || 'Inconnu'} - Échéance: ${request.dueDate}`,
+              operator: currentUser.identifiant || 'Inconnu',
+              cashierName: currentUser.identifiant || 'Inconnu'
+            } : null;
+            
+            const addedHistory = [newTx];
+            if (feesTx) addedHistory.push(feesTx);
 
-        return {
-          ...c,
-          balances: { ...c.balances, credit: newTotal },
-          history: newHistory,
-          dureeCredit: request.duration,
-          lastCreditDetails: {
-            capital: capital,
-            interest: interest,
-            penalty: penalty,
-            duration: request.duration,
-            dueDate: request.dueDate,
-            requestedBy: request.requestedBy,
-            validatedBy: request.validatedBy,
-            disbursedBy: currentUser.identifiant || 'Inconnu'
-          },
-          lastCreditRequest: {
-            ...request,
-            status: 'Débloqué',
-            disbursedBy: currentUser.identifiant || 'Inconnu',
-            disbursementDate: new Date().toISOString()
+            const newHistory = [...addedHistory, ...fullHistory];
+            localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+
+            return {
+              ...c,
+              balances: { ...c.balances, credit: newTotal },
+              history: newHistory,
+              dureeCredit: request.duration,
+              lastCreditDetails: {
+                capital: capital,
+                interest: interest,
+                penalty: penalty,
+                duration: request.duration,
+                dueDate: request.dueDate,
+                requestedBy: request.requestedBy,
+                validatedBy: request.validatedBy,
+                disbursedBy: currentUser.identifiant || 'Inconnu'
+              },
+              lastCreditRequest: {
+                ...request,
+                status: 'Débloqué',
+                disbursedBy: currentUser.identifiant || 'Inconnu',
+                disbursementDate: new Date().toISOString()
+              }
+            };
           }
-        };
+          return c;
+        });
+        
+        localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+        localStorage.setItem('microfox_pending_sync', 'true');
+        window.dispatchEvent(new Event('storage'));
+        loadData();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setStatusMessage({ 
+          type: 'success', 
+          text: `Le crédit de ${capital.toLocaleString()} F pour ${client.name} a été débloqué avec succès.` 
+        });
+        setTimeout(() => setStatusMessage(null), 6000);
       }
-      return c;
-    });
-    
-    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
-    loadData();
-    setStatusMessage({ 
-      type: 'success', 
-      text: `Le crédit de ${capital.toLocaleString()} F pour ${client.name} a été débloqué avec succès.` 
-    });
-    setTimeout(() => setStatusMessage(null), 6000);
+    );
   };
 
   const handleCancelDisbursement = (memberId: string) => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
     if (!currentUser) {
-      alert("Session expirée. Veuillez vous reconnecter.");
+      showAlert("Session expirée", "Veuillez vous reconnecter.", "error");
       return;
     }
 
     if (!['administrateur', 'directeur', 'caissier'].includes(currentUser.role)) {
-      alert("Seul l'administrateur, le directeur ou le caissier peut annuler un décaissement.");
+      showAlert("Accès refusé", "Seul l'administrateur, le directeur ou le caissier peut annuler un décaissement.", "error");
       return;
     }
 
-    const saved = localStorage.getItem('microfox_members_data');
-    let clients = saved ? JSON.parse(saved) : [];
-    const client = clients.find((c: any) => c.id === memberId);
-    if (!client || !client.lastCreditRequest || client.lastCreditRequest.status !== 'Débloqué') return;
+    showConfirm(
+      "Annulation de décaissement",
+      "Voulez-vous vraiment annuler ce décaissement ? Les soldes seront rétablis.",
+      () => {
+        const saved = localStorage.getItem('microfox_members_data');
+        let clients = saved ? JSON.parse(saved) : [];
+        const client = clients.find((c: any) => c.id === memberId);
+        if (!client || !client.lastCreditRequest || client.lastCreditRequest.status !== 'Débloqué') return;
 
-    const request = client.lastCreditRequest;
-    const capital = Number(request.capital || 0);
-    const fees = Number(request.fees || 0);
-    const interest = Number(request.interest || 0);
-    const penalty = Number(request.penalty || 0);
-    
-    // Revert Caisse/Agent balance
-    const targetCaisse = currentUser.role === 'agent commercial' ? null : (currentUser.caisse || (currentUser.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
-    if (targetCaisse) {
-      const cashKey = `microfox_cash_balance_${targetCaisse}`;
-      const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
-      localStorage.setItem(cashKey, (currentCashBalance + capital - fees).toString());
-    } else if (currentUser.role === 'agent commercial') {
-      const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
-      const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
-      localStorage.setItem(agentBalanceKey, (currentAgentBalance + capital - fees).toString());
-    }
-
-    const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId) {
-        let fullHistory = c.history || [];
-        if (fullHistory.length === 0) {
-          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
-          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        const request = client.lastCreditRequest;
+        const capital = Number(request.capital || 0);
+        const fees = Number(request.fees || 0);
+        const interest = Number(request.interest || 0);
+        const penalty = Number(request.penalty || 0);
+        
+        // Revert Caisse/Agent balance
+        const targetCaisse = currentUser.role === 'agent commercial' ? null : (currentUser.caisse || (currentUser.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+        if (targetCaisse) {
+          const cashKey = `microfox_cash_balance_${targetCaisse}`;
+          const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
+          localStorage.setItem(cashKey, (currentCashBalance + capital - fees).toString());
+        } else if (currentUser.role === 'agent commercial') {
+          const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
+          const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+          localStorage.setItem(agentBalanceKey, (currentAgentBalance + capital - fees).toString());
         }
 
-        // Remove the disbursement transactions (deblocage and fees)
-        // We look for the most recent ones related to this credit
-        const newHistory = fullHistory.filter((tx: any) => 
-          !(tx.type === 'deblocage' && tx.account === 'credit' && Number(tx.amount) === capital && tx.date === request.disbursementDate) &&
-          !(tx.type === 'depot' && tx.account === 'frais' && Number(tx.amount) === fees && tx.date === request.disbursementDate)
-        );
-        
-        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+        const updatedClients = clients.map((c: any) => {
+          if (c.id === memberId) {
+            let fullHistory = c.history || [];
+            if (fullHistory.length === 0) {
+              const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+              if (savedHistory) fullHistory = JSON.parse(savedHistory);
+            }
 
-        const currentCredit = Number(c.balances?.credit || 0);
-        const revertedTotal = currentCredit - (capital + interest + penalty);
+            // Remove the disbursement transactions (deblocage and fees)
+            // We look for the most recent ones related to this credit
+            const newHistory = fullHistory.filter((tx: any) => 
+              !(tx.type === 'deblocage' && tx.account === 'credit' && Number(tx.amount) === capital && tx.date === request.disbursementDate) &&
+              !(tx.type === 'depot' && tx.account === 'frais' && Number(tx.amount) === fees && tx.date === request.disbursementDate)
+            );
+            
+            localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
 
-        return {
-          ...c,
-          balances: { ...c.balances, credit: revertedTotal },
-          history: newHistory,
-          lastCreditRequest: {
-            ...request,
-            status: 'Validé',
-            disbursedBy: null,
-            disbursementDate: null
+            const currentCredit = Number(c.balances?.credit || 0);
+            const revertedTotal = currentCredit - (capital + interest + penalty);
+
+            return {
+              ...c,
+              balances: { ...c.balances, credit: revertedTotal },
+              history: newHistory,
+              lastCreditRequest: {
+                ...request,
+                status: 'Validé',
+                disbursedBy: null,
+                disbursementDate: null
+              }
+            };
           }
-        };
-      }
-      return c;
-    });
+          return c;
+        });
 
-    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
-    loadData();
-    alert("Décaissement annulé. Le crédit est de nouveau en attente de déblocage.");
+        localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+        localStorage.setItem('microfox_pending_sync', 'true');
+        window.dispatchEvent(new Event('storage'));
+        loadData();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        showAlert("Succès", "Décaissement annulé. Le crédit est de nouveau en attente de déblocage.", "success");
+      }
+    );
   };
 
   const handleCancelRequest = (memberId: string) => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
     if (!currentUser) {
-      alert("Session expirée. Veuillez vous reconnecter.");
+      showAlert("Session expirée", "Veuillez vous reconnecter.", "error");
       return;
     }
 
     if (!['administrateur', 'directeur', 'gestionnaire de crédit'].includes(currentUser.role)) {
-      alert("Seul l'administrateur, le directeur ou le gestionnaire de crédit peut annuler une demande de crédit.");
+      showAlert("Accès refusé", "Seul l'administrateur, le directeur ou le gestionnaire de crédit peut annuler une demande de crédit.", "error");
       return;
     }
 
-    if (!window.confirm("Voulez-vous vraiment annuler cette demande de crédit ?")) return;
-
-    const saved = localStorage.getItem('microfox_members_data');
-    let clients = saved ? JSON.parse(saved) : [];
-    
-    const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId) {
-        return {
-          ...c,
-          lastCreditRequest: {
-            ...c.lastCreditRequest,
-            status: 'Annulé',
-            cancelledBy: currentUser.identifiant || 'Inconnu',
-            cancelledAt: new Date().toISOString()
+    showConfirm(
+      "Annulation de demande",
+      "Voulez-vous vraiment annuler cette demande de crédit ?",
+      () => {
+        const saved = localStorage.getItem('microfox_members_data');
+        let clients = saved ? JSON.parse(saved) : [];
+        
+        const updatedClients = clients.map((c: any) => {
+          if (c.id === memberId) {
+            return {
+              ...c,
+              lastCreditRequest: {
+                ...c.lastCreditRequest,
+                status: 'Annulé',
+                cancelledBy: currentUser.identifiant || 'Inconnu',
+                cancelledAt: new Date().toISOString()
+              }
+            };
           }
-        };
-      }
-      return c;
-    });
+          return c;
+        });
 
-    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
-    loadData();
-    alert("Demande de crédit annulée avec succès.");
+        localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+        localStorage.setItem('microfox_pending_sync', 'true');
+        window.dispatchEvent(new Event('storage'));
+        loadData();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        showAlert("Succès", "Demande de crédit annulée avec succès.", "success");
+      }
+    );
   };
 
   return (
@@ -444,6 +488,15 @@ const CreditDisbursement: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        type={confirmModal.type}
+      />
     </div>
   );
 };

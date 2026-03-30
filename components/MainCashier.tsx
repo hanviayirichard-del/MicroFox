@@ -79,6 +79,8 @@ const MainCashier: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
+
   useEffect(() => {
     const loadData = () => {
       const savedPayments = localStorage.getItem('microfox_agent_payments');
@@ -315,6 +317,10 @@ const MainCashier: React.FC = () => {
     const matchesDate = (!startDate || txDate >= startDate) && (!endDate || txDate <= endDate);
     
     return matchesSearch && matchesFilter && matchesCaisse && matchesDate;
+  }).sort((a, b) => {
+    if (a.status === 'En attente' && b.status !== 'En attente') return -1;
+    if (a.status !== 'En attente' && b.status === 'En attente') return 1;
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
   return (
@@ -564,7 +570,7 @@ const MainCashier: React.FC = () => {
               <table className="w-full min-w-[1000px] text-left">
                 <thead>
                   <tr className="bg-gray-50/50 border-b border-gray-100">
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Agent / Date</th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer">Agent / Date</th>
                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Cotisations</th>
                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Livrets</th>
                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Écart</th>
@@ -577,15 +583,24 @@ const MainCashier: React.FC = () => {
                 <tbody className="divide-y divide-gray-50">
                   {filteredPayments.length > 0 ? (
                     filteredPayments.map((p) => (
-                      <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                      <tr 
+                        key={p.id} 
+                        className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                        onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}
+                      >
                         <td className="px-6 py-5">
                           <p className="text-xs font-black text-[#121c32] uppercase">
                             {p.agentName} {p.zone ? `(ZONE ${p.zone})` : ''} - VERSEMENT
                             {p.cashierName && <span className="block text-[9px] text-gray-400 lowercase italic">par {p.cashierName}</span>}
                           </p>
                           <p className="text-[10px] font-bold text-gray-400 mb-2">{new Date(p.date).toLocaleString()}</p>
-                          {p.billetage && p.status === 'En attente' && (
+                          {p.billetage && (p.status === 'En attente' || expandedPaymentId === p.id) && (
                             <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                              <div className="mb-2 border-b border-gray-200 pb-2">
+                                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Détails du Versement</p>
+                                <p className="text-[10px] font-bold text-[#121c32] mt-1">Agent: {p.agentName}</p>
+                                <p className="text-[10px] font-bold text-[#121c32]">Date: {new Date(p.date).toLocaleString()}</p>
+                              </div>
                               <p className="text-[9px] font-black text-gray-400 uppercase mb-2 tracking-widest">Billetage Agent</p>
                               <div className="space-y-1.5">
                                 {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map(val => p.billetage[val] > 0 && (
