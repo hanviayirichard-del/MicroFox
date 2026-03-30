@@ -29,6 +29,8 @@ const AgentPayments: React.FC = () => {
     'monnaie': 0
   });
   const [authCode, setAuthCode] = useState('');
+  const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   const physicalBalance = (Number(billetage['10000']) * 10000) + 
                          (Number(billetage['5000']) * 5000) + 
@@ -79,7 +81,8 @@ const AgentPayments: React.FC = () => {
           history.forEach((tx: any) => {
             // Filtrer par l'ID de l'agent ou par son nom dans la description pour plus de robustesse
             const isAgentTx = String(tx.userId) === String(user.id) || 
-                             (tx.description && tx.description.toLowerCase().includes(`agent ${user.identifiant.toLowerCase()}`));
+                             (tx.description && tx.description.toLowerCase().includes(`agent ${user.identifiant.toLowerCase()}`)) ||
+                             (tx.cashierName === user.identifiant);
             
             if (isAgentTx) {
               const desc = (tx.description || '').toLowerCase();
@@ -102,7 +105,8 @@ const AgentPayments: React.FC = () => {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
           // Soustraire tous les versements déjà soumis ou validés pour cet agent
-          if (String(p.agentId) === String(user.id) && p.status !== 'Annulé') {
+          // Ne pas soustraire les versements annulés ou rejetés car l'argent est retourné au solde agent
+          if (String(p.agentId) === String(user.id) && p.status !== 'Annulé' && p.status !== 'Rejeté') {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
           }
@@ -130,11 +134,23 @@ const AgentPayments: React.FC = () => {
         const allPayments = JSON.parse(saved);
         const userStr = localStorage.getItem('microfox_current_user');
         const user = userStr ? JSON.parse(userStr) : null;
+        
+        let filtered = allPayments;
         if (user && user.role === 'agent commercial') {
-          setPaymentsHistory(allPayments.filter((p: any) => p.agentId === user.id));
-        } else {
-          setPaymentsHistory(allPayments);
+          filtered = allPayments.filter((p: any) => p.agentId === user.id);
         }
+        
+        // Filter by date range
+        filtered = filtered.filter((p: any) => {
+          const pDate = p.date.split('T')[0];
+          return pDate >= startDate && pDate <= endDate;
+        });
+
+        setPaymentsHistory(filtered.sort((a: any, b: any) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        ));
+      } else {
+        setPaymentsHistory([]);
       }
     };
 
@@ -146,8 +162,10 @@ const AgentPayments: React.FC = () => {
     loadDailyStats();
     loadHistory();
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [startDate, endDate]);
 
   const handleVersement = () => {
     const totalAmount = physicalBalance; // Use physical balance as the amount to deposit
@@ -221,7 +239,6 @@ const AgentPayments: React.FC = () => {
       setAuthCode('');
       
       setSuccessMessage(`Versement de ${totalAmount} FCFA soumis à la ${selectedCaisse} avec succès.`);
-      alert("Versement effectué avec succès.");
       setIsSubmitting(false);
       setTimeout(() => setSuccessMessage(null), 4000);
     }, 1500);
@@ -412,12 +429,33 @@ const AgentPayments: React.FC = () => {
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
-          <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Historique des Versements</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Historique des Versements</h2>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-black text-[#121c32] outline-none focus:border-[#00c896]"
+              />
+              <span className="text-gray-400 text-[10px] font-black">AU</span>
+              <input 
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-black text-[#121c32] outline-none focus:border-[#00c896]"
+              />
+            </div>
+          </div>
           
           <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
             {paymentsHistory.length > 0 ? (
               paymentsHistory.map((p) => (
-                <div key={p.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3">
+                <div key={p.id} className={`p-4 rounded-2xl border space-y-3 transition-all ${
+                  p.status === 'Validé' ? 'bg-gray-50 border-gray-100' : 
+                  p.status === 'Annulé' || p.status === 'Rejeté' ? 'bg-red-50/30 border-red-200' :
+                  'bg-amber-50 border-amber-200 shadow-sm ring-1 ring-amber-100'
+                }`}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-black text-[#121c32] uppercase">
@@ -427,9 +465,14 @@ const AgentPayments: React.FC = () => {
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total: {p.totalAmount.toLocaleString()} F</p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                      p.status === 'Validé' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                      p.status === 'Validé' ? 'bg-emerald-100 text-emerald-600' : 
+                      p.status === 'Annulé' || p.status === 'Rejeté' ? 'bg-red-100 text-red-600' :
+                      'bg-amber-100 text-amber-600 animate-pulse'
                     }`}>
-                      {p.status}
+                      {p.status === 'Validé' ? 'Validé' : 
+                       p.status === 'Annulé' ? 'Annulé' :
+                       p.status === 'Rejeté' ? 'Rejeté' :
+                       'En attente de validation'}
                     </span>
                   </div>
                   

@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { ClientAccount, TontineAccount, Transaction } from '../types';
+import ConfirmModal from './ConfirmModal';
 
 const suggestNextAccountNumber = (type: 'epargne' | 'tontine', currentMembers: ClientAccount[], zone?: string): string => {
   const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": "00001"}');
@@ -1974,6 +1975,39 @@ const Members: React.FC = () => {
   const [showAddTontineModal, setShowAddTontineModal] = useState<boolean>(false);
   const [showEditTontineModal, setShowEditTontineModal] = useState<boolean>(false);
   const [showOpenEpargneModal, setShowOpenEpargneModal] = useState<boolean>(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'confirm' | 'alert' | 'success' | 'error';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'confirm'
+  });
+
+  const showAlert = (title: string, message: string, type: 'alert' | 'success' | 'error' = 'alert') => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+      type
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: onConfirm,
+      type: 'confirm'
+    });
+  };
   const [isActionsOpen, setIsActionsOpen] = useState<boolean>(false);
   const [isEditingCredit, setIsEditingCredit] = useState<boolean>(false);
   const [creditFormData, setCreditFormData] = useState<any>({});
@@ -2757,7 +2791,7 @@ const Members: React.FC = () => {
       }
 
       setShowOperationForm(false);
-      alert("Opération effectuée avec succès.");
+      showAlert("Succès", "Opération effectuée avec succès.", "success");
     }
   };
 
@@ -2786,22 +2820,25 @@ const Members: React.FC = () => {
   };
 
   const handleDeleteClient = (clientId: string, clientName: string) => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement le client ${clientName} ? Cette action est irréversible.`)) {
-      return;
-    }
+    showConfirm(
+      "Suppression de client",
+      `Êtes-vous sûr de vouloir supprimer définitivement le client ${clientName} ? Cette action est irréversible.`,
+      () => {
+        const updated = clients.filter(c => c.id !== clientId);
+        setClients(updated);
+        localStorage.setItem('microfox_members_data', JSON.stringify(updated));
+        localStorage.removeItem(`microfox_history_${clientId}`);
+        localStorage.setItem('microfox_pending_sync', 'true');
+        
+        if (selectedClientId === clientId) {
+          setSelectedClientId(null);
+        }
 
-    const updated = clients.filter(c => c.id !== clientId);
-    setClients(updated);
-    localStorage.setItem('microfox_members_data', JSON.stringify(updated));
-    localStorage.removeItem(`microfox_history_${clientId}`);
-    localStorage.setItem('microfox_pending_sync', 'true');
-    
-    if (selectedClientId === clientId) {
-      setSelectedClientId(null);
-    }
-
-    recordAuditLog('SUPPRESSION', 'MEMBRES', `Suppression du compte client ${clientName} (${clientId})`);
-    alert("Client supprimé avec succès.");
+        recordAuditLog('SUPPRESSION', 'MEMBRES', `Suppression du compte client ${clientName} (${clientId})`);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        showAlert("Succès", "Client supprimé avec succès.", "success");
+      }
+    );
   };
 
   const exportToHTML = () => {
@@ -4266,6 +4303,14 @@ const Members: React.FC = () => {
           </>
         )}
       </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        type={confirmModal.type}
+      />
     </div>
   </div>
 );

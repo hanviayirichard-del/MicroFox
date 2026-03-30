@@ -433,7 +433,7 @@ const CreditRequest: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Date prévue de déblocage</label>
+              <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Échéance</label>
               <input 
                 type="date" 
                 value={dueDate} 

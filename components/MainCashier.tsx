@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Landmark, CheckCircle, XCircle, Clock, Search, Filter, TrendingUp, Wallet, ArrowDownCircle, Send, ShieldCheck } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
+import ConfirmModal from './ConfirmModal';
 
 const MainCashier: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
@@ -9,6 +10,40 @@ const MainCashier: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('Tous');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'confirm' | 'alert' | 'success' | 'error';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'confirm'
+  });
+
+  const showAlert = (title: string, message: string, type: 'alert' | 'success' | 'error' = 'alert') => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+      type
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: onConfirm,
+      type: 'confirm'
+    });
+  };
   const [caisses, setCaisses] = useState(() => {
     const userStr = localStorage.getItem('microfox_current_user');
     if (userStr) {
@@ -103,85 +138,94 @@ const MainCashier: React.FC = () => {
       setValidationErrors({...validationErrors, [paymentId]: "Saisie du montant reçu obligatoire"});
       return;
     }
-    
-    if (validationErrors[paymentId]) {
-      const newErrors = {...validationErrors};
-      delete newErrors[paymentId];
-      setValidationErrors(newErrors);
-    }
-    
-    const saved = localStorage.getItem('microfox_agent_payments');
-    const currentPayments = saved ? JSON.parse(saved) : [];
-    const updatedPayments = currentPayments.map((p: any) => {
-      if (p.id === paymentId) {
-        const finalAmount = observed ? Number(observed) : p.totalAmount;
-        const theoretical = p.theoreticalAmount ?? p.totalAmount;
-        const gap = finalAmount - theoretical;
 
-        if (action === 'Validé' && p.status !== 'Validé') {
-          const targetCaisse = selectedCaisse;
-          const balanceKey = `microfox_cash_balance_${targetCaisse}`;
-          const savedBal = localStorage.getItem(balanceKey);
-          const currentBal = savedBal !== null ? Number(savedBal) : (targetCaisse === 'CAISSE PRINCIPALE' ? 5000000 : 0);
-          const newBal = currentBal + finalAmount;
-          localStorage.setItem(balanceKey, newBal.toString());
-          
-          setCashBalance(newBal);
-          
-          if (gap !== 0) {
-            const savedGaps = localStorage.getItem('microfox_all_gaps');
-            const allGaps = savedGaps ? JSON.parse(savedGaps) : [];
+    const processAction = () => {
+      const saved = localStorage.getItem('microfox_agent_payments');
+      const currentPayments = saved ? JSON.parse(saved) : [];
+      const updatedPayments = currentPayments.map((p: any) => {
+        if (p.id === paymentId) {
+          const finalAmount = observed ? Number(observed) : p.totalAmount;
+          const theoretical = p.theoreticalAmount ?? p.totalAmount;
+          const gap = finalAmount - theoretical;
+
+          if (action === 'Validé' && p.status !== 'Validé') {
+            const targetCaisse = selectedCaisse;
+            const balanceKey = `microfox_cash_balance_${targetCaisse}`;
+            const savedBal = localStorage.getItem(balanceKey);
+            const currentBal = savedBal !== null ? Number(savedBal) : (targetCaisse === 'CAISSE PRINCIPALE' ? 5000000 : 0);
+            const newBal = currentBal + finalAmount;
+            localStorage.setItem(balanceKey, newBal.toString());
             
-            // Find agent zone
-            const savedUsers = localStorage.getItem('microfox_users');
-            const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
-            const agent = allUsers.find((u: any) => u.id === p.agentId);
-            const agentZone = agent?.zoneCollecte || agent?.zone;
+            setCashBalance(newBal);
+            
+            if (gap !== 0) {
+              const savedGaps = localStorage.getItem('microfox_all_gaps');
+              const allGaps = savedGaps ? JSON.parse(savedGaps) : [];
+              
+              // Find agent zone
+              const savedUsers = localStorage.getItem('microfox_users');
+              const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
+              const agent = allUsers.find((u: any) => u.id === p.agentId);
+              const agentZone = agent?.zoneCollecte || agent?.zone;
 
-            const agentCode = agent?.code || p.agentId;
+              const agentCode = agent?.code || p.agentId;
 
-            const newGapEntry = {
-              id: `gap_${Date.now()}`,
-              date: new Date().toISOString(),
-              type: 'AGENT',
-              sourceId: p.id,
-              sourceName: p.agentName,
-              sourceCode: agentCode,
-              userId: p.agentId,
-              declaredAmount: p.theoreticalAmount ?? p.totalAmount,
-              observedAmount: finalAmount,
-              gapAmount: gap,
-              status: 'En attente',
-              zone: agentZone,
-              caisse: selectedCaisse,
-              observation: observation,
-              validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id
-            };
-            localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
+              const newGapEntry = {
+                id: `gap_${Date.now()}`,
+                date: new Date().toISOString(),
+                type: 'AGENT',
+                sourceId: p.id,
+                sourceName: p.agentName,
+                sourceCode: agentCode,
+                userId: p.agentId,
+                declaredAmount: p.theoreticalAmount ?? p.totalAmount,
+                observedAmount: finalAmount,
+                gapAmount: gap,
+                status: 'En attente',
+                zone: agentZone,
+                caisse: selectedCaisse,
+                observation: observation,
+                validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id
+              };
+              localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
+            }
+          } else if (action === 'Rejeté' && p.status !== 'Rejeté') {
+            if (p.type === 'CASHIER_TRANSFER') {
+              const sourceCaisseKey = `microfox_cash_balance_${p.agentId}`;
+              const currentSourceBal = Number(localStorage.getItem(sourceCaisseKey) || 0);
+              localStorage.setItem(sourceCaisseKey, (currentSourceBal + p.totalAmount).toString());
+            } else {
+              // Return money to agent balance
+              const agentBalanceKey = `microfox_agent_balance_${p.agentId}`;
+              const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+              localStorage.setItem(agentBalanceKey, (currentAgentBalance + p.totalAmount).toString());
+            }
+            
+            recordAuditLog('MODIFICATION', 'CAISSE', `Versement de ${p.agentName} REJETÉ (${p.totalAmount} FCFA)`);
           }
-        } else if (action === 'Rejeté' && p.status !== 'Rejeté') {
-          if (p.type === 'CASHIER_TRANSFER') {
-            const sourceCaisseKey = `microfox_cash_balance_${p.agentId}`;
-            const currentSourceBal = Number(localStorage.getItem(sourceCaisseKey) || 0);
-            localStorage.setItem(sourceCaisseKey, (currentSourceBal + p.totalAmount).toString());
-          } else {
-            // Return money to agent balance
-            const agentBalanceKey = `microfox_agent_balance_${p.agentId}`;
-            const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
-            localStorage.setItem(agentBalanceKey, (currentAgentBalance + p.totalAmount).toString());
-          }
-          
-          recordAuditLog('MODIFICATION', 'CAISSE', `Versement de ${p.agentName} REJETÉ (${p.totalAmount} FCFA)`);
+          return { ...p, status: action, caisse: selectedCaisse, observedAmount: finalAmount, gap: gap, validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id };
         }
-        return { ...p, status: action, caisse: selectedCaisse, observedAmount: finalAmount, gap: gap, validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id };
-      }
-      return p;
-    });
+        return p;
+      });
 
-    localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedPayments));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    setPayments(updatedPayments);
-    window.dispatchEvent(new Event('storage'));
+      localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedPayments));
+      localStorage.setItem('microfox_pending_sync', 'true');
+      setPayments(updatedPayments);
+      window.dispatchEvent(new Event('storage'));
+      
+      setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      setStatusMessage({ 
+        type: 'success', 
+        text: `Versement de ${currentPayments.find((p: any) => p.id === paymentId)?.agentName} ${action.toLowerCase()} avec succès.` 
+      });
+      setTimeout(() => setStatusMessage(null), 4000);
+    };
+
+    if (action === 'Validé') {
+      showConfirm("Validation de versement", `Voulez-vous valider le versement de ${observed} F ?`, processAction);
+    } else {
+      showConfirm("Rejet de versement", "Voulez-vous rejeter ce versement ? L'argent sera retourné au solde de l'agent.", processAction);
+    }
   };
 
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
@@ -193,22 +237,22 @@ const MainCashier: React.FC = () => {
     const gap = physicalAmount - theoreticalAmount;
 
     if (cashBalance === 0) {
-      alert(`Opération impossible : Le solde de la ${selectedCaisse} est à zéro.`);
+      showAlert("Opération impossible", `Le solde de la ${selectedCaisse} est à zéro.`, "error");
       return;
     }
 
     if (theoreticalAmount <= 0) {
-      alert("Le montant à verser doit être supérieur à 0.");
+      showAlert("Montant invalide", "Le montant à verser doit être supérieur à 0.", "error");
       return;
     }
 
     if (theoreticalAmount > cashBalance) {
-      alert("Le montant à verser ne peut pas être supérieur au solde de la caisse.");
+      showAlert("Solde insuffisant", "Le montant à verser ne peut pas être supérieur au solde de la caisse.", "error");
       return;
     }
 
     if (physicalAmount <= 0) {
-      alert("Le montant du billetage doit être supérieur à 0.");
+      showAlert("Billetage vide", "Le montant du billetage doit être supérieur à 0.", "error");
       return;
     }
 
@@ -217,7 +261,7 @@ const MainCashier: React.FC = () => {
     
     if (isMainCaisse) {
       if (!isAdminOrDirector) {
-        alert("Seul l'administrateur ou le Directeur peut effectuer un versement au coffre depuis la caisse principale.");
+        showAlert("Accès restreint", "Seul l'administrateur ou le Directeur peut effectuer un versement au coffre depuis la caisse principale.", "error");
         return;
       }
       const vaultSaved = localStorage.getItem('microfox_vault_balance');
@@ -305,7 +349,7 @@ const MainCashier: React.FC = () => {
       'monnaie': 0
     });
     window.dispatchEvent(new Event('storage'));
-    alert(`Versement de ${physicalAmount.toLocaleString()} F effectué. Écart: ${gap.toLocaleString()} F.`);
+    showAlert("Succès", `Versement de ${physicalAmount.toLocaleString()} F effectué. Écart: ${gap.toLocaleString()} F.`, "success");
   };
 
   const filteredPayments = payments.filter(p => {
@@ -325,6 +369,13 @@ const MainCashier: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20">
+      {statusMessage && (
+        <div className={`p-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg animate-in fade-in slide-in-from-top-4 duration-300 ${
+          statusMessage.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          {statusMessage.text}
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
@@ -715,6 +766,15 @@ const MainCashier: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        type={confirmModal.type}
+      />
     </div>
   );
 };
