@@ -46,13 +46,26 @@ import * as XLSX from 'xlsx';
 import { ClientAccount, TontineAccount, Transaction } from '../types';
 
 const suggestNextAccountNumber = (type: 'epargne' | 'tontine', currentMembers: ClientAccount[], zone?: string): string => {
+  const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": "00001"}');
+  const instCode = (mfConfig.code || '00001').padStart(5, '0').substring(0, 5);
+  const agencyCode = '00001'; // Default agency code
+
   if (type === 'epargne') {
     const numbers = currentMembers
       .map(m => m.epargneAccountNumber)
-      .filter((n): n is string => !!n && /^\d+$/.test(n))
-      .map(n => parseInt(n, 10));
+      .filter((n): n is string => !!n && n.length >= 21)
+      .map(n => {
+        // Extract the 11-digit account part (from index 10 to 21)
+        const part = n.substring(10, 21);
+        return /^\d+$/.test(part) ? parseInt(part, 10) : 0;
+      });
     const max = numbers.length > 0 ? Math.max(...numbers) : 0;
-    return (max + 1).toString().padStart(3, '0');
+    const nextNum = (max + 1).toString().padStart(11, '0');
+    
+    // Simple check digit (placeholder logic for BCEAO key)
+    const key = (97 - (parseInt(instCode + agencyCode + nextNum) % 97)).toString().padStart(2, '0');
+    
+    return `${instCode}${agencyCode}${nextNum}${key}`;
   } else {
     // Tontine zone-based: e.g., 02A1, 02A2
     const prefix = zone || '01';
@@ -74,6 +87,7 @@ const OperationForm: React.FC<{
   onSave: (transaction: Omit<Transaction, 'id' | 'date'>, validatedRequestIds?: string[]) => void;
   clientId: string;
   clientName: string;
+  epargneAccountNumber?: string;
   tontineAccounts: TontineAccount[];
   initialTontineId?: string;
   creditBalances?: { capital: number; interest: number; penalty: number; total: number };
@@ -83,7 +97,7 @@ const OperationForm: React.FC<{
   adhesionPaid?: number;
   livretPaid?: number;
   isEpargneBlockedByAdmin?: boolean;
-}> = ({ onClose, onSave, clientId, clientName, tontineAccounts, initialTontineId, creditBalances, partSocialeBalance, garantieBalance, epargneBalance, adhesionPaid, livretPaid, isEpargneBlockedByAdmin }) => {
+}> = ({ onClose, onSave, clientId, clientName, epargneAccountNumber, tontineAccounts, initialTontineId, creditBalances, partSocialeBalance, garantieBalance, epargneBalance, adhesionPaid, livretPaid, isEpargneBlockedByAdmin }) => {
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
   const [type, setType] = useState<'depot' | 'retrait' | 'remboursement' | 'transfert' | 'deblocage' | 'depot_garantie' | 'retrait_garantie'>('depot');
   const [account, setAccount] = useState<'epargne' | 'garantie' | 'partSociale' | 'credit' | 'tontine'>('epargne');
@@ -174,6 +188,11 @@ const OperationForm: React.FC<{
       }
     }
 
+    if (type === 'deblocage' && !epargneAccountNumber) {
+      alert("Opération impossible : Le client ne peut pas bénéficier d'un déblocage de crédit car il n'a pas de compte épargne. Un compte épargne est obligatoire.");
+      return;
+    }
+
     if ((account === 'tontine' || (type === 'transfert' && account === 'tontine')) && isTontineBlocked && selectedValidatedIds.length === 0) {
       alert("Opération impossible : Le compte tontine est bloqué.");
       return;
@@ -234,9 +253,13 @@ const OperationForm: React.FC<{
       type: finalType,
       account: finalAccount as 'epargne' | 'garantie' | 'credit' | 'partSociale' | 'tontine',
       tontineAccountId: (finalAccount === 'tontine' || (type === 'transfert' && account === 'tontine')) ? selectedTontineId : undefined,
+      tontineAccountNumber: (finalAccount === 'tontine' || (type === 'transfert' && account === 'tontine')) ? selectedTontine?.number : undefined,
       amount: numAmount,
       description: finalDescription,
-      destinationAccount: type === 'transfert' ? transferDest : undefined
+      destinationAccount: type === 'transfert' ? transferDest : undefined,
+      rembCapital: type === 'remboursement' ? Number(rembCapital) || 0 : undefined,
+      rembInterest: type === 'remboursement' ? Number(rembInterest) || 0 : undefined,
+      rembPenalty: type === 'remboursement' ? Number(rembPenalty) || 0 : undefined
     }, selectedValidatedIds.length > 0 ? selectedValidatedIds : undefined);
   };
 
@@ -247,7 +270,13 @@ const OperationForm: React.FC<{
           <div className="bg-white/10 p-2 rounded-xl"><Calculator size={24} /></div>
           <div className="flex flex-col">
             <h2 className="text-lg font-black uppercase tracking-tight">NOUVELLE OPÉRATION</h2>
-            <p className="text-[10px] font-bold text-gray-500 uppercase">{clientName}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-[10px] font-bold text-gray-500 uppercase">{clientName}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-black uppercase">EP: {epargneAccountNumber || '---'}</span>
+                <span className="text-[8px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded font-black uppercase">TN: {tontineAccounts[0]?.number || '---'}</span>
+              </div>
+            </div>
           </div>
         </div>
         <button onClick={onClose} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors"><X size={24} /></button>
@@ -612,6 +641,13 @@ const OperationForm: React.FC<{
               <div className="space-y-1">
                 <p className="text-[9px] font-bold text-gray-500 uppercase">Client</p>
                 <p className="text-xs font-black text-white uppercase">{clientName}</p>
+              </div>
+              <div className="space-y-1 text-right">
+                <p className="text-[9px] font-bold text-gray-500 uppercase">Comptes</p>
+                <div className="flex flex-col items-end">
+                  <p className="text-[9px] font-black text-emerald-400 uppercase">EP: {epargneAccountNumber || '---'}</p>
+                  <p className="text-[9px] font-black text-blue-400 uppercase">TN: {tontineAccounts[0]?.number || '---'}</p>
+                </div>
               </div>
               <div className="space-y-1 text-right">
                 <p className="text-[9px] font-bold text-gray-500 uppercase">Type</p>
@@ -1878,7 +1914,7 @@ const Members: React.FC = () => {
           tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 0 }],
           history: [],
           gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
-          dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '12 Mois'
+          dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '3 Mois'
         },
         { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
       ];
@@ -1914,7 +1950,7 @@ const Members: React.FC = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>('1');
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const [isHeaderVisible, setIsHeaderVisible] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'epargne' | 'tontine' | 'credit' | 'garantie' | 'partSociale' | 'profile' | 'current_credit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'epargne' | 'tontine' | 'credit' | 'garantie' | 'partSociale' | 'profile' | 'current_credit' | 'credit_archives'>('overview');
   const [tontineSubTab, setTontineSubTab] = useState<'journal' | 'cases'>('cases');
   const [selectedTontineId, setSelectedTontineId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -2605,6 +2641,17 @@ const Members: React.FC = () => {
           } else {
             newBalances.credit = 0;
           }
+          
+          // Mettre à jour les détails du crédit pour refléter le remboursement
+          if (c.lastCreditDetails) {
+            c.lastCreditDetails.capital = Math.max(0, (c.lastCreditDetails.capital || 0) - (op.rembCapital || 0));
+            c.lastCreditDetails.interest = Math.max(0, (c.lastCreditDetails.interest || 0) - (op.rembInterest || 0));
+            c.lastCreditDetails.penalty = Math.max(0, (c.lastCreditDetails.penalty || 0) - (op.rembPenalty || 0));
+          } else if (c.lastCreditRequest) {
+            c.lastCreditRequest.capital = Math.max(0, (c.lastCreditRequest.capital || 0) - (op.rembCapital || 0));
+            c.lastCreditRequest.interest = Math.max(0, (c.lastCreditRequest.interest || 0) - (op.rembInterest || 0));
+            c.lastCreditRequest.penalty = Math.max(0, (c.lastCreditRequest.penalty || 0) - (op.rembPenalty || 0));
+          }
         } else if (op.type === 'deblocage') {
           newBalances.credit += op.amount;
         }
@@ -3044,6 +3091,7 @@ const Members: React.FC = () => {
             onSave={handleSaveOperation}
             clientId={selectedClient?.id || ''}
             clientName={selectedClient?.name || ''}
+            epargneAccountNumber={selectedClient?.epargneAccountNumber}
             tontineAccounts={selectedClient?.tontineAccounts || []}
             initialTontineId={selectedTontineId || undefined}
             isEpargneBlockedByAdmin={selectedClient?.isEpargneBlocked}
@@ -3052,16 +3100,30 @@ const Members: React.FC = () => {
             epargneBalance={selectedClient?.balances.epargne}
             adhesionPaid={selectedClient?.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('adhésion')).reduce((sum, tx) => sum + tx.amount, 0)}
             livretPaid={selectedClient?.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('livret')).reduce((sum, tx) => sum + tx.amount, 0)}
-            creditBalances={selectedClient ? {
-              total: selectedClient.balances.credit,
-              capital: (selectedClient as any).lastCreditRequest 
-                ? (selectedClient.balances.credit * ((selectedClient as any).lastCreditRequest.capital / ((selectedClient as any).lastCreditRequest.capital + (selectedClient as any).lastCreditRequest.interest)))
-                : (selectedClient.balances.credit * 0.9),
-              interest: (selectedClient as any).lastCreditRequest 
-                ? (selectedClient.balances.credit * ((selectedClient as any).lastCreditRequest.interest / ((selectedClient as any).lastCreditRequest.capital + (selectedClient as any).lastCreditRequest.interest)))
-                : (selectedClient.balances.credit * 0.1),
-              penalty: (selectedClient as any).lastCreditRequest?.penalty || 0
-            } : undefined}
+            creditBalances={selectedClient ? (() => {
+              const total = selectedClient.balances.credit;
+              const initialCap = (selectedClient as any).lastCreditDetails?.capital || (selectedClient as any).lastCreditRequest?.capital || (total * 0.9);
+              const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest || (total * 0.1);
+              const initialTot = Number(initialCap) + Number(initialInt);
+              
+              if (Math.abs(total - initialTot) < 1) {
+                return {
+                  total,
+                  capital: Number(initialCap),
+                  interest: Number(initialInt),
+                  penalty: (selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0
+                };
+              }
+
+              const capRatio = initialTot > 0 ? Number(initialCap) / initialTot : 0.9;
+              const intRatio = initialTot > 0 ? Number(initialInt) / initialTot : 0.1;
+              return {
+                total,
+                capital: Math.floor(total * capRatio),
+                interest: Math.floor(total * intRatio),
+                penalty: (selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0
+              };
+            })() : undefined}
           />
         ) : !selectedClient ? (
           <div className="flex-1 bg-[#121c32] rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-500 p-8 text-center"><User size={64} strokeWidth={1} className="mb-4 opacity-20 mx-auto" /><p className="font-bold uppercase tracking-widest text-sm">Sélectionnez un client</p></div>
@@ -3161,6 +3223,7 @@ const Members: React.FC = () => {
                     <button onClick={() => setActiveTab('partSociale')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><Gem size={16} /> Part Sociale</button>
                     <button onClick={() => setActiveTab('profile')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><BookOpen size={16} /> Dossier Client</button>
                     <button onClick={() => { setActiveTab('current_credit'); setIsEditingCredit(false); }} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><CreditCard size={16} /> Dossier crédit actuel</button>
+                    <button onClick={() => setActiveTab('credit_archives')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><History size={16} /> Archives des crédits</button>
                   </>
                 ) : (
                   <div className="flex items-center gap-4 w-full">
@@ -3180,6 +3243,11 @@ const Members: React.FC = () => {
                       {activeTab === 'current_credit' && (
                         <div className="w-full flex items-center justify-center gap-3 rounded-2xl font-black py-5 text-lg bg-red-500/10 text-red-400 border border-red-500/20 shadow-2xl">
                           <CreditCard size={28} /> DOSSIER CRÉDIT ACTUEL
+                        </div>
+                      )}
+                      {activeTab === 'credit_archives' && (
+                        <div className="w-full flex items-center justify-center gap-3 rounded-2xl font-black py-5 text-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-2xl">
+                          <History size={28} /> ARCHIVES DES CRÉDITS
                         </div>
                       )}
                     </div>
@@ -3297,7 +3365,10 @@ const Members: React.FC = () => {
                               <div className="min-w-0">
                                 <p className="text-sm font-black text-white uppercase tracking-tight">{tx.description}</p>
                                 <div className="flex items-center gap-2 mt-1">
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()}</p>
+                                  <p className="text-[10px] font-bold text-gray-500 uppercase">
+                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                  </p>
                                   <span className="w-1 h-1 rounded-full bg-gray-700" />
                                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{tx.account}</p>
                                 </div>
@@ -3361,7 +3432,10 @@ const Members: React.FC = () => {
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                  <p className="text-[10px] font-bold text-gray-500 uppercase">
+                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                  </p>
                                 </div>
                               </div>
                               <div className="text-right shrink-0 ml-4">
@@ -3469,7 +3543,10 @@ const Members: React.FC = () => {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                    <p className="text-[10px] font-bold text-gray-500 uppercase">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase">
+                                      {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                    </p>
                                   </div>
                                 </div>
                                 <div className="flex flex-col items-end gap-0.5 shrink-0 ml-4">
@@ -3653,17 +3730,33 @@ const Members: React.FC = () => {
                     <div className="bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Capital Restant</p>
                       <p className="text-xl font-black text-white mt-1">
-                        {selectedClient.lastCreditRequest 
-                          ? (selectedClient.balances.credit * (selectedClient.lastCreditRequest.capital / (selectedClient.lastCreditRequest.capital + selectedClient.lastCreditRequest.interest))).toLocaleString()
-                          : (selectedClient.balances.credit * 0.9).toLocaleString()} F
+                        {(() => {
+                          const total = selectedClient.balances.credit;
+                          const initialCap = (selectedClient as any).lastCreditDetails?.capital || (selectedClient as any).lastCreditRequest?.capital;
+                          const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest;
+                          const initialPen = (selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0;
+                          
+                          if (initialCap !== undefined) return Number(initialCap).toLocaleString();
+                          
+                          // Fallback if no details
+                          const initialTot = Number(total);
+                          return Math.floor(initialTot * 0.9).toLocaleString();
+                        })()} F
                       </p>
                     </div>
                     <div className="bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Intérêts Attendus</p>
                       <p className="text-xl font-black text-blue-400 mt-1">
-                        {selectedClient.lastCreditRequest 
-                          ? (selectedClient.balances.credit * (selectedClient.lastCreditRequest.interest / (selectedClient.lastCreditRequest.capital + selectedClient.lastCreditRequest.interest))).toLocaleString()
-                          : (selectedClient.balances.credit * 0.1).toLocaleString()} F
+                        {(() => {
+                          const total = selectedClient.balances.credit;
+                          const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest;
+                          
+                          if (initialInt !== undefined) return Number(initialInt).toLocaleString();
+                          
+                          // Fallback if no details
+                          const initialTot = Number(total);
+                          return Math.floor(initialTot * 0.1).toLocaleString();
+                        })()} F
                       </p>
                     </div>
                     <div className="bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm">
@@ -3693,7 +3786,10 @@ const Members: React.FC = () => {
                               </div>
                               <div className="min-w-0">
                                 <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                  {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                  {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                </p>
                               </div>
                             </div>
                             <p className={`text-base font-black shrink-0 ml-4 ${tx.type === 'remboursement' ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -3743,7 +3839,10 @@ const Members: React.FC = () => {
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                  </p>
                                 </div>
                               </div>
                               <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -3799,7 +3898,10 @@ const Members: React.FC = () => {
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                  </p>
                                 </div>
                               </div>
                               <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-pink-400'}`}>
@@ -3877,11 +3979,20 @@ const Members: React.FC = () => {
                           <p className="text-2xl font-black text-white">{selectedClient.balances.credit.toLocaleString()} F</p>
                         </div>
                         <div className="p-5 bg-white/5 rounded-2xl border border-white/5">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Capital décaissé</p>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Capital restant dû</p>
                           <p className="text-lg font-black text-white">
-                            {selectedClient.lastCreditRequest 
-                              ? (selectedClient.balances.credit * (selectedClient.lastCreditRequest.capital / (selectedClient.lastCreditRequest.capital + selectedClient.lastCreditRequest.interest))).toLocaleString()
-                              : (selectedClient.balances.credit * 0.9).toLocaleString()} F
+                            {(() => {
+                              const total = selectedClient.balances.credit;
+                              const initialCap = (selectedClient as any).lastCreditDetails?.capital || (selectedClient as any).lastCreditRequest?.capital || (total * 0.9);
+                              const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest || (total * 0.1);
+                              const initialTot = Number(initialCap) + Number(initialInt);
+                              
+                              // Si le solde total est égal au montant initial (capital + intérêt), on affiche le capital initial
+                              if (Math.abs(total - initialTot) < 1) return Number(initialCap).toLocaleString();
+                              
+                              const capRatio = initialTot > 0 ? Number(initialCap) / initialTot : 0.9;
+                              return Math.floor(total * capRatio).toLocaleString();
+                            })()} F
                           </p>
                         </div>
                         
@@ -3909,7 +4020,7 @@ const Members: React.FC = () => {
                               className="w-full bg-[#1e293b] border border-white/10 rounded-lg p-2 text-sm font-bold text-white outline-none focus:border-[#00c896]" 
                             />
                           ) : (
-                            <p className="text-sm font-bold text-white">{selectedClient.dureeCredit || 'N/A'}</p>
+                            <p className="text-sm font-bold text-white">{selectedClient.dureeCredit || (selectedClient as any).lastCreditDetails?.duration || (selectedClient as any).lastCreditRequest?.duration || 'N/A'}</p>
                           )}
                         </div>
                         
@@ -3946,9 +4057,17 @@ const Members: React.FC = () => {
                         <div className="p-5 bg-white/5 rounded-2xl border border-white/5">
                           <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Intérêts attendus</p>
                           <p className="text-lg font-black text-blue-400">
-                            {selectedClient.lastCreditRequest 
-                              ? (selectedClient.balances.credit * (selectedClient.lastCreditRequest.interest / (selectedClient.lastCreditRequest.capital + selectedClient.lastCreditRequest.interest))).toLocaleString()
-                              : Math.floor(selectedClient.balances.credit * 0.15).toLocaleString()} F
+                            {(() => {
+                              const total = selectedClient.balances.credit;
+                              const initialCap = selectedClient.lastCreditDetails?.capital || selectedClient.lastCreditRequest?.capital || (total * 0.9);
+                              const initialInt = selectedClient.lastCreditDetails?.interest || selectedClient.lastCreditRequest?.interest || (total * 0.1);
+                              const initialTot = Number(initialCap) + Number(initialInt);
+                              
+                              if (Math.abs(total - initialTot) < 1) return Number(initialInt).toLocaleString();
+                              
+                              const intRatio = initialTot > 0 ? Number(initialInt) / initialTot : 0.1;
+                              return Math.floor(total * intRatio).toLocaleString();
+                            })()} F
                           </p>
                         </div>
                         <div className="p-5 bg-white/5 rounded-2xl border border-white/5">
@@ -4024,6 +4143,126 @@ const Members: React.FC = () => {
                       </p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'credit_archives' && (
+                <div className="space-y-6">
+                  {(() => {
+                    const credits: any[] = [];
+                    let currentCredit: any = null;
+                    const sortedHistory = [...(selectedClient?.history || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                    sortedHistory.forEach(tx => {
+                      if (tx.account === 'credit') {
+                        if (tx.type === 'deblocage') {
+                          if (currentCredit) credits.push(currentCredit);
+                          currentCredit = {
+                            id: tx.id,
+                            date: tx.date,
+                            amount: tx.amount,
+                            description: tx.description,
+                            cashierName: tx.cashierName,
+                            repayments: [],
+                            totalRepaid: 0
+                          };
+                        } else if (tx.type === 'remboursement' && currentCredit) {
+                          currentCredit.repayments.push({
+                            id: tx.id,
+                            date: tx.date,
+                            amount: tx.amount,
+                            capital: tx.rembCapital || 0,
+                            interest: tx.rembInterest || 0,
+                            penalty: tx.rembPenalty || 0,
+                            cashierName: tx.cashierName
+                          });
+                          currentCredit.totalRepaid += tx.amount;
+                        }
+                      }
+                    });
+                    if (currentCredit) credits.push(currentCredit);
+                    const archives = credits.reverse();
+
+                    if (archives.length === 0) {
+                      return (
+                        <div className="bg-[#121c32] rounded-[2rem] p-12 text-center border border-white/5">
+                          <History size={48} className="text-gray-700 mx-auto mb-4 opacity-20" />
+                          <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">Aucun historique de crédit archivé</p>
+                        </div>
+                      );
+                    }
+
+                    return archives.map((credit, idx) => (
+                      <div key={credit.id} className="bg-[#121c32] rounded-[2rem] border border-white/5 overflow-hidden shadow-sm">
+                        <div className="bg-white/5 p-6 flex items-center justify-between border-b border-white/5">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                              <CreditCard size={24} />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Crédit N° {archives.length - idx}</p>
+                              <h4 className="text-lg font-black text-white uppercase tracking-tight">{credit.amount.toLocaleString()} F</h4>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date Déblocage</p>
+                            <p className="text-sm font-bold text-gray-300">
+                              {new Date(credit.date).toLocaleDateString()}
+                              {credit.cashierName && ` • OP: ${credit.cashierName}`}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="p-6 space-y-6">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Remboursé</p>
+                              <p className="text-base font-black text-emerald-400">{credit.totalRepaid.toLocaleString()} F</p>
+                            </div>
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Reste à payer</p>
+                              <p className="text-base font-black text-red-400">{Math.max(0, credit.amount - credit.totalRepaid).toLocaleString()} F</p>
+                            </div>
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-center col-span-2 sm:col-span-1">
+                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Statut</p>
+                              <p className={`text-xs font-black uppercase ${credit.totalRepaid >= credit.amount ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {credit.totalRepaid >= credit.amount ? 'Soldé' : 'En cours'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Historique des remboursements</p>
+                            {credit.repayments.length > 0 ? (
+                              <div className="space-y-2">
+                                {credit.repayments.map((remb: any) => (
+                                  <div key={remb.id} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                                        <ArrowDownLeft size={16} />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-black text-white uppercase">{new Date(remb.date).toLocaleDateString()}</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">
+                                          Cap: {remb.capital.toLocaleString()} | Int: {remb.interest.toLocaleString()}
+                                          {remb.cashierName && ` | OP: ${remb.cashierName}`}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <p className="text-sm font-black text-emerald-400">+{remb.amount.toLocaleString()} F</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 bg-white/5 rounded-xl border border-dashed border-white/10 text-center text-[10px] font-bold text-gray-600 uppercase">
+                                Aucun remboursement effectué
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
               )}
             </div>

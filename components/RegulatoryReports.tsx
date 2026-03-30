@@ -48,7 +48,8 @@ const RegulatoryReports: React.FC = () => {
     },
     credits: {
       accordes: 0,
-      rembourse: 0
+      rembourse: 0,
+      interets: 0
     }
   });
 
@@ -77,7 +78,7 @@ const RegulatoryReports: React.FC = () => {
         produits: { carnetsTontine: 0, carnetsMembre: 0, commissionsTontine: 0, fraisDossier: 0, interetsCredit: 0, droitAdhesion: 0, total: 0 },
         charges: { salaires: 0, depensesAdmin: 0, total: 0 },
         depots: { ordinaires: 0, retraitsOrdinaires: 0, tontines: 0, retraitsTontines: 0 },
-        credits: { accordes: 0, rembourse: 0 },
+        credits: { accordes: 0, rembourse: 0, interets: 0 },
         marge: 0
       };
 
@@ -87,17 +88,17 @@ const RegulatoryReports: React.FC = () => {
           const txDate = new Date(tx.date);
           if (txDate >= start && txDate <= end) {
             const desc = (tx.description || '').toLowerCase();
-            const amount = tx.amount || 0;
+            const amount = Number(tx.amount || 0);
 
             // Produits
             if (desc.includes('carnet tontine')) data.produits.carnetsTontine += amount;
             else if (desc.includes('carnet membre')) data.produits.carnetsMembre += amount;
             else if (desc.includes('commission tontine')) data.produits.commissionsTontine += amount;
             else if (desc.includes('frais de dossier')) data.produits.fraisDossier += amount;
-            else if (desc.includes('intérêt') || desc.includes('interet')) data.produits.interetsCredit += amount;
+            else if ((desc.includes('intérêt') || desc.includes('interet')) && tx.account !== 'credit') data.produits.interetsCredit += amount;
             else if (desc.includes('adhésion')) data.produits.droitAdhesion += amount;
 
-            // Charges (simulées car souvent hors membres, mais on vérifie si c'est dans l'historique d'un compte spécial ou si on a des types spécifiques)
+            // Charges
             if (desc.includes('salaire')) data.charges.salaires += amount;
             else if (desc.includes('dépense admin') || desc.includes('depense admin')) data.charges.depensesAdmin += amount;
 
@@ -113,7 +114,13 @@ const RegulatoryReports: React.FC = () => {
             // État des crédits
             if (tx.account === 'credit') {
               if (tx.type === 'deblocage') data.credits.accordes += amount;
-              if (tx.type === 'remboursement') data.credits.rembourse += amount;
+              if (tx.type === 'remboursement') {
+                const cap = tx.rembCapital !== undefined ? Number(tx.rembCapital) : amount;
+                const int = tx.rembInterest !== undefined ? Number(tx.rembInterest) : 0;
+                data.credits.rembourse += cap;
+                data.credits.interets += int;
+                data.produits.interetsCredit += int;
+              }
             }
           }
         });
@@ -159,44 +166,45 @@ const RegulatoryReports: React.FC = () => {
       [''],
       ['COMPTES D\'EXPLOITATION', '', ''],
       ['COMPTE', 'LIBELLÉS', 'MONTANTS'],
-      ['706110', 'Produits d\'exploitation (A)', sigData.produits.total],
-      ['706111', 'Carnets Tontine vendus', sigData.produits.carnetsTontine],
-      ['706112', 'Carnets membre vendus', sigData.produits.carnetsMembre],
-      ['706113', 'Commissions sur Tontine', sigData.produits.commissionsTontine],
-      ['706114', 'Frais de dossiers sur crédit accordé', sigData.produits.fraisDossier],
-      ['701110', 'Intérêt remboursé sur crédit accordé', sigData.produits.interetsCredit],
-      ['706115', 'Droit d\'adhésion', sigData.produits.droitAdhesion],
+      ['70611000', 'Produits d\'exploitation (A)', sigData.produits.total],
+      ['70611100', 'Carnets Tontine vendus', sigData.produits.carnetsTontine],
+      ['70611200', 'Carnets membre vendus', sigData.produits.carnetsMembre],
+      ['70611300', 'Commissions sur Tontine', sigData.produits.commissionsTontine],
+      ['70611400', 'Frais de dossiers sur crédit accordé', sigData.produits.fraisDossier],
+      ['70111000', 'Intérêt remboursé sur crédit accordé', sigData.produits.interetsCredit],
+      ['70611500', 'Droit d\'adhésion', sigData.produits.droitAdhesion],
       ['', 'Total produits d\'exploitation (A)', sigData.produits.total],
       [''],
-      ['611100', 'Charges d\'exploitation (B)', sigData.charges.total],
-      ['611110', 'Salaires', sigData.charges.salaires],
-      ['612000', 'Dépenses administratives', sigData.charges.depensesAdmin],
+      ['61110000', 'Charges d\'exploitation (B)', sigData.charges.total],
+      ['61111000', 'Salaires', sigData.charges.salaires],
+      ['61200000', 'Dépenses administratives', sigData.charges.depensesAdmin],
       ['', 'Total charges d\'exploitation (B)', sigData.charges.total],
-      ['131000', 'Marge bénéficiaire (A - B)', sigData.marge],
+      ['13100000', 'Marge bénéficiaire (A - B)', sigData.marge],
       [''],
       ['COMPTE D\'INVESTISSEMENT', '', ''],
       ['', 'Ressource (A)', sigData.marge],
-      ['101100', 'Capital souscrit appelé versé', 0],
-      ['131000', 'Marge bénéficiaire', sigData.marge],
-      ['240000', 'Investissement (B)', 0],
+      ['10110000', 'Capital souscrit appelé versé', 0],
+      ['13100000', 'Marge bénéficiaire', sigData.marge],
+      ['24000000', 'Investissement (B)', 0],
       ['', 'Investissement', 0],
-      ['620000', 'Autres charges (C)', 0],
+      ['62000000', 'Autres charges (C)', 0],
       ['', 'Autres charges', 0],
       ['', 'Situation du mois (A-B-C)', sigData.marge],
       [''],
       ['ÉTAT DES DÉPÔTS', '', ''],
       ['COMPTE', 'ÉLÉMENTS', 'MONTANTS'],
-      ['251110', 'Dépôts ordinaires', sigData.depots.ordinaires],
-      ['251110', 'Retraits ordinaires', sigData.depots.retraitsOrdinaires],
+      ['25111000', 'Dépôts ordinaires', sigData.depots.ordinaires],
+      ['25111000', 'Retraits ordinaires', sigData.depots.retraitsOrdinaires],
       ['', 'ECART', sigData.depots.ordinaires - sigData.depots.retraitsOrdinaires],
-      ['252110', 'Dépôts Tontines', sigData.depots.tontines],
-      ['252110', 'Retraits Tontines', sigData.depots.retraitsTontines],
+      ['25211000', 'Dépôts Tontines', sigData.depots.tontines],
+      ['25211000', 'Retraits Tontines', sigData.depots.retraitsTontines],
       ['', 'ECART', sigData.depots.tontines - sigData.depots.retraitsTontines],
       [''],
       ['ÉTAT DES CRÉDITS EN COURS', '', ''],
       ['COMPTE', 'LIBELLÉS', 'MONTANTS'],
-      ['221110', 'Crédits accordés', sigData.credits.accordes],
-      ['221110', 'Capital remboursé', sigData.credits.rembourse]
+      ['22111000', 'Crédits accordés', sigData.credits.accordes],
+      ['22111000', 'Capital remboursé', sigData.credits.rembourse],
+      ['70111000', 'Intérêts remboursés', sigData.credits.interets]
     ];
 
     const htmlContent = `
@@ -365,37 +373,37 @@ const RegulatoryReports: React.FC = () => {
                 <td colSpan={3} className="px-6 py-3 text-[11px] font-black text-[#121c32] uppercase tracking-widest">Comptes d'Exploitation</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">706110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">70611000</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] uppercase">Produits d'exploitation (A)</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.produits.total.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">706111</td>
+                <td className="px-6 py-2 text-[10px] font-bold">70611100</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Carnets Tontine vendus</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.carnetsTontine.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">706112</td>
+                <td className="px-6 py-2 text-[10px] font-bold">70611200</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Carnets membre vendus</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.carnetsMembre.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">706113</td>
+                <td className="px-6 py-2 text-[10px] font-bold">70611300</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Commissions sur Tontine</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.commissionsTontine.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">706114</td>
+                <td className="px-6 py-2 text-[10px] font-bold">70611400</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Frais de dossiers sur crédit accordé</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.fraisDossier.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">701110</td>
+                <td className="px-6 py-2 text-[10px] font-bold">70111000</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Intérêt remboursé sur crédit accordé</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.interetsCredit.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">706115</td>
+                <td className="px-6 py-2 text-[10px] font-bold">70611500</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Droit d'adhésion</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.droitAdhesion.toLocaleString()}</td>
               </tr>
@@ -404,19 +412,19 @@ const RegulatoryReports: React.FC = () => {
                 <td className="px-6 py-3 text-xs font-black text-emerald-700 uppercase">Total produits d'exploitation (A)</td>
                 <td className="px-6 py-3 text-xs font-black text-emerald-700 text-right">{sigData.produits.total.toLocaleString()}</td>
               </tr>
-
+ 
               <tr className="bg-gray-50/10">
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">611100</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">61110000</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] uppercase">Charges d'exploitation (B)</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.charges.total.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">611110</td>
+                <td className="px-6 py-2 text-[10px] font-bold">61111000</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Salaires</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.charges.salaires.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">612000</td>
+                <td className="px-6 py-2 text-[10px] font-bold">61200000</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Dépenses administratives</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.charges.depensesAdmin.toLocaleString()}</td>
               </tr>
@@ -426,11 +434,11 @@ const RegulatoryReports: React.FC = () => {
                 <td className="px-6 py-3 text-xs font-black text-red-700 text-right">{sigData.charges.total.toLocaleString()}</td>
               </tr>
               <tr className="bg-[#121c32] text-white">
-                <td className="px-6 py-4 text-xs font-bold opacity-50">131000</td>
+                <td className="px-6 py-4 text-xs font-bold opacity-50">13100000</td>
                 <td className="px-6 py-4 text-sm font-black uppercase tracking-widest">Marge bénéficiaire (A - B)</td>
                 <td className="px-6 py-4 text-sm font-black text-right">{sigData.marge.toLocaleString()}</td>
               </tr>
-
+ 
               {/* Section Investissement */}
               <tr className="bg-gray-50/30">
                 <td colSpan={3} className="px-6 py-3 text-[11px] font-black text-[#121c32] uppercase tracking-widest">Compte d'Investissement</td>
@@ -441,42 +449,42 @@ const RegulatoryReports: React.FC = () => {
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.marge.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">101100</td>
+                <td className="px-6 py-2 text-[10px] font-bold">10110000</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Capital souscrit appelé versé</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">0</td>
               </tr>
               <tr className="text-gray-500">
-                <td className="px-6 py-2 text-[10px] font-bold">131000</td>
+                <td className="px-6 py-2 text-[10px] font-bold">13100000</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Marge bénéficiaire</td>
                 <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.marge.toLocaleString()}</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">240000</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">24000000</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] uppercase">Investissement (B)</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">0</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">620000</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">62000000</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] uppercase">Autres charges (C)</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">0</td>
               </tr>
               <tr className="bg-blue-900 text-white">
-                <td className="px-6 py-4 text-xs font-bold opacity-50">131000</td>
+                <td className="px-6 py-4 text-xs font-bold opacity-50">13100000</td>
                 <td className="px-6 py-4 text-sm font-black uppercase tracking-widest">Situation du mois (A-B-C)</td>
                 <td className="px-6 py-4 text-sm font-black text-right">{sigData.marge.toLocaleString()}</td>
               </tr>
-
+ 
               {/* Section Dépôts */}
               <tr className="bg-gray-50/30">
                 <td colSpan={3} className="px-6 py-3 text-[11px] font-black text-[#121c32] uppercase tracking-widest">État des Dépôts</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">251110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">25111000</td>
                 <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Dépôts ordinaires</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.depots.ordinaires.toLocaleString()}</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">251110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">25111000</td>
                 <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Retraits ordinaires</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.depots.retraitsOrdinaires.toLocaleString()}</td>
               </tr>
@@ -486,12 +494,12 @@ const RegulatoryReports: React.FC = () => {
                 <td className="px-6 py-2 text-xs font-black text-blue-700 text-right">{(sigData.depots.ordinaires - sigData.depots.retraitsOrdinaires).toLocaleString()}</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">252110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">25211000</td>
                 <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Dépôts Tontines</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.depots.tontines.toLocaleString()}</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">252110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">25211000</td>
                 <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Retraits Tontines</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.depots.retraitsTontines.toLocaleString()}</td>
               </tr>
@@ -500,20 +508,25 @@ const RegulatoryReports: React.FC = () => {
                 <td className="px-6 py-2 text-xs font-black text-amber-700 uppercase italic">ECART (Tontine)</td>
                 <td className="px-6 py-2 text-xs font-black text-amber-700 text-right">{(sigData.depots.tontines - sigData.depots.retraitsTontines).toLocaleString()}</td>
               </tr>
-
+ 
               {/* Section Crédits */}
               <tr className="bg-gray-50/30">
                 <td colSpan={3} className="px-6 py-3 text-[11px] font-black text-[#121c32] uppercase tracking-widest">État des Crédits en Cours</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">221110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">22111000</td>
                 <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Crédits accordés</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.credits.accordes.toLocaleString()}</td>
               </tr>
               <tr>
-                <td className="px-6 py-3 text-xs font-bold text-gray-400">221110</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">22111000</td>
                 <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Capital remboursé</td>
                 <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.credits.rembourse.toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">70111000</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Intérêts remboursés</td>
+                <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.credits.interets.toLocaleString()}</td>
               </tr>
             </tbody>
           </table>

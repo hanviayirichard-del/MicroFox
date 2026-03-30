@@ -5,12 +5,14 @@ import {
   CheckCircle,
   History,
   ArrowUpRight,
-  ShieldCheck
+  ShieldCheck,
+  X
 } from 'lucide-react';
 
 const CreditDisbursement: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -26,31 +28,61 @@ const CreditDisbursement: React.FC = () => {
   }, []);
 
   const pendingRequests = members.filter(m => 
-    m.epargneAccountNumber && m.lastCreditRequest && m.lastCreditRequest.status === 'En attente'
+    m.epargneAccountNumber && m.lastCreditRequest && m.lastCreditRequest.status === 'Validé'
   ).filter(m => {
     const search = searchTerm.toLowerCase();
     return m.name.toLowerCase().includes(search) || m.code.toLowerCase().includes(search);
   });
 
   const handleDisburse = (memberId: string) => {
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
+    if (!currentUser) {
+      setStatusMessage({ type: 'error', text: "Session expirée. Veuillez vous reconnecter." });
+      setTimeout(() => setStatusMessage(null), 6000);
+      return;
+    }
+
     const saved = localStorage.getItem('microfox_members_data');
     let clients = saved ? JSON.parse(saved) : [];
     const client = clients.find((c: any) => c.id === memberId);
     if (!client || !client.lastCreditRequest) return;
 
     const request = client.lastCreditRequest;
-    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
-    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+    const capital = Number(request.capital || 0);
+    const interest = Number(request.interest || 0);
+    const fees = Number(request.fees || 0);
+    const penalty = Number(request.penalty || 0);
+
+    if (request.status !== 'Validé') {
+      setStatusMessage({ type: 'error', text: "Le crédit doit être validé avant d'être décaissé." });
+      setTimeout(() => setStatusMessage(null), 6000);
+      return;
+    }
+
+    if (!window.confirm(`Voulez-vous vraiment débloquer ce crédit de ${capital.toLocaleString()} F pour ${client.name} ?`)) {
+      return;
+    }
+
+    const targetCaisse = currentUser.role === 'agent commercial' ? null : (currentUser.caisse || (currentUser.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
     
     if (targetCaisse) {
       const cashKey = `microfox_cash_balance_${targetCaisse}`;
       const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
-      if (currentCashBalance <= 0) {
-        alert(`Opération impossible : Le solde de la ${targetCaisse} est de 0 F. Veuillez approvisionner la caisse.`);
+      if (currentCashBalance < capital) {
+        setStatusMessage({ 
+          type: 'error', 
+          text: `Opération impossible : Le solde de la ${targetCaisse} est de ${currentCashBalance.toLocaleString()} F. Solde insuffisant pour décaisser ${capital.toLocaleString()} F.` 
+        });
+        setTimeout(() => setStatusMessage(null), 6000);
         return;
       }
-      // Mise à jour du solde de la caisse
-      localStorage.setItem(cashKey, (currentCashBalance - request.capital).toString());
+      // Mise à jour du solde de la caisse : on décaisse le capital et on encaisse les frais
+      localStorage.setItem(cashKey, (currentCashBalance - capital + fees).toString());
+    } else if (currentUser.role === 'agent commercial') {
+      const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
+      const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+      // Pour un agent, on impacte aussi son solde
+      localStorage.setItem(agentBalanceKey, (currentAgentBalance - capital + fees).toString());
     }
 
     const updatedClients = clients.map((c: any) => {
@@ -61,25 +93,29 @@ const CreditDisbursement: React.FC = () => {
           if (savedHistory) fullHistory = JSON.parse(savedHistory);
         }
 
-        const currentCredit = c.balances?.credit || 0;
-        const newTotal = currentCredit + request.capital + request.interest + request.penalty;
+        const currentCredit = Number(c.balances?.credit || 0);
+        const newTotal = currentCredit + capital + interest + penalty;
         
         const newTx = {
           id: Date.now().toString(),
           type: 'deblocage',
           account: 'credit',
-          amount: request.capital,
+          amount: capital,
           date: new Date().toISOString(),
-          description: `Déblocage de crédit approuvé - Échéance: ${request.dueDate}`
+          description: `Déblocage de crédit approuvé par ${currentUser.identifiant || 'Inconnu'} - Échéance: ${request.dueDate}`,
+          operator: currentUser.identifiant || 'Inconnu',
+          cashierName: currentUser.identifiant || 'Inconnu'
         };
 
-        const feesTx = request.fees > 0 ? {
+        const feesTx = fees > 0 ? {
           id: `fees-${Date.now()}`,
           type: 'depot',
           account: 'frais',
-          amount: request.fees,
+          amount: fees,
           date: new Date().toISOString(),
-          description: `Frais de dossier crédit - Échéance: ${request.dueDate}`
+          description: `Frais de dossier crédit encaissés par ${currentUser.identifiant || 'Inconnu'} - Échéance: ${request.dueDate}`,
+          operator: currentUser.identifiant || 'Inconnu',
+          cashierName: currentUser.identifiant || 'Inconnu'
         } : null;
         
         const addedHistory = [newTx];
@@ -92,9 +128,21 @@ const CreditDisbursement: React.FC = () => {
           ...c,
           balances: { ...c.balances, credit: newTotal },
           history: newHistory,
+          dureeCredit: request.duration,
+          lastCreditDetails: {
+            capital: capital,
+            interest: interest,
+            penalty: penalty,
+            duration: request.duration,
+            dueDate: request.dueDate,
+            requestedBy: request.requestedBy,
+            validatedBy: request.validatedBy,
+            disbursedBy: currentUser.identifiant || 'Inconnu'
+          },
           lastCreditRequest: {
             ...request,
             status: 'Débloqué',
+            disbursedBy: currentUser.identifiant || 'Inconnu',
             disbursementDate: new Date().toISOString()
           }
         };
@@ -106,11 +154,138 @@ const CreditDisbursement: React.FC = () => {
     localStorage.setItem('microfox_pending_sync', 'true');
     window.dispatchEvent(new Event('storage'));
     loadData();
-    alert("Crédit débloqué avec succès.");
+    setStatusMessage({ 
+      type: 'success', 
+      text: `Le crédit de ${capital.toLocaleString()} F pour ${client.name} a été débloqué avec succès.` 
+    });
+    setTimeout(() => setStatusMessage(null), 6000);
+  };
+
+  const handleCancelDisbursement = (memberId: string) => {
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
+    if (!currentUser) {
+      alert("Session expirée. Veuillez vous reconnecter.");
+      return;
+    }
+
+    if (!['administrateur', 'directeur', 'caissier'].includes(currentUser.role)) {
+      alert("Seul l'administrateur, le directeur ou le caissier peut annuler un décaissement.");
+      return;
+    }
+
+    const saved = localStorage.getItem('microfox_members_data');
+    let clients = saved ? JSON.parse(saved) : [];
+    const client = clients.find((c: any) => c.id === memberId);
+    if (!client || !client.lastCreditRequest || client.lastCreditRequest.status !== 'Débloqué') return;
+
+    const request = client.lastCreditRequest;
+    const capital = Number(request.capital || 0);
+    const fees = Number(request.fees || 0);
+    const interest = Number(request.interest || 0);
+    const penalty = Number(request.penalty || 0);
+    
+    // Revert Caisse/Agent balance
+    const targetCaisse = currentUser.role === 'agent commercial' ? null : (currentUser.caisse || (currentUser.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+    if (targetCaisse) {
+      const cashKey = `microfox_cash_balance_${targetCaisse}`;
+      const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
+      localStorage.setItem(cashKey, (currentCashBalance + capital - fees).toString());
+    } else if (currentUser.role === 'agent commercial') {
+      const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
+      const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+      localStorage.setItem(agentBalanceKey, (currentAgentBalance + capital - fees).toString());
+    }
+
+    const updatedClients = clients.map((c: any) => {
+      if (c.id === memberId) {
+        let fullHistory = c.history || [];
+        if (fullHistory.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+          if (savedHistory) fullHistory = JSON.parse(savedHistory);
+        }
+
+        // Remove the disbursement transactions (deblocage and fees)
+        // We look for the most recent ones related to this credit
+        const newHistory = fullHistory.filter((tx: any) => 
+          !(tx.type === 'deblocage' && tx.account === 'credit' && Number(tx.amount) === capital && tx.date === request.disbursementDate) &&
+          !(tx.type === 'depot' && tx.account === 'frais' && Number(tx.amount) === fees && tx.date === request.disbursementDate)
+        );
+        
+        localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
+
+        const currentCredit = Number(c.balances?.credit || 0);
+        const revertedTotal = currentCredit - (capital + interest + penalty);
+
+        return {
+          ...c,
+          balances: { ...c.balances, credit: revertedTotal },
+          history: newHistory,
+          lastCreditRequest: {
+            ...request,
+            status: 'Validé',
+            disbursedBy: null,
+            disbursementDate: null
+          }
+        };
+      }
+      return c;
+    });
+
+    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+    localStorage.setItem('microfox_pending_sync', 'true');
+    window.dispatchEvent(new Event('storage'));
+    loadData();
+    alert("Décaissement annulé. Le crédit est de nouveau en attente de déblocage.");
+  };
+
+  const handleCancelRequest = (memberId: string) => {
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
+    if (!currentUser) {
+      alert("Session expirée. Veuillez vous reconnecter.");
+      return;
+    }
+
+    if (!['administrateur', 'directeur', 'gestionnaire de crédit'].includes(currentUser.role)) {
+      alert("Seul l'administrateur, le directeur ou le gestionnaire de crédit peut annuler une demande de crédit.");
+      return;
+    }
+
+    if (!window.confirm("Voulez-vous vraiment annuler cette demande de crédit ?")) return;
+
+    const saved = localStorage.getItem('microfox_members_data');
+    let clients = saved ? JSON.parse(saved) : [];
+    
+    const updatedClients = clients.map((c: any) => {
+      if (c.id === memberId) {
+        return {
+          ...c,
+          lastCreditRequest: {
+            ...c.lastCreditRequest,
+            status: 'Annulé',
+            cancelledBy: currentUser.identifiant || 'Inconnu',
+            cancelledAt: new Date().toISOString()
+          }
+        };
+      }
+      return c;
+    });
+
+    localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+    localStorage.setItem('microfox_pending_sync', 'true');
+    window.dispatchEvent(new Event('storage'));
+    loadData();
+    alert("Demande de crédit annulée avec succès.");
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {statusMessage && (
+        <div className={`p-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg animate-in fade-in slide-in-from-top-4 duration-300 ${
+          statusMessage.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          {statusMessage.text}
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-[#121c32] uppercase tracking-tight">Déblocage de Crédit</h1>
@@ -123,7 +298,7 @@ const CreditDisbursement: React.FC = () => {
             placeholder="Rechercher une demande..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-2xl outline-none focus:border-emerald-500 font-medium transition-all shadow-sm"
+            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-2xl outline-none focus:border-emerald-500 font-medium transition-all shadow-sm text-[#121c32]"
           />
         </div>
       </div>
@@ -154,7 +329,7 @@ const CreditDisbursement: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Frais/Pén.</p>
-                    <p className="text-lg font-black text-amber-600">{(m.lastCreditRequest.fees + m.lastCreditRequest.penalty).toLocaleString()} F</p>
+                    <p className="text-lg font-black text-amber-600">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Échéance</p>
@@ -162,13 +337,22 @@ const CreditDisbursement: React.FC = () => {
                   </div>
                 </div>
 
-                <button 
-                  onClick={() => handleDisburse(m.id)}
-                  className="px-8 py-4 bg-[#00c896] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-[#00a87d] transition-all flex items-center justify-center gap-2 shrink-0"
-                >
-                  <ArrowUpRight size={20} />
-                  Débloquer
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button 
+                    onClick={() => handleCancelRequest(m.id)}
+                    className="p-4 text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+                    title="Annuler la demande"
+                  >
+                    <X size={24} />
+                  </button>
+                  <button 
+                    onClick={() => handleDisburse(m.id)}
+                    className="px-8 py-4 bg-[#00c896] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-[#00a87d] transition-all flex items-center justify-center gap-2"
+                  >
+                    <ArrowUpRight size={20} />
+                    Débloquer
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -177,8 +361,8 @@ const CreditDisbursement: React.FC = () => {
             <div className="w-20 h-20 bg-gray-50 text-gray-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <History size={40} />
             </div>
-            <h3 className="text-xl font-black text-gray-600 uppercase tracking-tight">Aucune demande en attente</h3>
-            <p className="text-gray-600 text-sm mt-2">Les nouvelles demandes de crédit apparaîtront ici pour validation.</p>
+            <h3 className="text-xl font-black text-gray-600 uppercase tracking-tight">Aucun crédit à débloquer</h3>
+            <p className="text-gray-600 text-sm mt-2">Les crédits validés apparaîtront ici pour déblocage.</p>
           </div>
         )}
       </div>
@@ -193,12 +377,14 @@ const CreditDisbursement: React.FC = () => {
             <thead>
               <tr className="bg-gray-50/50">
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Membre</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Opérateurs (Req/Val/Déc)</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Capital</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Intérêts</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Frais/Pén.</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Date Débloc.</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Échéance</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Statut</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -209,6 +395,13 @@ const CreditDisbursement: React.FC = () => {
                       <p className="text-sm font-black text-[#121c32] uppercase">{m.name}</p>
                       <p className="text-[10px] font-bold text-gray-600 uppercase tracking-tight">{m.code}</p>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-blue-600 uppercase">Req: {m.lastCreditRequest.requestedBy || '---'}</p>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase">Val: {m.lastCreditRequest.validatedBy || '---'}</p>
+                        <p className="text-[10px] font-bold text-purple-600 uppercase">Déc: {m.lastCreditRequest.disbursedBy || '---'}</p>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <p className="text-sm font-black text-emerald-600">{m.lastCreditRequest.capital.toLocaleString()} F</p>
                     </td>
@@ -216,7 +409,7 @@ const CreditDisbursement: React.FC = () => {
                       <p className="text-sm font-black text-blue-600">{m.lastCreditRequest.interest.toLocaleString()} F</p>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <p className="text-sm font-black text-amber-600">{(m.lastCreditRequest.fees + m.lastCreditRequest.penalty).toLocaleString()} F</p>
+                      <p className="text-sm font-black text-amber-600">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-700">
                       {new Date(m.lastCreditRequest.disbursementDate).toLocaleDateString()}
@@ -229,11 +422,20 @@ const CreditDisbursement: React.FC = () => {
                         Débloqué
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => handleCancelDisbursement(m.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Annuler le décaissement"
+                      >
+                        <X size={18} />
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-600 italic text-sm">
+                  <td colSpan={9} className="px-6 py-8 text-center text-gray-600 italic text-sm">
                     Aucun déblocage récent
                   </td>
                 </tr>

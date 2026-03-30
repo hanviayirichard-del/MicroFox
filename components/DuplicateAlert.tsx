@@ -6,7 +6,7 @@ const DuplicateAlert: React.FC = () => {
   const [duplicates, setDuplicates] = useState<{
     type: 'Épargne' | 'Tontine' | 'Nom';
     number: string;
-    clients: { id: string; name: string; code: string }[];
+    clients: { id: string; name: string; code: string; author?: string }[];
   }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -46,7 +46,12 @@ const DuplicateAlert: React.FC = () => {
           foundDuplicates.push({
             type: 'Épargne',
             number: num,
-            clients: clients.map(c => ({ id: c.id, name: c.name, code: c.code }))
+            clients: clients.map(c => ({ 
+              id: c.id, 
+              name: c.name, 
+              code: c.code,
+              author: c.history?.[0]?.cashierName || 'Système'
+            }))
           });
         }
       });
@@ -56,7 +61,12 @@ const DuplicateAlert: React.FC = () => {
           foundDuplicates.push({
             type: 'Tontine',
             number: num,
-            clients: clients.map(c => ({ id: c.id, name: c.name, code: c.code }))
+            clients: clients.map(c => ({ 
+              id: c.id, 
+              name: c.name, 
+              code: c.code,
+              author: c.history?.[0]?.cashierName || 'Système'
+            }))
           });
         }
       });
@@ -66,7 +76,12 @@ const DuplicateAlert: React.FC = () => {
           foundDuplicates.push({
             type: 'Nom',
             number: name,
-            clients: clients.map(c => ({ id: c.id, name: c.name, code: c.code }))
+            clients: clients.map(c => ({ 
+              id: c.id, 
+              name: c.name, 
+              code: c.code,
+              author: c.history?.[0]?.cashierName || 'Système'
+            }))
           });
         }
       });
@@ -135,9 +150,14 @@ const DuplicateAlert: React.FC = () => {
                     <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center text-gray-400 font-bold">
                       <User size={20} />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-white truncate uppercase">{client.name}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">{client.code}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase">{client.code}</p>
+                        {client.author && (
+                          <p className="text-[9px] font-medium text-emerald-500/70 uppercase italic">Par: {client.author}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -31,7 +31,8 @@ import {
   CloudSync,
   Printer,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Search
 } from 'lucide-react';
 import { MenuItem, SidebarProps } from '../types';
 import { useState, useEffect } from 'react';
@@ -44,6 +45,8 @@ interface MenuCategory {
 const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout, onSync, isSyncing }) => {
   const [hasPendingSync, setHasPendingSync] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, string[]>>({});
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const updateState = () => {
@@ -55,6 +58,53 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         } catch (e) {
           console.error("Error parsing permissions:", e);
         }
+      }
+
+      // Calculate notification count
+      const userStr = localStorage.getItem('microfox_current_user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        let count = 0;
+
+        // Agent pending deposit
+        if (user.role === 'agent commercial') {
+          const balance = Number(localStorage.getItem(`microfox_agent_balance_${user.id}`) || 0);
+          if (balance > 0) count++;
+        }
+
+        // Pending withdrawals (Auditor/Admin)
+        if (['auditeur', 'contrôleur', 'administrateur'].includes(user.role)) {
+          const saved = localStorage.getItem('microfox_pending_withdrawals');
+          if (saved) {
+            const pending = JSON.parse(saved).filter((r: any) => !r.isDeleted && r.status === 'En attente');
+            if (pending.length > 0) count++;
+          }
+        }
+
+        // Cashier/Admin notifications
+        if (['caissier', 'administrateur', 'directeur'].includes(user.role)) {
+          // Tontine withdrawals
+          const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
+          if (savedValidated) {
+            const validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed);
+            if (validated.length > 0) count++;
+          }
+          // Agent payments
+          const savedPayments = localStorage.getItem('microfox_agent_payments');
+          if (savedPayments) {
+            const pendingPayments = JSON.parse(savedPayments).filter((p: any) => p.status === 'En attente');
+            if (pendingPayments.length > 0) count++;
+          }
+          // Credit disbursements
+          const savedMembers = localStorage.getItem('microfox_members_data');
+          if (savedMembers) {
+            const members = JSON.parse(savedMembers);
+            const pendingCredits = members.filter((m: any) => m.lastCreditRequest && m.lastCreditRequest.status === 'En attente');
+            if (pendingCredits.length > 0) count++;
+          }
+        }
+
+        setNotificationCount(count);
       }
     };
     updateState();
@@ -95,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       title: "Pilotage",
       items: [
         { id: 'Tableau de Bord', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} /> },
-        { id: 'Notification', label: 'Notification', icon: <Bell size={20} /> },
+        { id: 'Notification', label: 'Notification', icon: <Bell size={20} />, badge: notificationCount },
         { id: 'Carte Géographique', label: 'Carte Géographique', icon: <Map size={20} /> },
       ]
     },
@@ -107,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         { id: 'Alerte Doublons', label: 'Alerte Doublons', icon: <AlertTriangle size={20} />, badge: 0 },
         { id: 'Réclamations Clients', label: 'Réclamations Clients', icon: <MessageSquare size={20} /> },
         { id: 'Demande de crédit', label: 'Demande de crédit', icon: <FileText size={20} /> },
-        { id: 'Déblocage de crédit', label: 'Déblocage de crédit', icon: <FileCheck size={20} /> },
+        { id: 'Validation de Crédit', label: 'Validation de Crédit', icon: <FileCheck size={20} /> },
         { id: 'Crédit actif', label: 'Crédit actif', icon: <TrendingUp size={20} /> },
         { id: 'Autres opérations crédit', label: 'Autres opérations crédit', icon: <RefreshCw size={20} /> },
       ]
@@ -131,7 +181,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         { id: 'Dépenses administratives', label: 'Dépenses administratives', icon: <TrendingDown size={20} /> },
         { id: 'Stocks Livrets', label: 'Stocks Livrets', icon: <Package size={20} /> },
         { id: 'Frais & Parts Sociales', label: 'Frais & Parts Sociales', icon: <Gem size={20} /> },
-        { id: 'Gestion Crédits', label: 'Gestion Crédits', icon: <CreditCard size={20} /> },
+        { id: 'Déblocage de crédit', label: 'Déblocage de crédit', icon: <CreditCard size={20} /> },
         { id: 'Commissions', label: 'Commissions', icon: <Percent size={20} /> },
       ]
     },
@@ -186,12 +236,30 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         </button>
       </div>
 
+      <div className="px-4 py-3 border-b border-gray-800">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Rechercher un onglet..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-[#1e2a44] text-white text-xs px-4 py-2.5 rounded-xl border border-gray-700 focus:outline-none focus:border-[#00c896] transition-all placeholder:text-gray-500"
+          />
+          <Search size={14} className="absolute right-3 top-3 text-gray-500" />
+        </div>
+      </div>
+
       <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
         {categories
           .filter(cat => cat.title !== "Support & Système" || (JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role === 'administrateur'))
           .map((category) => {
             const userRole = JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role;
             const filteredItems = category.items.filter(item => {
+              // Search filter
+              if (searchTerm && !item.label.toLowerCase().includes(searchTerm.toLowerCase())) {
+                return false;
+              }
+
               if (item.id === 'Guide Pratique') return true;
               if (userRole === 'administrateur') return true;
 
@@ -206,9 +274,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
               if (userRole === 'directeur') {
                 const allowedIds = [
                   'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 
-                  'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 
+                  'Validation de Crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 
                   'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 
-                  'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Gestion Crédits', 
+                  'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Déblocage de crédit', 
                   'Commissions', 'Journal Global', 'Comptabilité & États', 'États Réglementaires', 
                   'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Reçu de caisse', 'Contrôle Terrain', 
                   'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'
@@ -219,7 +287,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                 const allowedIds = [
                   'Membres',
                   'Analyse',
-                  'Déblocage de crédit',
                   'Crédit actif',
                   'Tontine Journalière',
                   'Vente Livrets',
@@ -227,7 +294,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Gestion Caisse',
                   'Dépenses administratives',
                   'Frais & Parts Sociales',
-                  'Gestion Crédits',
+                  'Déblocage de crédit',
                   'Journal Global',
                   'Reçu de caisse',
                   'Etats des écarts',

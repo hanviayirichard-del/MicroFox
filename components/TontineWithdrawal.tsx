@@ -284,7 +284,7 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     return { 
-      netBalance: Math.max(0, grossBalance - totalComm), 
+      netBalance: cycleDetails.reduce((sum, c) => sum + c.decaissable, 0), 
       cycles: displayCycles, 
       currentCycleCases: displayCycleCases, 
       currentCycleDates: displayCycleDates,
@@ -374,15 +374,15 @@ const TontineWithdrawal: React.FC = () => {
         // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
         const updatedCycleDetails = stats.cycleDetails.map(c => {
           const request = requestedCycleIndices.find(r => r.idx === c.index);
-          // On ne bloque le cycle que s'il y a une demande EN ATTENTE.
-          // Les demandes VALIDÉES sont gérées par getTontineStats via l'historique (une fois ajoutées).
-          const isPending = request?.status === 'En attente';
+          // On ne bloque le cycle que s'il y a une demande EN ATTENTE ou VALIDÉE non encore en historique.
+          // Les demandes VALIDÉES déjà en historique sont gérées par getTontineStats.
+          const isPending = request?.status === 'En attente' || request?.status === 'Validée';
           
           return {
             ...c,
             isRetire: c.isRetire || isPending,
-            montantRetire: c.montantRetire || (request ? request.amount : 0),
-            dateRetrait: c.dateRetrait || (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
+            montantRetire: c.isRetire ? c.montantRetire : (request ? request.amount : 0),
+            dateRetrait: c.isRetire ? c.dateRetrait : (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
           };
         });
 
@@ -629,6 +629,10 @@ const TontineWithdrawal: React.FC = () => {
                 <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
                   <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Client sélectionné</p>
                   <p className="text-sm font-bold text-[#121c32]">{selectedClient.name}</p>
+                  <div className="flex gap-2 mt-1">
+                    <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 rounded font-black uppercase">EP: {selectedClient.epargneAccountNumber || '---'}</span>
+                    <span className="text-[8px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 rounded font-black uppercase">TN: {selectedClient.accountNumber || '---'}</span>
+                  </div>
                   <div className="flex justify-between mt-2 pt-2 border-t border-emerald-100">
                     <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">Disponible Net total</span>
                     <span className="text-sm font-black text-[#121c32]">{selectedClient.availableTontine.toLocaleString()} F</span>

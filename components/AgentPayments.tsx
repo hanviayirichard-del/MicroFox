@@ -44,7 +44,8 @@ const AgentPayments: React.FC = () => {
                          (Number(billetage['5']) * 5) + 
                          Number(billetage['monnaie']);
 
-  const gap = physicalBalance - agentBalance;
+  const theoreticalTotal = totalCotisations + totalLivrets;
+  const gap = physicalBalance - theoreticalTotal;
 
   useEffect(() => {
     const userStr = localStorage.getItem('microfox_current_user');
@@ -157,7 +158,7 @@ const AgentPayments: React.FC = () => {
         amountCotisations: totalCotisations,
         amountLivrets: totalLivrets,
         totalAmount: totalAmount,
-        theoreticalAmount: agentBalance,
+        theoreticalAmount: theoreticalTotal,
         physicalBalance: physicalBalance,
         gap: gap,
         billetage: billetage,
@@ -185,8 +186,15 @@ const AgentPayments: React.FC = () => {
       }
       
       setAgentBalance(0);
+      setTotalCotisations(0);
+      setTotalLivrets(0);
+      setBilletage({
+        '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '250': 0, '200': 0, '100': 0, '50': 0, '25': 0, '10': 0, '5': 0, 'monnaie': 0
+      });
+      setAuthCode('');
       
       setSuccessMessage(`Versement de ${totalAmount} FCFA soumis à la ${selectedCaisse} avec succès.`);
+      alert("Versement effectué avec succès.");
       setIsSubmitting(false);
       setTimeout(() => setSuccessMessage(null), 4000);
     }, 1500);
@@ -222,7 +230,7 @@ const AgentPayments: React.FC = () => {
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Solde Agent à Verser</h2>
-            <span className="text-2xl font-black text-emerald-600">{agentBalance.toLocaleString()} FCFA</span>
+            <span className="text-2xl font-black text-emerald-600">{theoreticalTotal.toLocaleString()} FCFA</span>
           </div>
           
           <div className="space-y-4">
@@ -262,7 +270,7 @@ const AgentPayments: React.FC = () => {
 
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
             <span className="text-sm font-black text-[#121c32] uppercase">Total Théorique</span>
-            <span className="text-2xl font-black text-[#00c896]">{agentBalance.toLocaleString()} F</span>
+            <span className="text-2xl font-black text-[#00c896]">{theoreticalTotal.toLocaleString()} F</span>
           </div>
 
           <div className="pt-6 border-t border-gray-100 space-y-4">

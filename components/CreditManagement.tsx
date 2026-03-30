@@ -20,152 +20,15 @@ import {
   CheckCircle
 } from 'lucide-react';
 
-const NewCreditModal: React.FC<{
-  onClose: () => void;
-  onSave: (memberId: string, amount: number, interest: number, fees: number, penalty: number, dueDate: string) => void;
-}> = ({ onClose, onSave }) => {
-  const [members, setMembers] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMemberId, setSelectedMemberId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [interest, setInterest] = useState('');
-  const [fees, setFees] = useState('');
-  const [penalty, setPenalty] = useState('');
-  const [dueDate, setDueDate] = useState('');
-
-  useEffect(() => {
-    const saved = localStorage.getItem('microfox_members_data');
-    if (saved) {
-      setMembers(JSON.parse(saved));
-    } else {
-      setMembers([
-        { id: '1', name: 'KOFFI Ama Gertrude', code: 'CLT-001254', epargneAccountNumber: 'EP-44201', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, tontineAccounts: [{ number: 'TN-8829-01' }] },
-        { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', epargneAccountNumber: 'EP-99102', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, tontineAccounts: [] }
-      ]);
-    }
-  }, []);
-
-  const filteredMembers = members.filter(m => {
-    if (!m.epargneAccountNumber) return false;
-    const search = searchTerm.toLowerCase();
-    return (
-      m.name.toLowerCase().includes(search) ||
-      m.code.toLowerCase().includes(search) ||
-      (m.epargneAccountNumber && m.epargneAccountNumber.toLowerCase().includes(search)) ||
-      (m.tontineAccounts && m.tontineAccounts.some((acc: any) => acc.number.toLowerCase().includes(search)))
-    );
-  });
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] my-4 sm:my-8">
-        <div className="bg-[#121c32] p-6 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <CreditCard size={24} className="text-emerald-400" />
-            <h3 className="text-lg font-black uppercase tracking-tight">Accorder un Crédit</h3>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X size={20} /></button>
-        </div>
-        <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Rechercher le Membre</label>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Nom, N° Épargne ou Tontine..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-bold text-black text-sm"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Sélectionner le Membre</label>
-            <select 
-              value={selectedMemberId} 
-              onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-bold text-black"
-            >
-              <option value="">-- Choisir un client --</option>
-              {filteredMembers.map(m => (
-                <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Montant du Crédit (F)</label>
-            <input 
-              type="number" 
-              value={amount} 
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0"
-              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-black text-2xl text-[#121c32]"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Intérêt à payer (F)</label>
-              <input 
-                type="number" 
-                value={interest} 
-                onChange={(e) => setInterest(e.target.value)}
-                placeholder="0"
-                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-bold text-black"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Frais de dossier (F)</label>
-              <input 
-                type="number" 
-                value={fees} 
-                onChange={(e) => setFees(e.target.value)}
-                placeholder="0"
-                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-bold text-black"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Pénalité (F)</label>
-              <input 
-                type="number" 
-                value={penalty} 
-                onChange={(e) => setPenalty(e.target.value)}
-                placeholder="0"
-                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-bold text-black"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Échéance</label>
-              <input 
-                type="date" 
-                value={dueDate} 
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-[#00c896] font-bold text-black"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="p-8 pt-0 shrink-0">
-          <button 
-            onClick={() => { if(selectedMemberId && amount) onSave(selectedMemberId, Number(amount), Number(interest), Number(fees), Number(penalty), dueDate); }}
-            className="w-full py-5 bg-[#00c896] text-white rounded-2xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-          >
-            <CheckCircle size={20} />
-            Décaisser le Crédit
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function CreditManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [credits, setCredits] = useState<any[]>([]);
-  const [showNewCreditModal, setShowNewCreditModal] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [showArchives, setShowArchives] = useState(false);
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [selectedCreditId, setSelectedCreditId] = useState<string | null>(null);
+  const [penaltyAmount, setPenaltyAmount] = useState('');
   const [stats, setStats] = useState({
     encoursBrut: 0,
     interetsAttendus: 0,
@@ -190,8 +53,12 @@ export default function CreditManagement() {
       ];
     }
 
-    const activeCredits = clients.filter((c: any) => (c.balances?.credit || 0) > 0).map((c: any) => {
-      const total = c.balances.credit;
+    const allCredits = clients.filter((c: any) => {
+      const hasCreditBalance = (c.balances?.credit || 0) > 0;
+      const hasCreditHistory = c.history?.some((tx: any) => tx.account === 'credit');
+      return hasCreditBalance || hasCreditHistory;
+    }).map((c: any) => {
+      const total = c.balances.credit || 0;
       const dueDateStr = c.lastCreditRequest?.dueDate || c.lastCreditDetails?.dueDate || '2025-06-15';
       const dueDate = new Date(dueDateStr);
       const now = new Date();
@@ -199,26 +66,51 @@ export default function CreditManagement() {
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
       let status = 'Sain';
-      if (diffDays >= 30) status = 'Contentieux';
+      if (total === 0) status = 'Clôturé';
+      else if (diffDays >= 30) status = 'Contentieux';
       else if (diffDays >= 1) status = 'Retard';
+
+      const initialCap = c.lastCreditDetails?.capital || c.lastCreditRequest?.capital || (total * 0.9);
+      const initialInt = c.lastCreditDetails?.interest || c.lastCreditRequest?.interest || (total * 0.1);
+      const initialTot = Number(initialCap) + Number(initialInt);
+      
+      let interet = 0;
+      let capital = 0;
+      
+      if (Math.abs(total - initialTot) < 1) {
+        interet = Number(initialInt);
+        capital = Number(initialCap);
+      } else {
+        const capRatio = initialTot > 0 ? Number(initialCap) / initialTot : 0.9;
+        const intRatio = initialTot > 0 ? Number(initialInt) / initialTot : 0.1;
+        interet = Math.floor(total * intRatio);
+        capital = Math.floor(total * capRatio);
+      }
 
       return {
         id: c.id,
         name: c.name,
         code: c.code,
-        capital: Math.floor(total * 0.9),
-        interet: Math.floor(total * 0.1),
+        capital: capital,
+        interet: interet,
         penalite: c.lastCreditRequest?.penalty || c.lastCreditDetails?.penalty || 0,
         status: status,
-        dateEcheance: dueDateStr
+        dateEcheance: dueDateStr,
+        duration: c.lastCreditDetails?.duration || c.lastCreditRequest?.duration || 'N/A',
+        creditNumber: c.lastCreditDetails?.creditNumber || c.lastCreditRequest?.creditNumber || '---',
+        totalCredit: initialTot,
+        requestedBy: c.lastCreditDetails?.requestedBy || c.lastCreditRequest?.requestedBy || 'N/A',
+        validatedBy: c.lastCreditDetails?.validatedBy || c.lastCreditRequest?.validatedBy || 'N/A',
+        disbursedBy: c.lastCreditDetails?.disbursedBy || c.lastCreditRequest?.disbursedBy || 'N/A'
       };
     });
 
-    setCredits(activeCredits);
+    setCredits(allCredits);
 
-    const eb = activeCredits.reduce((acc: number, c: any) => acc + c.capital + c.interet + c.penalite, 0);
-    const int = activeCredits.reduce((acc: number, c: any) => acc + c.interet, 0);
-    const pen = activeCredits.reduce((acc: number, c: any) => acc + c.penalite, 0);
+    const activeCredits = allCredits.filter((c: any) => c.status !== 'Clôturé');
+    const eb = activeCredits.reduce((acc: number, c: any) => acc + (c.capital || 0) + (c.interet || 0) + (c.penalite || 0), 0);
+    const int = activeCredits.reduce((acc: number, c: any) => acc + (c.interet || 0), 0);
+    const pen = activeCredits.reduce((acc: number, c: any) => acc + (c.penalite || 0), 0);
 
     setStats({
       encoursBrut: eb,
@@ -237,7 +129,7 @@ export default function CreditManagement() {
   const generateHTMLContent = (isForPrint = false) => {
     if (credits.length === 0) return null;
     const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
-    const headers = ["Nom", "Code", "Capital", "Intérêt", "Pénalité", "Status"];
+    const headers = ["Nom", "Code", "Capital restant dû", "Intérêt", "Pénalité", "Demandé par", "Validé par", "Décaissé par", "Durée", "Status"];
     
     const htmlContent = `
       <!DOCTYPE html>
@@ -265,20 +157,24 @@ export default function CreditManagement() {
           <p class="mf-info">${mfConfig.adresse}</p>
           <p class="mf-info">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
         </div>
-        <h2 class="report-title">Portefeuille des Crédits Actifs</h2>
+        <h2 class="report-title">Dossiers Crédit Actuels / Archives des Crédits</h2>
         <p class="period">Généré le ${new Date().toLocaleDateString()}</p>
         <table>
           <thead>
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
           </thead>
           <tbody>
-            ${credits.map(c => `
+            ${filteredCredits.map(c => `
               <tr>
                 <td>${c.name}</td>
                 <td>${c.code}</td>
-                <td class="text-right">${c.capital.toLocaleString()} F</td>
-                <td class="text-right">${c.interet.toLocaleString()} F</td>
-                <td class="text-right">${c.penalite.toLocaleString()} F</td>
+                <td class="text-right">${(c.capital || 0).toLocaleString()} F</td>
+                <td class="text-right">${(c.interet || 0).toLocaleString()} F</td>
+                <td class="text-right">${(c.penalite || 0).toLocaleString()} F</td>
+                <td>${c.requestedBy || 'N/A'}</td>
+                <td>${c.validatedBy || 'N/A'}</td>
+                <td>${c.disbursedBy || 'N/A'}</td>
+                <td>${c.duration || 'N/A'}</td>
                 <td>${c.status}</td>
               </tr>
             `).join('')}
@@ -315,38 +211,36 @@ export default function CreditManagement() {
     }
   };
 
-  const handleSaveNewCredit = (memberId: string, amount: number, interest: number, fees: number, penalty: number, dueDate: string) => {
+  const handleAddPenalty = () => {
+    if (!selectedCreditId || !penaltyAmount) return;
+
     const saved = localStorage.getItem('microfox_members_data');
-    let clients = [];
-    if (saved) {
-      clients = JSON.parse(saved);
-    } else {
-      clients = [
-        { id: '1', name: 'KOFFI Ama Gertrude', code: 'CLT-001254', balances: { credit: 1200000 }, history: [] },
-        { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', balances: { credit: 0 }, history: [] }
-      ];
-    }
+    let clients = saved ? JSON.parse(saved) : [];
 
     const updatedClients = clients.map((c: any) => {
-      if (c.id === memberId) {
+      if (c.id === selectedCreditId) {
+        const amount = Number(penaltyAmount);
+        const currentCredit = c.balances?.credit || 0;
+        const newTotal = currentCredit + amount;
+        
         let fullHistory = c.history || [];
         if (fullHistory.length === 0) {
           const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
           if (savedHistory) fullHistory = JSON.parse(savedHistory);
         }
 
-        const currentCredit = c.balances.credit || 0;
-        const newTotal = currentCredit + amount + interest + penalty; // On ajoute les intérêts et pénalités au solde dû
-        
+        const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
         const newTx = {
           id: Date.now().toString(),
-          type: 'deblocage',
+          type: 'frais',
           account: 'credit',
           amount: amount,
           date: new Date().toISOString(),
-          description: `Déblocage de crédit - Échéance: ${dueDate}`
+          description: `Application d'une pénalité sur crédit par ${currentUser.identifiant || 'Inconnu'}`,
+          operator: currentUser.identifiant || 'Inconnu',
+          cashierName: currentUser.identifiant || 'Inconnu'
         };
-        
+
         const newHistory = [newTx, ...fullHistory];
         localStorage.setItem(`microfox_history_${c.id}`, JSON.stringify(newHistory));
 
@@ -354,24 +248,22 @@ export default function CreditManagement() {
           ...c,
           balances: { ...c.balances, credit: newTotal },
           history: newHistory,
-          // On peut stocker les détails spécifiques si besoin
           lastCreditDetails: {
-            capital: amount,
-            interest: interest,
-            fees: fees,
-            penalty: penalty,
-            dueDate: dueDate
+            ...(c.lastCreditDetails || {}),
+            penalty: (c.lastCreditDetails?.penalty || 0) + amount
           }
         };
       }
       return c;
     });
-    
+
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
+    localStorage.setItem('microfox_pending_sync', 'true');
     window.dispatchEvent(new Event('storage'));
     loadData();
-    setShowNewCreditModal(false);
-    alert("Crédit décaissé avec succès.");
+    setShowPenaltyModal(false);
+    setPenaltyAmount('');
+    alert("Pénalité appliquée avec succès.");
   };
 
   const filteredCredits = credits.filter(c => 
@@ -381,20 +273,52 @@ export default function CreditManagement() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      {showNewCreditModal && (
-        <NewCreditModal 
-          onClose={() => setShowNewCreditModal(false)} 
-          onSave={handleSaveNewCredit} 
-        />
+      {showPenaltyModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="bg-[#121c32] p-6 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle size={24} className="text-red-400" />
+                <h3 className="text-lg font-black uppercase tracking-tight">Appliquer une Pénalité</h3>
+              </div>
+              <button onClick={() => setShowPenaltyModal(false)} className="p-2 hover:bg-white/10 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Montant de la Pénalité (F)</label>
+                <input 
+                  type="number" 
+                  value={penaltyAmount} 
+                  onChange={(e) => setPenaltyAmount(e.target.value)}
+                  placeholder="0"
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-red-500 font-black text-2xl text-[#121c32]"
+                />
+              </div>
+              <button 
+                onClick={handleAddPenalty}
+                className="w-full py-5 bg-red-500 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle size={20} />
+                Confirmer la Pénalité
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header & Stats Cards */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-2">
         <div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-tight">Gestion des Crédits</h1>
+          <h1 className="text-2xl font-black text-white uppercase tracking-tight">Portefeuille Crédit</h1>
           <p className="text-gray-400 text-sm font-medium mt-1">Suivi du portefeuille et recouvrement</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => setShowArchives(!showArchives)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${showArchives ? 'bg-amber-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            <History size={18} /> {showArchives ? 'Retour aux crédits actifs' : 'Archives des crédits'}
+          </button>
           <button 
             onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
@@ -407,12 +331,6 @@ export default function CreditManagement() {
           >
             <Download size={18} /> Exporter HTML
           </button>
-          <button 
-            onClick={() => setShowNewCreditModal(true)}
-            className="flex items-center gap-2 px-6 py-2 bg-[#121c32] text-white rounded-xl text-sm font-bold shadow-lg hover:bg-[#1a2b4a] transition-all"
-          >
-            <CreditCard size={18} /> Nouveau Crédit / Pénalité
-          </button>
         </div>
       </div>
 
@@ -423,7 +341,7 @@ export default function CreditManagement() {
           </div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2">Encours Brut Total</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black">{stats.encoursBrut.toLocaleString()}</span>
+            <span className="text-3xl font-black">{(stats.encoursBrut || 0).toLocaleString()}</span>
             <span className="text-sm font-bold opacity-70">F</span>
           </div>
         </div>
@@ -434,7 +352,7 @@ export default function CreditManagement() {
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Intérêts attendus</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-black text-[#121c32]">{stats.interetsAttendus.toLocaleString()}</span>
+            <span className="text-3xl font-black text-[#121c32]">{(stats.interetsAttendus || 0).toLocaleString()}</span>
             <span className="text-sm font-bold text-gray-400">F</span>
           </div>
         </div>
@@ -445,7 +363,7 @@ export default function CreditManagement() {
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Pénalités cumulées</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-black text-red-500">{stats.penalitesCumulees.toLocaleString()}</span>
+            <span className="text-3xl font-black text-red-500">{(stats.penalitesCumulees || 0).toLocaleString()}</span>
             <span className="text-sm font-bold text-gray-400">F</span>
           </div>
         </div>
@@ -464,17 +382,28 @@ export default function CreditManagement() {
 
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="relative w-full sm:w-96">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="Rechercher un dossier crédit..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:border-emerald-500 rounded-2xl outline-none text-sm font-medium transition-all"
-            />
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">
+              Dossiers Crédit Actuels / Archives des Crédits
+            </h2>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Rechercher..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-transparent focus:border-emerald-500 rounded-xl outline-none text-sm font-medium transition-all"
+              />
+            </div>
           </div>
           <div className="flex gap-2 self-end sm:self-center">
+            <button 
+              onClick={() => setShowArchives(!showArchives)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showArchives ? 'bg-[#121c32] text-white shadow-lg' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+            >
+              {showArchives ? 'Voir Actifs' : 'Voir Archives'}
+            </button>
             <button className="p-3 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-all"><Filter size={20} /></button>
           </div>
         </div>
@@ -483,18 +412,31 @@ export default function CreditManagement() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gray-50/50">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">N° Crédit</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Membre</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Capital Restant</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Capital restant dû</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Intérêts</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Pénalités</th>
+                {showArchives && (
+                  <>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Demandé par</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Validé par</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Décaissé par</th>
+                  </>
+                )}
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Durée</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Échéance</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredCredits.length > 0 ? (
-                filteredCredits.map((credit) => (
+              {filteredCredits.filter(c => showArchives ? c.status === 'Clôturé' : c.status !== 'Clôturé').length > 0 ? (
+                filteredCredits.filter(c => showArchives ? c.status === 'Clôturé' : c.status !== 'Clôturé').map((credit) => (
                   <tr key={credit.id} className="group hover:bg-emerald-50/30 transition-all cursor-pointer">
+                    <td className="px-6 py-5">
+                      <p className="text-xs font-black text-amber-600 uppercase">{credit.creditNumber || '---'}</p>
+                    </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-[#121c32] text-white flex items-center justify-center font-black text-xs">
@@ -507,18 +449,38 @@ export default function CreditManagement() {
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <p className="text-sm font-black text-[#121c32]">{credit.capital.toLocaleString()} F</p>
+                      <p className="text-sm font-black text-[#121c32]">{(credit.capital || 0).toLocaleString()} F</p>
                     </td>
                     <td className="px-6 py-5">
-                      <p className="text-sm font-black text-blue-600">{credit.interet.toLocaleString()} F</p>
+                      <p className="text-sm font-black text-blue-600">{(credit.interet || 0).toLocaleString()} F</p>
                     </td>
                     <td className="px-6 py-5">
-                      <p className="text-sm font-black text-red-500">{credit.penalite.toLocaleString()} F</p>
+                      <p className="text-sm font-black text-red-500">{(credit.penalite || 0).toLocaleString()} F</p>
+                    </td>
+                    {showArchives && (
+                      <>
+                        <td className="px-6 py-5">
+                          <p className="text-sm font-black text-gray-600 uppercase">{credit.requestedBy}</p>
+                        </td>
+                        <td className="px-6 py-5">
+                          <p className="text-sm font-black text-gray-600 uppercase">{credit.validatedBy}</p>
+                        </td>
+                        <td className="px-6 py-5">
+                          <p className="text-sm font-black text-gray-600 uppercase">{credit.disbursedBy}</p>
+                        </td>
+                      </>
+                    )}
+                    <td className="px-6 py-5">
+                      <p className="text-sm font-black text-gray-600">{credit.duration || 'N/A'}</p>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="text-sm font-black text-gray-700">{new Date(credit.dateEcheance).toLocaleDateString()}</p>
                     </td>
                     <td className="px-6 py-5">
                       <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight ${
                         credit.status === 'Sain' ? 'bg-emerald-100 text-emerald-700' : 
-                        credit.status === 'Retard' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                        credit.status === 'Retard' ? 'bg-amber-100 text-amber-700' : 
+                        credit.status === 'Clôturé' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-700'
                       }`}>
                         {credit.status}
                       </span>
@@ -539,6 +501,16 @@ export default function CreditManagement() {
                             <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2">
                               <button onClick={() => setOpenMenuId(null)} className="w-full text-left px-4 py-2 text-[10px] font-black text-gray-600 hover:bg-gray-50 uppercase">Détails</button>
                               <button onClick={() => setOpenMenuId(null)} className="w-full text-left px-4 py-2 text-[10px] font-black text-gray-600 hover:bg-gray-50 uppercase">Rembourser</button>
+                              <button 
+                                onClick={() => { 
+                                  setSelectedCreditId(credit.id); 
+                                  setShowPenaltyModal(true); 
+                                  setOpenMenuId(null); 
+                                }} 
+                                className="w-full text-left px-4 py-2 text-[10px] font-black text-amber-600 hover:bg-amber-50 uppercase"
+                              >
+                                Ajouter Pénalité
+                              </button>
                               <div className="h-px bg-gray-100 my-1"></div>
                               <button onClick={() => setOpenMenuId(null)} className="w-full text-left px-4 py-2 text-[10px] font-black text-red-500 hover:bg-red-50 uppercase">Clôturer</button>
                             </div>
@@ -582,10 +554,10 @@ export default function CreditManagement() {
                   </div>
                   <div>
                     <p className="text-sm font-black text-[#121c32] uppercase">{c.name}</p>
-                    <p className="text-[10px] font-bold text-gray-400">Échéance le {c.dateEcheance}</p>
+                    <p className="text-[10px] font-bold text-gray-400">Échéance le {new Date(c.dateEcheance).toLocaleDateString()}</p>
                   </div>
                 </div>
-                <p className="text-sm font-black text-amber-600">{(c.capital / 10).toLocaleString()} F</p>
+                <p className="text-sm font-black text-amber-600">{((c.capital || 0) / 10).toLocaleString()} F</p>
               </div>
             ))}
           </div>

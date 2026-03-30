@@ -14,6 +14,7 @@ import GlobalJournal from './components/GlobalJournal';
 import CashReceipts from './components/CashReceipts';
 import EducationSupport from './components/EducationSupport';
 import CreditRequest from './components/CreditRequest';
+import CreditValidation from './components/CreditValidation';
 import CreditDisbursement from './components/CreditDisbursement';
 import OtherCreditOperations from './components/OtherCreditOperations';
 import ActiveCredits from './components/ActiveCredits';
@@ -404,6 +405,71 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // User Location Tracking
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'administrateur') return;
+
+    const trackLocation = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            const timestamp = new Date().toISOString();
+
+            // Update user in microfox_users
+            const savedUsers = localStorage.getItem('microfox_users');
+            if (savedUsers) {
+              try {
+                const users: User[] = JSON.parse(savedUsers);
+                const updatedUsers = users.map(u => 
+                  u.id === currentUser.id 
+                    ? { ...u, latitude, longitude, lastUpdate: timestamp } 
+                    : u
+                );
+                localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+              } catch (e) {
+                console.error("Error updating user location:", e);
+              }
+            }
+
+            // Update journey history
+            const savedJourneys = localStorage.getItem('microfox_user_journeys');
+            let journeys = [];
+            if (savedJourneys) {
+              try {
+                journeys = JSON.parse(savedJourneys);
+              } catch (e) {
+                console.error("Error parsing journeys:", e);
+              }
+            }
+            
+            const newPoint = {
+              userId: currentUser.id,
+              userName: currentUser.identifiant,
+              lat: latitude,
+              lng: longitude,
+              timestamp
+            };
+
+            // Keep journey history (limit to 2000 points to avoid storage bloat)
+            const updatedJourneys = [
+              ...journeys,
+              newPoint
+            ].slice(-2000);
+
+            localStorage.setItem('microfox_user_journeys', JSON.stringify(updatedJourneys));
+          },
+          (error) => console.log("Tracking error:", error),
+          { enableHighAccuracy: true }
+        );
+      }
+    };
+
+    trackLocation();
+    const interval = setInterval(trackLocation, 300000); // Every 5 minutes
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const handleSelectSection = (id: string) => {
     setActiveSection(id);
     if (window.innerWidth < 1024) {
@@ -421,7 +487,7 @@ const App: React.FC = () => {
     }
 
     if (activeSection === 'Notification') {
-      return <Notifications />;
+      return <Notifications onSelectSection={handleSelectSection} />;
     }
 
     if (activeSection === 'Carte Géographique') {
@@ -448,12 +514,12 @@ const App: React.FC = () => {
       return <Commissions />;
     }
 
-    if (activeSection === 'Gestion Crédits') {
-      return <CreditManagement />;
-    }
-
     if (activeSection === 'Demande de crédit') {
       return <CreditRequest />;
+    }
+    
+    if (activeSection === 'Validation de Crédit') {
+      return <CreditValidation />;
     }
 
     if (activeSection === 'Déblocage de crédit') {

@@ -21,7 +21,11 @@ interface Notification {
   action?: string;
 }
 
-const Notifications: React.FC = () => {
+interface NotificationProps {
+  onSelectSection: (id: string) => void;
+}
+
+const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
@@ -84,7 +88,7 @@ const Notifications: React.FC = () => {
             message: `Il y a ${validated.length} retrait(s) tontine validé(s) en attente de décaissement.`,
             date: now,
             role: ['caissier', 'administrateur', 'directeur'],
-            action: 'CAISSE PRINCIPALE'
+            action: 'Membres'
           });
         }
       }
@@ -102,6 +106,26 @@ const Notifications: React.FC = () => {
             date: now,
             role: ['caissier', 'administrateur', 'directeur'],
             action: 'Gestion Caisse'
+          });
+        }
+      }
+
+      // Credit disbursements to process
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      if (savedMembers) {
+        const members = JSON.parse(savedMembers);
+        const pendingCredits = members.filter((m: any) => 
+          m.lastCreditRequest && m.lastCreditRequest.status === 'En attente'
+        );
+        if (pendingCredits.length > 0) {
+          newNotifications.push({
+            id: 'pending_credit_disbursements',
+            type: 'info',
+            title: 'Déblocages de crédit en attente',
+            message: `Il y a ${pendingCredits.length} demande(s) de crédit validée(s) en attente de déblocage.`,
+            date: now,
+            role: ['caissier', 'administrateur', 'directeur'],
+            action: 'Déblocage de crédit'
           });
         }
       }
@@ -193,6 +217,7 @@ const Notifications: React.FC = () => {
                 {n.action && (
                   <div className="pt-3">
                     <button 
+                      onClick={() => n.action && onSelectSection(n.action)}
                       className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all hover:gap-3 ${
                         n.type === 'warning' ? 'text-amber-600' :
                         n.type === 'info' ? 'text-blue-600' :

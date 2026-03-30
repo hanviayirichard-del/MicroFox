@@ -32,6 +32,9 @@ export interface User {
   caisse?: string;
   isBlocked?: boolean;
   isDeleted?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  lastUpdate?: string;
 }
 
 export interface TontineAccount {
@@ -49,6 +52,7 @@ export interface Transaction {
   type: 'depot' | 'retrait' | 'cotisation' | 'remboursement' | 'transfert' | 'deblocage';
   account: 'epargne' | 'tontine' | 'credit' | 'garantie' | 'partSociale' | 'frais';
   tontineAccountId?: string;
+  tontineAccountNumber?: string;
   amount: number;
   date: string;
   description: string;
@@ -58,6 +62,9 @@ export interface Transaction {
   balanceBefore?: number;
   cashierName?: string;
   caisse?: string;
+  rembCapital?: number;
+  rembInterest?: number;
+  rembPenalty?: number;
 }
 
 export interface ClientAccount {
@@ -98,6 +105,22 @@ export interface ClientAccount {
   creditStatus?: 'Sain' | 'Retard' | 'Contentieux';
   isEpargneBlocked?: boolean;
   isEpargneInvisible?: boolean;
+  lastCreditDetails?: {
+    capital: number;
+    interest: number;
+    fees: number;
+    penalty: number;
+    dueDate: string;
+    duration: string;
+  };
+  lastCreditRequest?: {
+    capital: number;
+    interest: number;
+    fees: number;
+    penalty: number;
+    dueDate: string;
+    duration: string;
+  };
 }
 
 export interface AuditLog {

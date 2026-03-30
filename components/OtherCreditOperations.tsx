@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
   AlertCircle, 
   CheckCircle,
   User,
   CreditCard,
-  History
+  History,
+  ChevronDown
 } from 'lucide-react';
 
 const OtherCreditOperations: React.FC = () => {
@@ -15,6 +16,8 @@ const OtherCreditOperations: React.FC = () => {
   const [penaltyAmount, setPenaltyAmount] = useState('');
   const [rebateAmount, setRebateAmount] = useState('');
   const [operationType, setOperationType] = useState<'penalty' | 'rebate'>('penalty');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -37,13 +40,25 @@ const OtherCreditOperations: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
-    return () => window.removeEventListener('storage', loadData);
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      window.removeEventListener('storage', loadData);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const filteredMembers = members.filter(m => {
     if (!m.epargneAccountNumber) return false;
     const search = searchTerm.toLowerCase();
-    const hasCredit = (m.balances?.credit || 0) > 0;
+    // Un crédit en cours (balance > 0) OU un crédit soldé (a eu une demande de crédit)
+    const hasCredit = (m.balances?.credit || 0) > 0 || m.lastCreditRequest !== undefined;
     return hasCredit && (
       m.name.toLowerCase().includes(search) ||
       m.code.toLowerCase().includes(search)
@@ -58,13 +73,15 @@ const OtherCreditOperations: React.FC = () => {
     const amount = Number(penaltyAmount);
     if (isNaN(amount) || amount <= 0) return alert("Veuillez saisir un montant valide.");
 
+    const userStr = localStorage.getItem('microfox_current_user');
+    const currentUser = JSON.parse(userStr || '{}');
+
     const updatedMembers = members.map(m => {
       if (m.id === selectedMemberId) {
         const currentCredit = m.balances.credit || 0;
         const newTotal = currentCredit + amount;
         
         const lastRequest = m.lastCreditRequest || {};
-        const lastDetails = m.lastCreditDetails || {};
         
         const updatedRequest = {
           ...lastRequest,
@@ -77,7 +94,9 @@ const OtherCreditOperations: React.FC = () => {
           account: 'credit',
           amount: amount,
           date: new Date().toISOString(),
-          description: `Application de pénalité de retard`
+          description: `Application de pénalité de retard`,
+          author: currentUser.identifiant,
+          cashierName: currentUser.identifiant
         };
 
         const newHistory = [newTx, ...(m.history || [])];
@@ -110,6 +129,9 @@ const OtherCreditOperations: React.FC = () => {
     const amount = Number(rebateAmount);
     if (isNaN(amount) || amount <= 0) return alert("Veuillez saisir un montant valide.");
 
+    const userStr = localStorage.getItem('microfox_current_user');
+    const currentUser = JSON.parse(userStr || '{}');
+
     const updatedMembers = members.map(m => {
       if (m.id === selectedMemberId) {
         const currentCredit = m.balances.credit || 0;
@@ -128,7 +150,9 @@ const OtherCreditOperations: React.FC = () => {
           account: 'credit',
           amount: amount,
           date: new Date().toISOString(),
-          description: `Application de ristourne de fidélité`
+          description: `Application de ristourne pour remboursement anticipé`,
+          author: currentUser.identifiant,
+          cashierName: currentUser.identifiant
         };
 
         const newHistory = [newTx, ...(m.history || [])];
@@ -155,6 +179,67 @@ const OtherCreditOperations: React.FC = () => {
     loadData();
   };
 
+  const handleCancelOperation = (memberId: string, txId: string) => {
+    const userStr = localStorage.getItem('microfox_current_user');
+    const currentUser = JSON.parse(userStr || '{}');
+    
+    if (!['administrateur', 'directeur'].includes(currentUser.role)) {
+      return alert("Seul l'administrateur ou le directeur peut annuler cette opération.");
+    }
+
+    if (!window.confirm("Voulez-vous vraiment annuler cette opération ?")) return;
+
+    const updatedMembers = members.map(m => {
+      if (m.id === memberId) {
+        const txIndex = (m.history || []).findIndex((tx: any) => tx.id === txId);
+        if (txIndex === -1) return m;
+
+        const tx = m.history[txIndex];
+        if (tx.cancelled) return m;
+
+        const amount = tx.amount;
+        let newTotal = m.balances.credit || 0;
+        const updatedRequest = { ...(m.lastCreditRequest || {}) };
+
+        if (tx.description.includes('pénalité')) {
+          newTotal = Math.max(0, newTotal - amount);
+          updatedRequest.penalty = Math.max(0, (updatedRequest.penalty || 0) - amount);
+        } else if (tx.description.includes('ristourne')) {
+          newTotal = newTotal + amount;
+          updatedRequest.rebate = Math.max(0, (updatedRequest.rebate || 0) - amount);
+        }
+
+        const updatedTx = { 
+          ...tx, 
+          cancelled: true, 
+          cancelledAt: new Date().toISOString(), 
+          cancelledBy: currentUser.identifiant,
+          description: tx.description + " (ANNULÉ)"
+        };
+        
+        const newHistory = [...m.history];
+        newHistory[txIndex] = updatedTx;
+        
+        localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+
+        return {
+          ...m,
+          balances: { ...m.balances, credit: newTotal },
+          lastCreditRequest: updatedRequest,
+          history: newHistory
+        };
+      }
+      return m;
+    });
+
+    localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
+    localStorage.setItem('microfox_pending_sync', 'true');
+    window.dispatchEvent(new Event('storage'));
+    
+    alert("Opération annulée avec succès.");
+    loadData();
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -162,7 +247,7 @@ const OtherCreditOperations: React.FC = () => {
           <div className="flex items-center gap-3">
             <AlertCircle size={24} className={operationType === 'penalty' ? "text-amber-400" : "text-emerald-400"} />
             <h3 className="text-lg font-black uppercase tracking-tight">
-              {operationType === 'penalty' ? "Pénalités de Retard" : "Ristournes de Fidélité"}
+              {operationType === 'penalty' ? "Pénalités de Retard" : "Ristournes pour Remboursement Anticipé"}
             </h3>
           </div>
           <div className="flex bg-white/10 p-1 rounded-xl w-full sm:w-auto">
@@ -185,43 +270,80 @@ const OtherCreditOperations: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Rechercher un membre avec crédit actif</label>
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Nom ou Code client..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-amber-500 font-bold text-black text-sm"
-                  />
-                </div>
-              </div>
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Rechercher un membre (Crédit actif ou soldé)</label>
+                <div className="relative" ref={dropdownRef}>
+                  <div 
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="w-full pl-4 pr-10 py-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none cursor-pointer flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Search className="text-gray-600" size={18} />
+                      <span className={`font-bold text-sm ${selectedMember ? 'text-black' : 'text-gray-400'}`}>
+                        {selectedMember ? `${selectedMember.name} (${selectedMember.code})` : "Sélectionner un membre..."}
+                      </span>
+                    </div>
+                    <ChevronDown size={20} className={`text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                  </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Sélectionner le Membre</label>
-                <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {filteredMembers.length > 0 ? (
-                    filteredMembers.map(m => (
-                      <button
-                        key={m.id}
-                        onClick={() => setSelectedMemberId(m.id)}
-                        className={`w-full p-4 rounded-2xl border flex items-center gap-3 transition-all ${selectedMemberId === m.id ? 'bg-amber-50 border-amber-500 shadow-sm' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${selectedMemberId === m.id ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                          {m.name.split(' ').map((n: string) => n[0]).join('')}
+                  {isDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-3 border-b border-gray-50 bg-gray-50/50">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                          <input 
+                            type="text" 
+                            placeholder="Filtrer par nom ou code..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:border-amber-500 text-xs font-bold text-[#121c32]"
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </div>
-                        <div className="text-left">
-                          <p className="text-sm font-black text-[#121c32] uppercase">{m.name}</p>
-                          <p className="text-[10px] font-bold text-gray-600 uppercase">{m.code}</p>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="text-center py-8 text-gray-400 italic text-sm uppercase">Aucun membre avec crédit actif trouvé</p>
+                      </div>
+                      <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                        {filteredMembers.length > 0 ? (
+                          filteredMembers.map(m => (
+                            <button
+                              key={m.id}
+                              onClick={() => {
+                                setSelectedMemberId(m.id);
+                                setIsDropdownOpen(false);
+                                setSearchTerm('');
+                              }}
+                              className={`w-full p-4 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0 ${selectedMemberId === m.id ? 'bg-amber-50' : ''}`}
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-black text-[10px] text-gray-600">
+                                {m.name.split(' ').map((n: string) => n[0]).join('')}
+                              </div>
+                              <div className="text-left">
+                                <p className="text-xs font-black text-[#121c32] uppercase">{m.name}</p>
+                                <p className="text-[9px] font-bold text-gray-500 uppercase">{m.code}</p>
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="p-8 text-center text-gray-400 italic text-xs uppercase">Aucun membre trouvé</div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
+
+              {selectedMember && (
+                <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-100 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Numéro du Crédit</p>
+                    <p className="text-xs font-black text-amber-600 uppercase">{selectedMember.lastCreditRequest?.creditNumber || '---'}</p>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Statut</p>
+                    <p className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${selectedMember.balances.credit > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {selectedMember.balances.credit > 0 ? 'En cours' : 'Soldé'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-6">
@@ -276,7 +398,9 @@ const OtherCreditOperations: React.FC = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-gray-200 rounded-3xl text-gray-500">
                   <CreditCard size={48} strokeWidth={1} className="mb-4 opacity-20" />
-                  <p className="text-sm font-bold uppercase tracking-widest">Sélectionnez un membre pour appliquer une pénalité</p>
+                  <p className="text-sm font-bold uppercase tracking-widest">
+                    {operationType === 'penalty' ? "Sélectionnez un membre pour appliquer une pénalité" : "Sélectionnez un membre pour appliquer une ristourne"}
+                  </p>
                 </div>
               )}
             </div>
@@ -298,38 +422,61 @@ const OtherCreditOperations: React.FC = () => {
               <tr className="bg-gray-50/50">
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Client</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Opération</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Auteur</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Montant</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Date</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {members.some(m => m.history?.some((tx: any) => tx.description.includes('pénalité') || tx.description.includes('ristourne'))) ? (
                 members.flatMap(m => (m.history || [])
                   .filter((tx: any) => tx.description.includes('pénalité') || tx.description.includes('ristourne'))
-                  .map((tx: any) => ({ ...tx, clientName: m.name, clientCode: m.code }))
+                  .map((tx: any) => ({ ...tx, clientName: m.name, clientCode: m.code, memberId: m.id }))
                 )
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .slice(0, 10)
-                .map((tx, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-black text-[#121c32] uppercase">{tx.clientName}</p>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase tracking-tight">{tx.clientCode}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className={`text-xs font-bold uppercase ${tx.description.includes('pénalité') ? 'text-amber-600' : 'text-emerald-600'}`}>{tx.description}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs font-medium text-gray-700">{new Date(tx.date).toLocaleDateString()}</p>
-                    </td>
-                  </tr>
-                ))
+                .map((tx, idx) => {
+                  const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+                  const canCancel = ['administrateur', 'directeur'].includes(currentUser.role);
+                  
+                  return (
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-black text-[#121c32] uppercase">{tx.clientName}</p>
+                        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-tight">{tx.clientCode}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className={`text-xs font-bold uppercase ${tx.description.includes('pénalité') ? 'text-amber-600' : 'text-emerald-600'}`}>{tx.description}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-[10px] font-black text-gray-600 uppercase">{tx.author || '---'}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-xs font-medium text-gray-700">{new Date(tx.date).toLocaleDateString()}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        {!tx.cancelled && canCancel && (
+                          <button 
+                            onClick={() => handleCancelOperation(tx.memberId, tx.id)}
+                            className="text-[10px] font-black text-red-500 uppercase hover:underline"
+                          >
+                            Annuler
+                          </button>
+                        )}
+                        {tx.cancelled && (
+                          <span className="text-[10px] font-black text-gray-400 uppercase italic">Annulé</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-600 italic text-sm uppercase tracking-widest">
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-600 italic text-sm uppercase tracking-widest">
                     Aucune opération appliquée récemment
                   </td>
                 </tr>

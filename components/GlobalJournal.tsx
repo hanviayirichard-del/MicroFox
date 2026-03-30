@@ -14,6 +14,8 @@ const GlobalJournal: React.FC = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedCaisse, setSelectedCaisse] = useState('Toutes les caisses');
+  const [selectedUser, setSelectedUser] = useState('Tous les utilisateurs');
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
   const savedUser = localStorage.getItem('microfox_current_user');
   const user = savedUser ? JSON.parse(savedUser) : {};
@@ -26,6 +28,7 @@ const GlobalJournal: React.FC = () => {
       
       const savedUsers = localStorage.getItem('microfox_users');
       const users = savedUsers ? JSON.parse(savedUsers) : [];
+      setAvailableUsers(users);
       const userCaisseMap = users.reduce((acc: any, u: any) => {
         acc[u.id] = u.caisse;
         return acc;
@@ -49,11 +52,16 @@ const GlobalJournal: React.FC = () => {
               if (member.zone !== user.zoneCollecte) return;
             }
 
+            const tontineAcc = member.tontineAccounts?.find((ta: any) => ta.id === tx.tontineAccountId);
+            const tontineNumber = tontineAcc ? tontineAcc.number : (member.tontineAccounts?.[0]?.number || 'N/A');
+
             allTxs.push({
               ...tx,
               memberName: member.name,
               memberCode: member.code,
-              caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A'
+              caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A',
+              epargneAccountNumber: member.epargneAccountNumber || 'N/A',
+              tontineAccountNumber: tontineNumber
             });
           });
         }
@@ -78,6 +86,7 @@ const GlobalJournal: React.FC = () => {
                 memberCode: p.caisse || 'N/A',
                 account: 'caisse',
                 caisse: p.caisse || 'N/A',
+                userId: p.validatorId,
                 cashierName: p.cashierName || 'N/A'
               });
             }
@@ -107,6 +116,7 @@ const GlobalJournal: React.FC = () => {
               memberCode: isToCaisse ? v.to : (isFromCaisse ? v.from : v.from),
               account: 'coffre',
               caisse: isToCaisse ? v.to : (isFromCaisse ? v.from : 'COFFRE'),
+              userId: v.userId,
               cashierName: v.cashierName || 'Système'
             });
           });
@@ -130,6 +140,7 @@ const GlobalJournal: React.FC = () => {
               memberCode: e.recordedBy,
               account: 'dépense',
               caisse: userIdentifiantCaisseMap[e.recordedBy] || 'N/A',
+              userId: e.userId || e.recordedBy,
               cashierName: e.recordedBy
             });
           });
@@ -190,7 +201,14 @@ const GlobalJournal: React.FC = () => {
               return `
               <tr>
                 <td>${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
-                <td>${tx.memberName}</td>
+                <td>
+                  <div style="font-weight: bold;">${tx.memberName}</div>
+                  ${tx.epargneAccountNumber ? `
+                  <div style="font-size: 9px; color: #64748b; margin-top: 2px;">
+                    EP: ${tx.epargneAccountNumber} | TN: ${tx.tontineAccountNumber}
+                  </div>
+                  ` : ''}
+                </td>
                 <td>${tx.memberCode}</td>
                 <td>${tx.description}</td>
                 <td>${tx.account.toUpperCase()}</td>
@@ -253,7 +271,8 @@ const GlobalJournal: React.FC = () => {
     const matchesStartDate = !startDate || txDate >= startDate;
     const matchesEndDate = !endDate || txDate <= endDate;
     const matchesCaisse = selectedCaisse === 'Toutes les caisses' || (tx.caisse && tx.caisse.toUpperCase() === selectedCaisse.toUpperCase());
-    return matchesSearch && matchesStartDate && matchesEndDate && matchesCaisse;
+    const matchesUser = selectedUser === 'Tous les utilisateurs' || (tx.userId === selectedUser || tx.cashierName === selectedUser);
+    return matchesSearch && matchesStartDate && matchesEndDate && matchesCaisse && matchesUser;
   });
 
   const totals = filteredTxs.reduce((acc, tx) => {
@@ -315,7 +334,7 @@ const GlobalJournal: React.FC = () => {
       </div>
 
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
-        <div className={`grid grid-cols-1 ${isAdminOrDirector ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
+        <div className={`grid grid-cols-1 ${isAdminOrDirector ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
            <div className="space-y-1">
             <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Début</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm" />
@@ -325,21 +344,36 @@ const GlobalJournal: React.FC = () => {
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm" />
           </div>
           {isAdminOrDirector && (
-            <div className="space-y-1">
-              <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Caisse</label>
-              <select 
-                value={selectedCaisse} 
-                onChange={(e) => setSelectedCaisse(e.target.value)} 
-                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm uppercase"
-              >
-                <option value="Toutes les caisses">Toutes les caisses</option>
-                <option value="CAISSE PRINCIPALE">CAISSE PRINCIPALE</option>
-                <option value="CAISSE 1">CAISSE 1</option>
-                <option value="CAISSE 2">CAISSE 2</option>
-                <option value="CAISSE 3">CAISSE 3</option>
-                <option value="CAISSE 4">CAISSE 4</option>
-              </select>
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Caisse</label>
+                <select 
+                  value={selectedCaisse} 
+                  onChange={(e) => setSelectedCaisse(e.target.value)} 
+                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm uppercase"
+                >
+                  <option value="Toutes les caisses">Toutes les caisses</option>
+                  <option value="CAISSE PRINCIPALE">CAISSE PRINCIPALE</option>
+                  <option value="CAISSE 1">CAISSE 1</option>
+                  <option value="CAISSE 2">CAISSE 2</option>
+                  <option value="CAISSE 3">CAISSE 3</option>
+                  <option value="CAISSE 4">CAISSE 4</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Utilisateur</label>
+                <select 
+                  value={selectedUser} 
+                  onChange={(e) => setSelectedUser(e.target.value)} 
+                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm uppercase"
+                >
+                  <option value="Tous les utilisateurs">Tous les utilisateurs</option>
+                  {availableUsers.map(u => (
+                    <option key={u.id} value={u.id}>{u.nom} ({u.identifiant})</option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
         </div>
         
@@ -414,7 +448,14 @@ const GlobalJournal: React.FC = () => {
                     </td>
                     <td className="px-4 py-5">
                       <p className="text-sm font-black text-[#121c32] uppercase">{tx.memberName}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{tx.memberCode}</p>
+                      <div className="flex flex-col gap-0.5">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{tx.memberCode}</p>
+                        {tx.epargneAccountNumber && (
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">
+                            EP: <span className="text-emerald-600">{tx.epargneAccountNumber}</span> | TN: <span className="text-amber-600">{tx.tontineAccountNumber}</span>
+                          </p>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-5">
                       <span className="px-2 py-1 bg-gray-100 rounded-lg text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">{tx.account}</span>
