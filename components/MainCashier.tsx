@@ -173,6 +173,7 @@ const MainCashier: React.FC = () => {
               const newGapEntry = {
                 id: `gap_${Date.now()}`,
                 date: new Date().toISOString(),
+                opDate: p.date, // Original operation date
                 type: 'AGENT',
                 sourceId: p.id,
                 sourceName: p.agentName,
@@ -308,6 +309,7 @@ const MainCashier: React.FC = () => {
       const newGapEntry = {
         id: `gap_${Date.now()}`,
         date: new Date().toISOString(),
+        opDate: new Date().toISOString(), // Transfer date is now
         type: 'CAISSIER',
         sourceId: selectedCaisse,
         sourceName: selectedCaisse,
@@ -319,7 +321,8 @@ const MainCashier: React.FC = () => {
         zone: 'SIÈGE',
         caisse: selectedCaisse,
         observation: `Écart de versement (${selectedCaisse})`,
-        userId: responsibleUserId
+        userId: responsibleUserId,
+        validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id
       };
       localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
     }

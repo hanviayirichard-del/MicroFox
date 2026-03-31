@@ -158,6 +158,7 @@ export interface FieldControlReport {
 export interface Gap {
   id: string;
   date: string;
+  opDate?: string;
   type: 'TONTINE' | 'AGENT' | 'CAISSIER';
   sourceId: string; // ID of the original transaction/payment
   sourceName: string; // Name of the person responsible (Client, Agent, or Cashier)

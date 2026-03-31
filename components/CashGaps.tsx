@@ -190,7 +190,7 @@ const CashGaps: React.FC = () => {
   const generateHTMLContent = (isForPrint = false) => {
     if (gaps.length === 0) return null;
     const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
-    const headers = ["Date", "Type", "Source", "Code", "Déclaré", "Observé", "Écart", "Statut", "Date Régul.", "Observation"];
+    const headers = ["Date Opé.", "Date Constat", "Type", "Source", "Code", "Acteurs", "Déclaré", "Observé", "Écart", "Statut", "Date Régul.", "Observation"];
     
     const htmlContent = `
       <!DOCTYPE html>
@@ -210,6 +210,7 @@ const CashGaps: React.FC = () => {
           tr:nth-child(even) { background-color: #f9fafb; }
           .negative { color: #dc2626; font-weight: bold; }
           .positive { color: #059669; font-weight: bold; }
+          .actors { font-size: 10px; color: #666; }
         </style>
       </head>
       <body>
@@ -224,20 +225,28 @@ const CashGaps: React.FC = () => {
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
           </thead>
           <tbody>
-            ${gaps.map(g => `
-              <tr>
-                <td>${new Date(g.date).toLocaleDateString()}</td>
-                <td>${g.type}</td>
-                <td>${g.sourceName}</td>
-                <td>${g.sourceCode || '-'}</td>
-                <td>${g.declaredAmount.toLocaleString()} F</td>
-                <td>${g.observedAmount.toLocaleString()} F</td>
-                <td class="${g.gapAmount < 0 ? 'negative' : 'positive'}">${g.gapAmount > 0 ? '+' : ''}${g.gapAmount.toLocaleString()} F</td>
-                <td>${g.status || 'En attente'}</td>
-                <td>${g.regDate || '-'}</td>
-                <td>${g.observation || '-'}</td>
-              </tr>
-            `).join('')}
+            ${gaps.map(g => {
+              const initiator = allUsers.find(u => u.id === g.userId)?.identifiant || g.sourceName;
+              const validator = g.validatorId ? allUsers.find(u => u.id === g.validatorId)?.identifiant : '-';
+              return `
+                <tr>
+                  <td>${new Date(g.opDate || g.date).toLocaleDateString()}</td>
+                  <td>${new Date(g.date).toLocaleDateString()}</td>
+                  <td>${g.type}</td>
+                  <td>${g.sourceName}</td>
+                  <td>${g.sourceCode || '-'}</td>
+                  <td class="actors">
+                    ${g.type === 'CAISSIER' ? `Caissier: ${initiator}` : `Agent: ${initiator}`}${validator !== '-' ? `<br>Validé par: ${validator}` : ''}
+                  </td>
+                  <td>${g.declaredAmount.toLocaleString()} F</td>
+                  <td>${g.observedAmount.toLocaleString()} F</td>
+                  <td class="${g.gapAmount < 0 ? 'negative' : 'positive'}">${g.gapAmount > 0 ? '+' : ''}${g.gapAmount.toLocaleString()} F</td>
+                  <td>${g.status || 'En attente'}</td>
+                  <td>${g.regDate || '-'}</td>
+                  <td>${g.observation || '-'}</td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
         </table>
         ${isForPrint ? `
@@ -422,10 +431,12 @@ const CashGaps: React.FC = () => {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-gray-50 bg-gray-50/50">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Date Opé.</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Date Constat</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Type / Source</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Déclaré</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Observé</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Écart</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Déclaré</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Observé</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Écart</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Statut</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Observation</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Actions</th>
@@ -435,6 +446,12 @@ const CashGaps: React.FC = () => {
               {filteredGaps.length > 0 ? (
                 filteredGaps.map(item => (
                   <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-5 text-xs font-bold text-gray-600">
+                      {new Date(item.opDate || item.date).toLocaleDateString('fr-FR')}
+                    </td>
+                    <td className="px-6 py-5 text-xs font-bold text-gray-400">
+                      {new Date(item.date).toLocaleDateString('fr-FR')}
+                    </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-[10px] ${
@@ -448,6 +465,9 @@ const CashGaps: React.FC = () => {
                           <p className="text-sm font-black text-[#121c32] uppercase">
                             {item.type === 'TONTINE' ? 'RETRAIT: ' : item.type === 'AGENT' ? 'VERSEMENT: ' : ''}
                             {item.sourceName}
+                          </p>
+                          <p className="text-[9px] font-bold text-gray-400">
+                            Date: {new Date(item.opDate || item.date).toLocaleDateString('fr-FR')}
                           </p>
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
@@ -464,6 +484,18 @@ const CashGaps: React.FC = () => {
                               <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">
                                 Agent: {allUsers.find(u => u.id === item.userId)?.identifiant || 'Inconnu'}
                               </p>
+                            )}
+                            {(item.type === 'AGENT' || item.type === 'CAISSIER') && (
+                              <div className="mt-1 space-y-0.5">
+                                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">
+                                  {item.type === 'AGENT' ? 'Agent' : 'Caissier'}: {allUsers.find(u => u.id === item.userId)?.identifiant || item.sourceName}
+                                </p>
+                                {item.validatorId && (
+                                  <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">
+                                    Validé par: {allUsers.find(u => u.id === item.validatorId)?.identifiant || 'Inconnu'}
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -530,7 +562,7 @@ const CashGaps: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-24 text-center">
+                  <td colSpan={9} className="px-6 py-24 text-center">
                     <div className="flex flex-col items-center gap-3 opacity-20">
                       <AlertTriangle size={48} />
                       <p className="text-sm font-black uppercase tracking-widest">Aucun écart constaté</p>

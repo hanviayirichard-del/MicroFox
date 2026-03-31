@@ -11,7 +11,7 @@ const AgentPayments: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [paymentsHistory, setPaymentsHistory] = useState<any[]>([]);
-  const [caisses] = useState(['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2']);
+  const [caisses] = useState(['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4']);
   const [selectedCaisse, setSelectedCaisse] = useState('CAISSE 1');
   const [billetage, setBilletage] = useState<any>({
     '10000': 0,
@@ -217,12 +217,12 @@ const AgentPayments: React.FC = () => {
 
       const updatedAllPayments = [newPayment, ...allPayments];
       localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedAllPayments));
-      window.dispatchEvent(new Event('storage'));
       
       // Deduct from agent balance
       const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
       const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
-      localStorage.setItem(agentBalanceKey, (currentAgentBalance - totalAmount).toString());
+      const newBalance = Math.max(0, currentAgentBalance - totalAmount);
+      localStorage.setItem(agentBalanceKey, newBalance.toString());
       
       localStorage.setItem('microfox_pending_sync', 'true');
       
@@ -232,13 +232,14 @@ const AgentPayments: React.FC = () => {
         setPaymentsHistory(updatedAllPayments);
       }
       
-      setAgentBalance(0);
-      setTotalCotisations(0);
-      setTotalLivrets(0);
+      setAgentBalance(newBalance);
       setBilletage({
         '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '250': 0, '200': 0, '100': 0, '50': 0, '25': 0, '10': 0, '5': 0, 'monnaie': 0
       });
       setAuthCode('');
+      
+      // Trigger storage event after all localStorage updates to refresh stats
+      window.dispatchEvent(new Event('storage'));
       
       setSuccessMessage(`Versement de ${totalAmount} FCFA soumis à la ${selectedCaisse} avec succès.`);
       setIsSubmitting(false);
@@ -287,10 +288,15 @@ const AgentPayments: React.FC = () => {
                 onChange={(e) => setSelectedCaisse(e.target.value)}
                 className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-black text-[#121c32] focus:border-emerald-500 transition-all appearance-none uppercase tracking-tight"
               >
-                {caisses
-                  .filter(c => currentUser?.role !== 'agent commercial' || c !== 'CAISSE PRINCIPALE')
-                  .map(c => <option key={c} value={c}>{c}</option>)
-                }
+                {caisses.map(c => {
+                  const saved = localStorage.getItem(`microfox_cash_balance_${c}`);
+                  const bal = saved !== null ? Number(saved) : (c === 'CAISSE PRINCIPALE' ? 5000000 : 0);
+                  return (
+                    <option key={c} value={c}>
+                      {c} {currentUser?.role !== 'agent commercial' ? `(${bal.toLocaleString()} F)` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -404,9 +410,9 @@ const AgentPayments: React.FC = () => {
 
           <button
             onClick={handleVersement}
-            disabled={isSubmitting || (totalCotisations + totalLivrets === 0) || gap < 0}
+            disabled={isSubmitting || (totalCotisations + totalLivrets === 0) || (gap < 0 && !authCode)}
             className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-sm transition-all shadow-lg active:scale-95 ${
-              isSubmitting || (totalCotisations + totalLivrets === 0) || gap < 0
+              isSubmitting || (totalCotisations + totalLivrets === 0) || (gap < 0 && !authCode)
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-[#121c32] text-white hover:bg-[#1d2d4d]'
             }`}
