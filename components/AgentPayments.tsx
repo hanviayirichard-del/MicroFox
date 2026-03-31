@@ -117,14 +117,16 @@ const AgentPayments: React.FC = () => {
       const calculatedCotisations = Math.max(0, cotisations - paidCotisations);
       const calculatedLivrets = Math.max(0, livrets - paidLivrets);
       
-      // Si le solde agent est supérieur au total calculé par l'historique (reliquat), 
-      // on ajuste pour que le total théorique reflète exactement ce qui doit être versé.
-      if (currentAgentBalance > (calculatedCotisations + calculatedLivrets)) {
-        setTotalCotisations(currentAgentBalance - calculatedLivrets);
-        setTotalLivrets(calculatedLivrets);
+      // Le montant à verser doit être strictement plafonné par le solde réel de l'agent (currentAgentBalance)
+      // pour éviter que des montants déjà versés ne réapparaissent à cause d'écarts de calcul avec l'historique.
+      if (currentAgentBalance <= 0) {
+        setTotalCotisations(0);
+        setTotalLivrets(0);
       } else {
-        setTotalCotisations(calculatedCotisations);
-        setTotalLivrets(calculatedLivrets);
+        // On répartit le solde réel en priorité sur les livrets, puis le reste en cotisations
+        const cappedLivrets = Math.min(calculatedLivrets, currentAgentBalance);
+        setTotalLivrets(cappedLivrets);
+        setTotalCotisations(currentAgentBalance - cappedLivrets);
       }
     };
 
