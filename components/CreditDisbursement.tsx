@@ -332,17 +332,17 @@ const CreditDisbursement: React.FC = () => {
       )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#121c32] uppercase tracking-tight">Déblocage de Crédit</h1>
-          <p className="text-gray-700 text-sm font-medium mt-1">Validation et décaissement des fonds</p>
+          <h1 className="text-2xl font-black text-white uppercase tracking-tight">Déblocage de Crédit</h1>
+          <p className="text-gray-500 text-sm font-medium mt-1">Validation et décaissement des fonds</p>
         </div>
         <div className="relative w-full md:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={20} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           <input 
             type="text" 
             placeholder="Rechercher une demande..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-2xl outline-none focus:border-emerald-500 font-medium transition-all shadow-sm text-[#121c32]"
+            className="w-full pl-12 pr-4 py-3 bg-white/5 border border-gray-800 rounded-2xl outline-none focus:border-emerald-500 font-medium transition-all shadow-sm text-white"
           />
         </div>
       </div>
@@ -350,41 +350,41 @@ const CreditDisbursement: React.FC = () => {
       <div className="grid grid-cols-1 gap-4">
         {pendingRequests.length > 0 ? (
           pendingRequests.map((m) => (
-            <div key={m.id} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+            <div key={m.id} className="bg-[#121c32] rounded-[2rem] p-6 border border-white/5 shadow-sm hover:shadow-md transition-all">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-[#121c32] text-white flex items-center justify-center font-black text-lg">
+                  <div className="w-14 h-14 rounded-2xl bg-white/5 text-white flex items-center justify-center font-black text-lg">
                     {m.name.split(' ').map((n: string) => n[0]).join('')}
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-[#121c32] uppercase">{m.name}</h3>
-                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{m.code}</p>
+                    <h3 className="text-lg font-black text-white uppercase">{m.name}</h3>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{m.code}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 flex-1 lg:px-12">
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Capital</p>
-                    <p className="text-lg font-black text-[#121c32]">{m.lastCreditRequest.capital.toLocaleString()} F</p>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Capital</p>
+                    <p className="text-lg font-black text-white">{m.lastCreditRequest.capital.toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Intérêts</p>
-                    <p className="text-lg font-black text-blue-600">{m.lastCreditRequest.interest.toLocaleString()} F</p>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Intérêts</p>
+                    <p className="text-lg font-black text-blue-400">{m.lastCreditRequest.interest.toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Frais/Pén.</p>
-                    <p className="text-lg font-black text-amber-600">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Frais/Pén.</p>
+                    <p className="text-lg font-black text-amber-400">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Échéance</p>
-                    <p className="text-lg font-black text-gray-700">{new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}</p>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Échéance</p>
+                    <p className="text-lg font-black text-gray-400">{new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button 
                     onClick={() => handleCancelRequest(m.id)}
-                    className="p-4 text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+                    className="p-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all"
                     title="Annuler la demande"
                   >
                     <X size={24} />
@@ -401,11 +401,11 @@ const CreditDisbursement: React.FC = () => {
             </div>
           ))
         ) : (
-          <div className="bg-white rounded-[2.5rem] p-20 text-center border border-dashed border-gray-200">
-            <div className="w-20 h-20 bg-gray-50 text-gray-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="bg-[#121c32] rounded-[2.5rem] p-20 text-center border border-dashed border-white/5">
+            <div className="w-20 h-20 bg-white/5 text-gray-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <History size={40} />
             </div>
-            <h3 className="text-xl font-black text-gray-600 uppercase tracking-tight">Aucun crédit à débloquer</h3>
+            <h3 className="text-xl font-black text-gray-500 uppercase tracking-tight">Aucun crédit à débloquer</h3>
             <p className="text-gray-600 text-sm mt-2">Les crédits validés apparaîtront ici pour déblocage.</p>
           </div>
         )}
@@ -413,63 +413,63 @@ const CreditDisbursement: React.FC = () => {
 
       {/* Recapitulatif des déblocages récents */}
       <div className="mt-12">
-        <h3 className="text-lg font-black text-[#121c32] uppercase tracking-tight mb-6 flex items-center gap-2">
+        <h3 className="text-lg font-black text-white uppercase tracking-tight mb-6 flex items-center gap-2">
           <ShieldCheck size={20} className="text-emerald-500" /> Déblocages Récents
         </h3>
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-x-auto">
+        <div className="bg-[#121c32] rounded-[2.5rem] shadow-sm border border-white/5 overflow-x-auto">
           <table className="w-full text-left min-w-[800px]">
             <thead>
-              <tr className="bg-gray-50/50">
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Membre</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Opérateurs (Req/Val/Déc)</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Capital</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Intérêts</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Frais/Pén.</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Date Débloc.</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Échéance</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Statut</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Actions</th>
+              <tr className="bg-white/5">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Membre</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Opérateurs (Req/Val/Déc)</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Capital</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Intérêts</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Frais/Pén.</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date Débloc.</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Échéance</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Statut</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/5">
               {members.filter(m => m.lastCreditRequest && m.lastCreditRequest.status === 'Débloqué').length > 0 ? (
                 members.filter(m => m.lastCreditRequest && m.lastCreditRequest.status === 'Débloqué').map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50/30 transition-colors">
+                  <tr key={m.id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="text-sm font-black text-[#121c32] uppercase">{m.name}</p>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase tracking-tight">{m.code}</p>
+                      <p className="text-sm font-black text-white uppercase">{m.name}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{m.code}</p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-blue-600 uppercase">Req: {m.lastCreditRequest.requestedBy || '---'}</p>
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase">Val: {m.lastCreditRequest.validatedBy || '---'}</p>
-                        <p className="text-[10px] font-bold text-purple-600 uppercase">Déc: {m.lastCreditRequest.disbursedBy || '---'}</p>
+                        <p className="text-[10px] font-bold text-blue-400 uppercase">Req: {m.lastCreditRequest.requestedBy || '---'}</p>
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase">Val: {m.lastCreditRequest.validatedBy || '---'}</p>
+                        <p className="text-[10px] font-bold text-purple-400 uppercase">Déc: {m.lastCreditRequest.disbursedBy || '---'}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <p className="text-sm font-black text-emerald-600">{m.lastCreditRequest.capital.toLocaleString()} F</p>
+                      <p className="text-sm font-black text-emerald-400">{m.lastCreditRequest.capital.toLocaleString()} F</p>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <p className="text-sm font-black text-blue-600">{m.lastCreditRequest.interest.toLocaleString()} F</p>
+                      <p className="text-sm font-black text-blue-400">{m.lastCreditRequest.interest.toLocaleString()} F</p>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <p className="text-sm font-black text-amber-600">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
+                      <p className="text-sm font-black text-amber-400">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-400">
                       {new Date(m.lastCreditRequest.disbursementDate).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-400">
                       {new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-tight">
+                      <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-black uppercase tracking-tight">
                         Débloqué
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => handleCancelDisbursement(m.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                         title="Annuler le décaissement"
                       >
                         <X size={18} />

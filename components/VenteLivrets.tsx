@@ -13,6 +13,10 @@ const VenteLivrets: React.FC = () => {
   const [agentStocks, setAgentStocks] = useState<any>(null);
   const [centralStocks, setCentralStocks] = useState<any>({ epargne: 0, tontine: 0 });
   const [salesJournal, setSalesJournal] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [activeTab, setActiveTab] = useState<'vente' | 'suivi'>('vente');
+  const [receivedHistory, setReceivedHistory] = useState<any[]>([]);
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -79,6 +83,49 @@ const VenteLivrets: React.FC = () => {
 
     setAgentStocks({ epargne, tontine });
     setCentralStocks({ epargne: centralEpargne, tontine: centralTontine });
+
+    // Pre-calculate agent sales for history balance
+    const agentSales: any[] = [];
+    membersData.forEach((m: any) => {
+      (m.history || []).forEach((tx: any) => {
+        const desc = (tx.description || '').toLowerCase();
+        if (desc.includes(`vente de livret`) && 
+            desc.includes(`- agent ${agentName.trim().toLowerCase()}`)) {
+          agentSales.push({
+            date: new Date(tx.date),
+            type: desc.includes('épargne') ? 'epargne' : 'tontine'
+          });
+        }
+      });
+    });
+
+    // Build Received History with running balance
+    const history: any[] = [];
+    if (savedStocks) {
+      const stocks = JSON.parse(savedStocks);
+      const agentDistributions = stocks.distributions
+        .filter((d: any) => (d.recipient || '').trim().toLowerCase() === agentName.trim().toLowerCase())
+        .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+
+      let runningEpargne = 0;
+      let runningTontine = 0;
+
+      agentDistributions.forEach((d: any) => {
+        if (d.type === 'epargne') runningEpargne += d.quantity;
+        else runningTontine += d.quantity;
+
+        const distDate = new Date(d.date || 0);
+        const soldEpargne = agentSales.filter(s => s.type === 'epargne' && s.date <= distDate).length;
+        const soldTontine = agentSales.filter(s => s.type === 'tontine' && s.date <= distDate).length;
+
+        history.push({
+          ...d,
+          remainingEpargne: runningEpargne - soldEpargne,
+          remainingTontine: runningTontine - soldTontine
+        });
+      });
+    }
+    setReceivedHistory(history.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()));
 
     // Build Sales Journal - show all sales by the current agent or all sales if admin/caissier
     const allSales: any[] = [];
@@ -188,8 +235,48 @@ const VenteLivrets: React.FC = () => {
     m.tontineAccounts?.some((t: any) => t.number.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const filteredSalesJournal = salesJournal.filter(sale => {
+    if (!startDate && !endDate) return true;
+    const saleDate = new Date(sale.date);
+    saleDate.setHours(0, 0, 0, 0);
+    
+    const start = startDate ? new Date(startDate) : null;
+    if (start) start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : null;
+    if (end) end.setHours(0, 0, 0, 0);
+    
+    if (start && end) return saleDate >= start && saleDate <= end;
+    if (start) return saleDate >= start;
+    if (end) return saleDate <= end;
+    return true;
+  });
+
+  const totalEpargneSold = filteredSalesJournal.filter(s => s.description.toLowerCase().includes('épargne')).length;
+  const totalTontineSold = filteredSalesJournal.filter(s => s.description.toLowerCase().includes('tontine')).length;
+
+  const filteredReceivedHistory = receivedHistory.filter(item => {
+    if (!startDate && !endDate) return true;
+    const itemDate = new Date(item.date || 0);
+    itemDate.setHours(0, 0, 0, 0);
+    
+    const start = startDate ? new Date(startDate) : null;
+    if (start) start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : null;
+    if (end) end.setHours(0, 0, 0, 0);
+    
+    if (start && end) return itemDate >= start && itemDate <= end;
+    if (start) return itemDate >= start;
+    if (end) return itemDate <= end;
+    return true;
+  });
+
+  const totalEpargneReceived = filteredReceivedHistory.filter(h => h.type === 'epargne').reduce((sum, h) => sum + h.quantity, 0);
+  const totalTontineReceived = filteredReceivedHistory.filter(h => h.type === 'tontine').reduce((sum, h) => sum + h.quantity, 0);
+
   const handleExport = () => {
-    const data = salesJournal.map(sale => ({
+    const data = filteredSalesJournal.map(sale => ({
       'Date': new Date(sale.date).toLocaleDateString('fr-FR'),
       'Heure': new Date(sale.date).toLocaleTimeString('fr-FR'),
       'Membre': sale.memberName,
@@ -206,7 +293,7 @@ const VenteLivrets: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-amber-100 text-amber-600 rounded-2xl">
             <ShoppingCart size={32} />
@@ -216,35 +303,50 @@ const VenteLivrets: React.FC = () => {
             <p className="text-gray-400 font-medium">Enregistrement des ventes de livrets aux membres.</p>
           </div>
         </div>
-        
-        <div className="flex flex-col md:flex-row gap-4">
-          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-            <div className="bg-[#121c32] p-4 rounded-2xl border border-gray-800 flex flex-col items-center min-w-[160px]">
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Stock Central (Siège)</span>
-              <div className="flex gap-6 w-full justify-center">
-                <div className="text-center">
-                  <p className="text-[10px] text-emerald-400 font-black uppercase tracking-tighter">Épargne</p>
-                  <p className="text-3xl font-black text-white leading-none mt-1">{centralStocks.epargne}</p>
-                </div>
-                <div className="text-center border-l border-gray-800 pl-6">
-                  <p className="text-[10px] text-amber-400 font-black uppercase tracking-tighter">Tontine</p>
-                  <p className="text-3xl font-black text-white leading-none mt-1">{centralStocks.tontine}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
+
+        <div className="flex bg-[#121c32] p-1 rounded-2xl border border-gray-800">
+          <button
+            onClick={() => setActiveTab('vente')}
+            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'vente' ? 'bg-amber-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+          >
+            Vente
+          </button>
+          <button
+            onClick={() => setActiveTab('suivi')}
+            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'suivi' ? 'bg-amber-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+          >
+            Suivi Stock
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row justify-end gap-4">
+        {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
           <div className="bg-[#121c32] p-4 rounded-2xl border border-gray-800 flex flex-col items-center min-w-[160px]">
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Votre Stock Disponible</span>
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Stock Central (Siège)</span>
             <div className="flex gap-6 w-full justify-center">
               <div className="text-center">
                 <p className="text-[10px] text-emerald-400 font-black uppercase tracking-tighter">Épargne</p>
-                <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.epargne || 0}</p>
+                <p className="text-3xl font-black text-white leading-none mt-1">{centralStocks.epargne}</p>
               </div>
               <div className="text-center border-l border-gray-800 pl-6">
                 <p className="text-[10px] text-amber-400 font-black uppercase tracking-tighter">Tontine</p>
-                <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.tontine || 0}</p>
+                <p className="text-3xl font-black text-white leading-none mt-1">{centralStocks.tontine}</p>
               </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="bg-[#121c32] p-4 rounded-2xl border border-gray-800 flex flex-col items-center min-w-[160px]">
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Votre Stock Disponible</span>
+          <div className="flex gap-6 w-full justify-center">
+            <div className="text-center">
+              <p className="text-[10px] text-emerald-400 font-black uppercase tracking-tighter">Épargne</p>
+              <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.epargne || 0}</p>
+            </div>
+            <div className="text-center border-l border-gray-800 pl-6">
+              <p className="text-[10px] text-amber-400 font-black uppercase tracking-tighter">Tontine</p>
+              <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.tontine || 0}</p>
             </div>
           </div>
         </div>
@@ -264,210 +366,357 @@ const VenteLivrets: React.FC = () => {
         </div>
       )}
 
-      {/* Quick Sell Card for Selected Member */}
-      {searchTerm && members.find(m => 
-        m.code === searchTerm || 
-        m.epargneAccountNumber === searchTerm || 
-        m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-      ) && (
-        <div className="bg-white p-6 rounded-[2rem] shadow-xl border-2 border-amber-500 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
-                <User size={24} />
+      {activeTab === 'vente' ? (
+        <>
+          {/* Quick Sell Card for Selected Member */}
+          {searchTerm && members.find(m => 
+            m.code === searchTerm || 
+            m.epargneAccountNumber === searchTerm || 
+            m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+          ) && (
+            <div className="bg-white p-6 rounded-[2rem] shadow-xl border-2 border-amber-500 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                    <User size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-[#121c32] uppercase">
+                      {members.find(m => 
+                        m.code === searchTerm || 
+                        m.epargneAccountNumber === searchTerm || 
+                        m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                      )?.name}
+                    </h3>
+                    <p className="text-xs font-bold text-gray-400">
+                      Code: {members.find(m => 
+                        m.code === searchTerm || 
+                        m.epargneAccountNumber === searchTerm || 
+                        m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                      )?.code}
+                    </p>
+                    {members.find(m => 
+                      m.code === searchTerm || 
+                      m.epargneAccountNumber === searchTerm || 
+                      m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                    )?.epargneAccountNumber && (
+                      <p className="text-[10px] font-black text-emerald-600 uppercase mt-1">
+                        Épargne: {members.find(m => 
+                          m.code === searchTerm || 
+                          m.epargneAccountNumber === searchTerm || 
+                          m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                        )?.epargneAccountNumber}
+                      </p>
+                    )}
+                    {members.find(m => 
+                      m.code === searchTerm || 
+                      m.epargneAccountNumber === searchTerm || 
+                      m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                    )?.tontineAccounts?.length > 0 && (
+                      <p className="text-[10px] font-black text-amber-600 uppercase mt-0.5">
+                        Tontine: {members.find(m => 
+                          m.code === searchTerm || 
+                          m.epargneAccountNumber === searchTerm || 
+                          m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                        )?.tontineAccounts.map((t: any) => t.number).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Prix à payer</p>
+                  <p className="text-2xl font-black text-amber-600">{selectedType === 'epargne' ? '300 F' : '500 F'}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-black text-[#121c32] uppercase">
-                  {members.find(m => 
+              <button
+                onClick={() => {
+                  const member = members.find(m => 
                     m.code === searchTerm || 
                     m.epargneAccountNumber === searchTerm || 
                     m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                  )?.name}
-                </h3>
-                <p className="text-xs font-bold text-gray-400">
-                  Code: {members.find(m => 
-                    m.code === searchTerm || 
-                    m.epargneAccountNumber === searchTerm || 
-                    m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                  )?.code}
-                </p>
-                {members.find(m => 
-                  m.code === searchTerm || 
-                  m.epargneAccountNumber === searchTerm || 
-                  m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                )?.epargneAccountNumber && (
-                  <p className="text-[10px] font-black text-emerald-600 uppercase mt-1">
-                    Épargne: {members.find(m => 
-                      m.code === searchTerm || 
-                      m.epargneAccountNumber === searchTerm || 
-                      m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                    )?.epargneAccountNumber}
-                  </p>
-                )}
-                {members.find(m => 
-                  m.code === searchTerm || 
-                  m.epargneAccountNumber === searchTerm || 
-                  m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                )?.tontineAccounts?.length > 0 && (
-                  <p className="text-[10px] font-black text-amber-600 uppercase mt-0.5">
-                    Tontine: {members.find(m => 
-                      m.code === searchTerm || 
-                      m.epargneAccountNumber === searchTerm || 
-                      m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                    )?.tontineAccounts.map((t: any) => t.number).join(', ')}
-                  </p>
-                )}
+                  );
+                  if (member) handleVendreLivret(member);
+                }}
+                className={`w-full mt-6 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 ${
+                  (!agentStocks || agentStocks[selectedType] <= 0)
+                  ? 'bg-gray-400 text-white opacity-80' 
+                  : selectedType === 'epargne' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-amber-600 text-white hover:bg-amber-700'
+                }`}
+              >
+                <ShoppingCart size={20} />
+                Vendre le Livret {selectedType === 'epargne' ? 'Épargne' : 'Tontine'}
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1 space-y-4">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Rechercher un membre..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 bg-[#121c32] text-white rounded-2xl font-medium outline-none placeholder:text-gray-500"
+                />
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Ou sélectionner dans la liste</label>
+                <select 
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm font-bold text-[#121c32]"
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchTerm}
+                >
+                  <option value="">-- Sélectionner un client --</option>
+                  {filteredMembers.sort((a, b) => a.name.localeCompare(b.name)).map(m => (
+                    <option key={m.id} value={m.code}>
+                      {m.name} ({m.code}) 
+                      {m.epargneAccountNumber ? ` | EP: ${m.epargneAccountNumber}` : ''}
+                      {m.tontineAccounts?.length > 0 ? ` | TN: ${m.tontineAccounts.map((t: any) => t.number).join(', ')}` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Prix à payer</p>
-              <p className="text-2xl font-black text-amber-600">{selectedType === 'epargne' ? '300 F' : '500 F'}</p>
+
+            <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="flex-1">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret à Vendre</label>
+                <div className="flex gap-2 mt-1">
+                  <button 
+                    onClick={() => setSelectedType('epargne')}
+                    disabled={currentUser?.role === 'agent commercial'}
+                    className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${selectedType === 'epargne' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'} ${currentUser?.role === 'agent commercial' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Épargne (300F)
+                  </button>
+                  <button 
+                    onClick={() => setSelectedType('tontine')}
+                    className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${selectedType === 'tontine' ? 'bg-amber-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
+                  >
+                    Tontine (500F)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-          <button
-            onClick={() => {
-              const member = members.find(m => 
-                m.code === searchTerm || 
-                m.epargneAccountNumber === searchTerm || 
-                m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-              );
-              if (member) handleVendreLivret(member);
-            }}
-            className={`w-full mt-6 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 ${
-              (!agentStocks || agentStocks[selectedType] <= 0)
-              ? 'bg-gray-400 text-white opacity-80' 
-              : selectedType === 'epargne' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-amber-600 text-white hover:bg-amber-700'
-            }`}
-          >
-            <ShoppingCart size={20} />
-            Vendre le Livret {selectedType === 'epargne' ? 'Épargne' : 'Tontine'}
-          </button>
+
+          <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
+                  <BookOpen size={18} className="text-amber-500" />
+                  Journal des Ventes de Livrets
+                </h2>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={handleExport}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                  >
+                    <Download size={14} />
+                    Exporter
+                  </button>
+                  <span className="text-[10px] font-black text-gray-400 uppercase bg-gray-50 px-3 py-1 rounded-full">
+                    {filteredSalesJournal.length} Ventes au total
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-gray-50">
+                <div className="flex-1 min-w-[200px] space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Intervalle de Date</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="date" 
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-[#121c32]"
+                    />
+                    <input 
+                      type="date" 
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-[#121c32]"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className="text-center">
+                    <p className="text-[9px] text-emerald-600 font-black uppercase tracking-tighter">Total Épargne Vendu</p>
+                    <p className="text-lg font-black text-[#121c32] leading-none mt-1">{totalEpargneSold}</p>
+                  </div>
+                  <div className="text-center border-l border-gray-200 pl-4">
+                    <p className="text-[9px] text-amber-600 font-black uppercase tracking-tighter">Total Tontine Vendu</p>
+                    <p className="text-lg font-black text-[#121c32] leading-none mt-1">{totalTontineSold}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[700px]">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DATE</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">MEMBRE</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DESCRIPTION</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">MONTANT</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredSalesJournal.map((sale) => (
+                    <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black text-[#121c32]">
+                            {new Date(sale.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </span>
+                          <span className="text-[10px] font-bold text-gray-400">
+                            {new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-[#121c32] uppercase">{sale.memberName}</span>
+                          <span className="text-[10px] font-bold text-gray-400">{sale.memberCode}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-bold text-gray-500 italic">{sale.description}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`text-sm font-black ${sale.description.toLowerCase().includes('épargne') ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {sale.amount} F
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredSalesJournal.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-bold uppercase text-xs">
+                        Aucune vente enregistrée
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex-1 min-w-[200px] space-y-1">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Intervalle de Date</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-[#121c32]"
+                  />
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl outline-none text-xs font-bold text-[#121c32]"
+                  />
+                </div>
+              </div>
+              {(startDate || endDate) && (
+                <button 
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="px-4 py-2 bg-gray-100 text-gray-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+                >
+                  Réinitialiser
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Reçu</p>
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase">Épargne: {totalEpargneReceived}</p>
+                  <p className="text-xs font-bold text-amber-600 uppercase">Tontine: {totalTontineReceived}</p>
+                </div>
+                <p className="text-3xl font-black text-[#121c32]">{totalEpargneReceived + totalTontineReceived}</p>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Vendu</p>
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase">Épargne Vendu: {totalEpargneSold}</p>
+                  <p className="text-xs font-bold text-amber-600 uppercase">Tontine Vendu: {totalTontineSold}</p>
+                </div>
+                <p className="text-3xl font-black text-[#121c32]">{filteredSalesJournal.length}</p>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stock Restant</p>
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase">Épargne: {agentStocks?.epargne || 0}</p>
+                  <p className="text-xs font-bold text-amber-600 uppercase">Tontine: {agentStocks?.tontine || 0}</p>
+                </div>
+                <p className="text-3xl font-black text-amber-600">{(agentStocks?.epargne || 0) + (agentStocks?.tontine || 0)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
+                <Plus size={18} className="text-emerald-500" />
+                Historique des Réceptions de livrets
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[600px]">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DATE</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">TYPE</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">QUANTITÉ REÇUE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredReceivedHistory.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-black text-[#121c32]">
+                          {item.date ? new Date(item.date).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${item.type === 'epargne' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                          {item.type === 'epargne' ? 'Épargne' : 'Tontine'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-sm font-black text-[#121c32]">{item.quantity}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {receivedHistory.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-gray-400 font-bold uppercase text-xs">
+                        Aucune réception enregistrée
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1 space-y-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="Rechercher un membre..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-[#121c32] text-white rounded-2xl font-medium outline-none placeholder:text-gray-500"
-            />
-          </div>
-          
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Ou sélectionner dans la liste</label>
-            <select 
-              className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm font-bold text-[#121c32]"
-              onChange={(e) => setSearchTerm(e.target.value)}
-              value={searchTerm}
-            >
-              <option value="">-- Sélectionner un client --</option>
-              {filteredMembers.sort((a, b) => a.name.localeCompare(b.name)).map(m => (
-                <option key={m.id} value={m.code}>
-                  {m.name} ({m.code}) 
-                  {m.epargneAccountNumber ? ` | EP: ${m.epargneAccountNumber}` : ''}
-                  {m.tontineAccounts?.length > 0 ? ` | TN: ${m.tontineAccounts.map((t: any) => t.number).join(', ')}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="flex-1">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret à Vendre</label>
-            <div className="flex gap-2 mt-1">
-              <button 
-                onClick={() => setSelectedType('epargne')}
-                disabled={currentUser?.role === 'agent commercial'}
-                className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${selectedType === 'epargne' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'} ${currentUser?.role === 'agent commercial' ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                Épargne (300F)
-              </button>
-              <button 
-                onClick={() => setSelectedType('tontine')}
-                className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${selectedType === 'tontine' ? 'bg-amber-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
-              >
-                Tontine (500F)
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
-            <BookOpen size={18} className="text-amber-500" />
-            Journal des Ventes de Livrets
-          </h2>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all"
-            >
-              <Download size={14} />
-              Exporter
-            </button>
-            <span className="text-[10px] font-black text-gray-400 uppercase bg-gray-50 px-3 py-1 rounded-full">
-              {salesJournal.length} Ventes au total
-            </span>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[700px]">
-            <thead>
-              <tr className="bg-gray-50/50 border-b border-gray-100">
-                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DATE</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">MEMBRE</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DESCRIPTION</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">MONTANT</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {salesJournal.map((sale) => (
-                <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-[#121c32]">
-                        {new Date(sale.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                      </span>
-                      <span className="text-[10px] font-bold text-gray-400">
-                        {new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-black text-[#121c32] uppercase">{sale.memberName}</span>
-                      <span className="text-[10px] font-bold text-gray-400">{sale.memberCode}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-bold text-gray-500 italic">{sale.description}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={`text-sm font-black ${sale.description.toLowerCase().includes('épargne') ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {sale.amount} F
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {salesJournal.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-bold uppercase text-xs">
-                    Aucune vente enregistrée
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 };

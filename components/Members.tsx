@@ -413,26 +413,26 @@ const OperationForm: React.FC<{
           ) : type === 'remboursement' ? (
             <div className="space-y-4">
               {creditBalances && creditBalances.total > 0 && (
-                <div className="grid grid-cols-3 gap-2 p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                <div className="grid grid-cols-3 gap-2 p-4 bg-purple-500/10 rounded-2xl border border-purple-500/20">
                   <div className="text-center">
                     <p className="text-[8px] font-black text-purple-400 uppercase">Solde Cap.</p>
-                    <p className="text-xs font-black text-[#121c32]">{Math.round(creditBalances.capital).toLocaleString()} F</p>
+                    <p className="text-xs font-black text-white">{Math.round(creditBalances.capital).toLocaleString()} F</p>
                   </div>
-                  <div className="text-center border-x border-purple-100">
+                  <div className="text-center border-x border-purple-500/20">
                     <p className="text-[8px] font-black text-purple-400 uppercase">Solde Int.</p>
-                    <p className="text-xs font-black text-blue-600">{Math.round(creditBalances.interest).toLocaleString()} F</p>
+                    <p className="text-xs font-black text-blue-400">{Math.round(creditBalances.interest).toLocaleString()} F</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[8px] font-black text-purple-400 uppercase">Solde Pen.</p>
-                    <p className="text-xs font-black text-red-500">{Math.round(creditBalances.penalty).toLocaleString()} F</p>
+                    <p className="text-xs font-black text-red-400">{Math.round(creditBalances.penalty).toLocaleString()} F</p>
                   </div>
                 </div>
               )}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Capital à rembourser</label>
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Capital à rembourser</label>
                   {creditBalances && (
-                    <span className="text-[10px] font-black text-purple-600 uppercase tracking-tighter">
+                    <span className="text-[10px] font-black text-purple-400 uppercase tracking-tighter">
                       Restant: {Math.round(creditBalances.capital).toLocaleString()} F
                     </span>
                   )}
@@ -442,15 +442,15 @@ const OperationForm: React.FC<{
                   value={rembCapital}
                   onChange={(e) => setRembCapital(e.target.value)}
                   placeholder="0"
-                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-black"
+                  className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-white"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Intérêts</label>
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Intérêts</label>
                     {creditBalances && (
-                      <span className="text-[9px] font-black text-blue-600 uppercase tracking-tighter">
+                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-tighter">
                         Restant: {Math.round(creditBalances.interest).toLocaleString()} F
                       </span>
                     )}
@@ -460,14 +460,14 @@ const OperationForm: React.FC<{
                     value={rembInterest}
                     onChange={(e) => setRembInterest(e.target.value)}
                     placeholder="0"
-                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-black"
+                    className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-white"
                   />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Pénalité</label>
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Pénalité</label>
                     {creditBalances && (
-                      <span className="text-[9px] font-black text-red-500 uppercase tracking-tighter">
+                      <span className="text-[9px] font-black text-red-400 uppercase tracking-tighter">
                         Restant: {Math.round(creditBalances.penalty).toLocaleString()} F
                       </span>
                     )}
@@ -477,7 +477,7 @@ const OperationForm: React.FC<{
                     value={rembPenalty}
                     onChange={(e) => setRembPenalty(e.target.value)}
                     placeholder="0"
-                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-black"
+                    className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-white"
                   />
                 </div>
               </div>
@@ -553,14 +553,14 @@ const OperationForm: React.FC<{
 
           {((type === 'transfert' && account === 'tontine') || (type === 'retrait' && account === 'tontine') || (type === 'depot' && account === 'tontine')) && (
             <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Sélectionner le compte Tontine</label>
+              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Sélectionner le compte Tontine</label>
               <select 
                 value={selectedTontineId}
                 onChange={(e) => setSelectedTontineId(e.target.value)}
-                className="w-full p-4 bg-gray-100 border border-gray-300 rounded-2xl outline-none font-bold text-base text-black"
+                className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl outline-none font-bold text-base text-white"
               >
                 {tontineAccounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.number} (Mise: {acc.dailyMise} F)</option>
+                  <option key={acc.id} value={acc.id} className="bg-[#121c32] text-white">{acc.number} (Mise: {acc.dailyMise} F)</option>
                 ))}
               </select>
             </div>
@@ -569,19 +569,19 @@ const OperationForm: React.FC<{
           {type !== 'remboursement' && (
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Montant (FCFA)</label>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Montant (FCFA)</label>
                 {account === 'partSociale' && partSocialeBalance !== undefined && (
-                  <span className="text-[10px] font-black text-amber-600 uppercase tracking-tighter">
+                  <span className="text-[10px] font-black text-amber-500 uppercase tracking-tighter">
                     Reste à payer: {Math.max(0, 5000 - partSocialeBalance).toLocaleString()} F
                   </span>
                 )}
                 {account === 'garantie' && garantieBalance !== undefined && currentUser?.role !== 'agent commercial' && (
-                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">
+                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">
                     Solde: {garantieBalance.toLocaleString()} F
                   </span>
                 )}
                 {account === 'epargne' && epargneBalance !== undefined && currentUser?.role !== 'agent commercial' && (
-                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-tighter">
+                  <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">
                     Solde: {epargneBalance.toLocaleString()} F
                   </span>
                 )}
@@ -593,7 +593,7 @@ const OperationForm: React.FC<{
                 placeholder="0"
                 readOnly={(type === 'retrait' || type === 'transfert') && account === 'tontine'}
                 disabled={((type === 'retrait' || type === 'retrait_garantie' || type === 'transfert') && account === 'tontine' && selectedValidatedIds.length === 0 && validatedRequests.length > 0) || isEpargneBlocked || isTontineBlocked}
-                className={`w-full p-6 bg-gray-50 border-2 border-transparent focus:border-emerald-500 rounded-2xl text-3xl font-black outline-none transition-all text-center ${((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) || isEpargneBlocked || isTontineBlocked ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-black'}`}
+                className={`w-full p-6 bg-white/5 border-2 border-transparent focus:border-emerald-500 rounded-2xl text-3xl font-black outline-none transition-all text-center ${((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) || isEpargneBlocked || isTontineBlocked ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-white'}`}
               />
               {(isEpargneBlocked || isTontineBlocked) && (
                 <p className="text-[9px] font-black text-red-500 uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
@@ -1136,44 +1136,44 @@ const RegistrationForm: React.FC<{
         </div>
 
         <section className="space-y-4">
-          <div className="bg-[#e2f9f0] p-5 sm:p-6 rounded-2xl flex items-center gap-3">
-            <Wallet size={24} className="text-[#005a3c]" />
-            <h3 className="text-lg font-black text-[#005a3c] uppercase tracking-tight">COMPTES & PRODUITS</h3>
+          <div className="bg-emerald-500/10 p-5 sm:p-6 rounded-2xl flex items-center gap-3 border border-emerald-500/20">
+            <Wallet size={24} className="text-emerald-400" />
+            <h3 className="text-lg font-black text-emerald-400 uppercase tracking-tight">COMPTES & PRODUITS</h3>
           </div>
           
-          <div className="space-y-4 border border-gray-200 p-5 sm:p-6 rounded-2xl bg-white shadow-sm">
-            <div className="bg-[#f0fdf4] border-2 border-[#00c896] rounded-3xl p-6 space-y-4">
+          <div className="space-y-4 border border-white/5 p-5 sm:p-6 rounded-2xl bg-white/5 shadow-sm">
+            <div className="bg-emerald-500/5 border-2 border-emerald-500/30 rounded-3xl p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <input 
                     type="checkbox" 
                     checked={isTontineSelected} 
                     onChange={() => setIsTontineSelected(!isTontineSelected)}
-                    className="w-6 h-6 accent-[#00c896]" 
+                    className="w-6 h-6 accent-emerald-500" 
                   />
-                  <h4 className="text-xl font-black text-[#121c32] uppercase">COMPTE TONTINE</h4>
+                  <h4 className="text-xl font-black text-white uppercase">COMPTE TONTINE</h4>
                 </div>
               </div>
               
               {isTontineSelected && (
-                <div className="space-y-4 pl-10 pt-2 border-t border-emerald-100">
+                <div className="space-y-4 pl-10 pt-2 border-t border-white/5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">NUMÉRO TONTINE</label>
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">NUMÉRO TONTINE</label>
                       <input 
                         type="text" 
                         value={tontineNumber}
                         onChange={(e) => setTontineNumber(e.target.value)}
-                        className="w-full p-4 bg-white border border-gray-300 rounded-xl outline-none text-base text-black" 
+                        className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none text-base text-white focus:border-emerald-500 transition-all" 
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">MISE (F)</label>
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">MISE (F)</label>
                       <input 
                         type="number" 
                         value={tontineMise}
                         onChange={(e) => setTontineMise(Number(e.target.value))}
-                        className="w-full p-4 bg-white border border-gray-300 rounded-xl outline-none font-black text-lg text-black" 
+                        className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none font-black text-lg text-white focus:border-emerald-500 transition-all" 
                       />
                     </div>
                   </div>
@@ -1182,65 +1182,65 @@ const RegistrationForm: React.FC<{
             </div>
 
             {currentUser?.role !== 'agent commercial' && (
-              <div className="bg-[#fdf4ff] border-2 border-[#a855f7] rounded-3xl p-6 space-y-4">
+              <div className="bg-purple-500/5 border-2 border-purple-500/30 rounded-3xl p-6 space-y-4">
                 <div className="flex items-center gap-4">
                   <input 
                     type="checkbox" 
                     checked={isEpargneSelected} 
                     onChange={() => setIsEpargneSelected(!isEpargneSelected)}
-                    className="w-6 h-6 accent-[#a855f7]" 
+                    className="w-6 h-6 accent-purple-500" 
                   />
-                  <h4 className="text-xl font-black text-[#121c32] uppercase">COMPTE ÉPARGNE</h4>
+                  <h4 className="text-xl font-black text-white uppercase">COMPTE ÉPARGNE</h4>
                 </div>
                 {isEpargneSelected && (
-                  <div className="space-y-4 pl-10 pt-2 border-t border-purple-100">
+                  <div className="space-y-4 pl-10 pt-2 border-t border-white/5">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">NUMÉRO ÉPARGNE *</label>
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">NUMÉRO ÉPARGNE *</label>
                       <input 
                         type="text" 
                         value={epargneNumber}
                         onChange={(e) => setEpargneNumber(e.target.value)}
-                        className="w-full p-4 bg-white border border-gray-300 rounded-xl outline-none text-base text-black" 
+                        className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none text-base text-white focus:border-purple-500 transition-all" 
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">ADHÉSION (F)</label>
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">ADHÉSION (F)</label>
                         <input 
                           type="number" 
                           value={fraisAdhesion}
                           onChange={(e) => setFraisAdhesion(Number(e.target.value))}
-                          className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-black" 
+                          className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none font-bold text-white focus:border-purple-500 transition-all" 
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">LIVRET (F)</label>
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">LIVRET (F)</label>
                         <input 
                           type="number" 
                           value={fraisLivret}
                           onChange={(e) => setFraisLivret(Number(e.target.value))}
-                          className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-black" 
+                          className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none font-bold text-white focus:border-purple-500 transition-all" 
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">PART SOCIALE (F)</label>
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">PART SOCIALE (F)</label>
                         <input 
                           type="number" 
                           value={partSocialePayee}
                           onChange={(e) => setPartSocialePayee(Number(e.target.value))}
-                          className="w-full p-4 bg-white border border-gray-300 rounded-xl outline-none font-black text-[#a855f7]" 
+                          className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none font-black text-purple-400 focus:border-purple-500 transition-all" 
                         />
-                        <p className="text-[9px] font-bold text-gray-400 uppercase">Min: 1000 F / Total: 5000 F</p>
+                        <p className="text-[9px] font-bold text-gray-500 uppercase">Min: 1000 F / Total: 5000 F</p>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[11px] font-black text-gray-800 uppercase tracking-tight">DÉPÔT INITIAL (F)</label>
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-tight">DÉPÔT INITIAL (F)</label>
                         <input 
                           type="number" 
                           value={depotInitialEpargne}
                           onChange={(e) => setDepotInitialEpargne(Number(e.target.value))}
-                          className="w-full p-4 bg-white border border-gray-300 rounded-xl outline-none font-black text-emerald-600" 
+                          className="w-full p-4 bg-white/5 border border-gray-800 rounded-xl outline-none font-black text-emerald-400 focus:border-purple-500 transition-all" 
                         />
                       </div>
                     </div>
@@ -1691,7 +1691,8 @@ const AddTontineModal: React.FC<{
             <select 
               value={zone} 
               onChange={(e) => setZone(e.target.value)}
-              className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl outline-none focus:border-[#00c896] font-bold text-white appearance-none"
+              disabled={!(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')}
+              className={`w-full p-4 bg-white/5 border border-gray-800 rounded-2xl outline-none focus:border-[#00c896] font-bold text-white appearance-none ${!(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {zones.map(z => <option key={z} value={z} className="bg-[#121c32]">{z}</option>)}
             </select>
@@ -3743,7 +3744,7 @@ const Members: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm">
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date de Déblocage</p>
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ÉCHÉANCE</p>
                       <p className="text-xl font-black text-white mt-1">
                         {(selectedClient as any).lastCreditRequest?.disbursementDate 
                           ? new Date((selectedClient as any).lastCreditRequest.disbursementDate).toLocaleDateString() 
@@ -4239,7 +4240,7 @@ const Members: React.FC = () => {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Date Déblocage</p>
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ÉCHÉANCE</p>
                             <p className="text-sm font-bold text-gray-300">
                               {new Date(credit.date).toLocaleDateString()}
                               {credit.cashierName && ` • OP: ${credit.cashierName}`}
