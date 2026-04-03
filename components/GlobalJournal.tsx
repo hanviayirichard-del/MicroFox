@@ -203,11 +203,9 @@ const GlobalJournal: React.FC = () => {
                 <td>${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
                 <td>
                   <div style="font-weight: bold;">${tx.memberName}</div>
-                  ${tx.epargneAccountNumber ? `
                   <div style="font-size: 9px; color: #64748b; margin-top: 2px;">
-                    EP: ${tx.epargneAccountNumber} | TN: ${tx.tontineAccountNumber}
+                    ${tx.memberCode} ${tx.epargneAccountNumber ? `| EP: ${tx.epargneAccountNumber}` : ''} ${tx.tontineAccountNumber ? `| TN: ${tx.tontineAccountNumber}` : ''}
                   </div>
-                  ` : ''}
                 </td>
                 <td>${tx.memberCode}</td>
                 <td>${tx.description}</td>
@@ -450,11 +448,11 @@ const GlobalJournal: React.FC = () => {
                       <p className="text-sm font-black text-[#121c32] uppercase">{tx.memberName}</p>
                       <div className="flex flex-col gap-0.5">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{tx.memberCode}</p>
-                        {tx.epargneAccountNumber && (
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">
-                            EP: <span className="text-emerald-600">{tx.epargneAccountNumber}</span> | TN: <span className="text-amber-600">{tx.tontineAccountNumber}</span>
-                          </p>
-                        )}
+                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">
+                          {tx.epargneAccountNumber && <span>EP: <span className="text-emerald-600">{tx.epargneAccountNumber}</span></span>}
+                          {tx.epargneAccountNumber && tx.tontineAccountNumber && <span className="mx-1 text-gray-300">|</span>}
+                          {tx.tontineAccountNumber && <span>TN: <span className="text-amber-600">{tx.tontineAccountNumber}</span></span>}
+                        </p>
                       </div>
                     </td>
                     <td className="px-4 py-5">

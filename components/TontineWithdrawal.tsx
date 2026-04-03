@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Wallet, Cloud, RefreshCw, AlertCircle, CheckCircle, FileText, User, Trash2, X, ChevronRight, LayoutGrid, History, ArrowDownLeft } from 'lucide-react';
+import { Search, Wallet, Cloud, RefreshCw, AlertCircle, CheckCircle, FileText, User, Trash2, X, ChevronRight, LayoutGrid, History, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
 const TontineWithdrawal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,25 +15,31 @@ const TontineWithdrawal: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
 
   // Logique de calcul du solde net (Disponible = Cotisé - Commission)
-  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = []) => {
+  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
     if (dailyMise <= 0) dailyMise = 500;
     
-    const tontineDeposits = (history || [])
-      .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && !h.description?.toLowerCase().includes('livret'))
-      .reduce((sum, h) => sum + h.amount, 0);
-    const tontineWithdrawals = (history || [])
-      .filter(h => (h.account === 'tontine' && (h.type === 'retrait' || h.type === 'transfert')))
-      .reduce((sum, h) => sum + h.amount, 0);
-    const filteredGrossBalance = tontineDeposits - tontineWithdrawals;
-
     const accountHistory = (history || [])
-      .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (h.tontineAccountId === accountId || !h.tontineAccountId) && h.description?.toLowerCase().includes('livret') !== true)
+      .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (
+        h.tontineAccountId === accountId || 
+        h.tontineAccountNumber === accountNumber ||
+        (!h.tontineAccountId && !h.tontineAccountNumber && (
+          (isFirstAccount && (!h.description?.includes('Compte:') || (accountNumber && h.description?.includes(accountNumber)))) ||
+          (accountNumber && h.description?.includes(accountNumber))
+        ))
+      ) && h.description?.toLowerCase().includes('livret') !== true)
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     // Merge history withdrawals with pending withdrawals to correctly split cycles
     const allWithdrawals = [
-      ...(history || []).filter(h => h.account === 'tontine' && (h.tontineAccountId === accountId || !h.tontineAccountId) && (h.type === 'retrait' || h.type === 'transfert')),
-      ...(pendingWithdrawals || []).map(p => ({
+      ...(history || []).filter(h => h.account === 'tontine' && (
+        h.tontineAccountId === accountId || 
+        h.tontineAccountNumber === accountNumber ||
+        (!h.tontineAccountId && !h.tontineAccountNumber && (
+          (isFirstAccount && (!h.description?.includes('Compte:') || (accountNumber && h.description?.includes(accountNumber)))) ||
+          (accountNumber && h.description?.includes(accountNumber))
+        ))
+      ) && (h.type === 'retrait' || h.type === 'transfert')),
+      ...(pendingWithdrawals || []).filter(p => p.tontineAccountId === accountId || p.tontineAccountNumber === accountNumber || (isFirstAccount && !p.tontineAccountId && !p.tontineAccountNumber)).map(p => ({
         ...p,
         type: 'retrait',
         account: 'tontine',
@@ -47,10 +53,42 @@ const TontineWithdrawal: React.FC = () => {
     const fmt = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const today = new Date();
 
-    if (accountHistory.length === 0 || grossBalance <= 0) {
+    if (accountHistory.length === 0) {
+      const isRetire = allWithdrawals.length > 0 || grossBalance < 0;
+      const mRetire = allWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+      
+      // Gérer le cas où il y a plusieurs retraits sans cotisations
+      if (allWithdrawals.length > 1) {
+        const details = [];
+        let idx = 1;
+        for (const w of allWithdrawals) {
+          details.push({
+            index: idx,
+            amount: 0,
+            disponible: 0,
+            commission: 0,
+            decaissable: 0,
+            cases: 0,
+            period: `Cycle ${idx} (Retiré)`,
+            isRetire: true,
+            dateRetrait: new Date(w.date).toLocaleDateString('fr-FR'),
+            montantRetire: w.amount,
+            dates: []
+          });
+          idx++;
+        }
+        return {
+          netBalance: 0,
+          cycles: idx,
+          currentCycleCases: 0,
+          currentCycleDates: [],
+          cycleDetails: details
+        };
+      }
+
       return { 
         netBalance: 0, 
-        cycles: 1, 
+        cycles: isRetire ? 2 : 1, 
         currentCycleCases: 0, 
         currentCycleDates: [], 
         cycleDetails: [{ 
@@ -61,9 +99,9 @@ const TontineWithdrawal: React.FC = () => {
           decaissable: 0, 
           cases: 0, 
           period: `${fmt(today)} au ...`, 
-          isRetire: grossBalance <= 0, 
-          dateRetrait: null, 
-          montantRetire: 0,
+          isRetire: isRetire, 
+          dateRetrait: allWithdrawals[0] ? new Date(allWithdrawals[0].date).toLocaleDateString('fr-FR') : null, 
+          montantRetire: mRetire,
           dates: []
         }] 
       };
@@ -77,70 +115,46 @@ const TontineWithdrawal: React.FC = () => {
     let cycleIdx = 1;
     let totalComm = 0;
     let specificWithdrawal;
+    const usedWithdrawalIds = new Set<string>();
 
     for (const tx of accountHistory) {
       const txDate = new Date(tx.date);
       let remainingAmount = tx.amount;
 
       while (remainingAmount > 0) {
-        if (currentCycleFirstDepositDate === null) currentCycleFirstDepositDate = txDate;
-        const cycleEndDateLimit = new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
-
-        const withdrawalDuringCycle = allWithdrawals.find(w => {
-          const wDate = new Date(w.date);
-          return wDate >= currentCycleFirstDepositDate! && wDate < txDate;
-        });
-
-        if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
-          let isRetire = false;
-          let retraitDate = null;
-          let mRetire = 0;
-          
-          const comm = currentCycleAmount > 0 ? dailyMise : 0;
-          const netCycleAmount = Math.max(0, currentCycleAmount - comm);
-          
-          specificWithdrawal = withdrawalDuringCycle || allWithdrawals.find(h => 
-            h.description.includes(`Cycles:`) && h.description.includes(`${cycleIdx}`) &&
-            new Date(h.date) >= currentCycleFirstDepositDate!
-          );
-
-          if (specificWithdrawal) {
-            isRetire = true;
-            retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
-            mRetire = specificWithdrawal.amount;
-          } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-            const hasFutureWithdrawal = allWithdrawals.some(w => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate!);
-            if (hasFutureWithdrawal) {
-              isRetire = true;
-              mRetire = netCycleAmount;
-              remainingWithdrawals -= netCycleAmount;
-              const fallbackWithdrawal = [...allWithdrawals].reverse().find(h => h.amount >= netCycleAmount && new Date(h.date) >= currentCycleFirstDepositDate!);
-              if (fallbackWithdrawal) retraitDate = new Date(fallbackWithdrawal.date).toLocaleDateString('fr-FR');
+        if (currentCycleFirstDepositDate === null) {
+          // Gérer les retraits qui ont eu lieu AVANT ce dépôt et qui doivent clôturer les cycles précédents
+          let priorWithdrawal;
+          while (priorWithdrawal = allWithdrawals.find(w => {
+            if (usedWithdrawalIds.has(w.id)) return false;
+            if (new Date(w.date) >= txDate) return false;
+            const matches = w.description.match(/Cycles: ([\d, ]+)/);
+            if (matches) {
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              return indices.includes(cycleIdx);
             }
+            return true;
+          })) {
+            usedWithdrawalIds.add(priorWithdrawal.id);
+            cycleDetails.push({
+              index: cycleIdx,
+              amount: 0,
+              disponible: 0,
+              commission: 0,
+              decaissable: 0,
+              cases: 0,
+              period: `Cycle ${cycleIdx} (Retiré)`,
+              isRetire: true,
+              dateRetrait: new Date(priorWithdrawal.date).toLocaleDateString('fr-FR'),
+              montantRetire: priorWithdrawal.amount,
+              dates: []
+            });
+            cycleIdx++;
           }
-
-          cycleDetails.push({
-            index: cycleIdx,
-            amount: currentCycleAmount,
-            disponible: isRetire ? 0 : currentCycleAmount,
-            commission: comm,
-            decaissable: isRetire ? 0 : netCycleAmount,
-            cases: isRetire ? 0 : Math.floor(currentCycleAmount / dailyMise),
-            period: `${fmt(currentCycleFirstDepositDate)} au ${withdrawalDuringCycle ? fmt(new Date(withdrawalDuringCycle.date)) : fmt(cycleEndDateLimit)}`,
-            isRetire: isRetire,
-            montantRetire: mRetire,
-            dateRetrait: retraitDate,
-            dates: [...currentCycleDates]
-          });
-          if (currentCycleAmount > 0) totalComm += comm;
-          cycleIdx++;
           currentCycleFirstDepositDate = txDate;
-          currentCycleCases = 0;
-          currentCycleAmount = 0;
-          currentCycleDates = [];
-          continue;
         }
-
+        // On traite d'abord l'ajout du montant au cycle en cours
+        const oldCases = currentCycleCases;
         let casesToAdd = Math.floor(remainingAmount / dailyMise);
         let space = 31 - currentCycleCases;
         if (space <= 0) space = 31;
@@ -151,55 +165,8 @@ const TontineWithdrawal: React.FC = () => {
           for (let m = 0; m < space; m++) {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
           }
-          currentCycleCases += space;
+          currentCycleCases = 31;
           remainingAmount -= amountUsed;
-          
-          let isRetire = false;
-          let retraitDate = null;
-          let mRetire = 0;
-          
-          const comm = currentCycleAmount > 0 ? dailyMise : 0;
-          const netCycleAmount = Math.max(0, currentCycleAmount - comm);
-          
-          specificWithdrawal = allWithdrawals.find(h => 
-            h.description.includes(`Cycles:`) && h.description.includes(`${cycleIdx}`) &&
-            new Date(h.date) >= currentCycleFirstDepositDate!
-          );
-
-          if (specificWithdrawal) {
-            isRetire = true;
-            retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
-            mRetire = specificWithdrawal.amount;
-          } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-            const hasFutureWithdrawal = allWithdrawals.some(w => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate!);
-            if (hasFutureWithdrawal) {
-              isRetire = true;
-              mRetire = netCycleAmount;
-              remainingWithdrawals -= netCycleAmount;
-              const fallbackWithdrawal = [...allWithdrawals].reverse().find(h => h.amount >= netCycleAmount && new Date(h.date) >= currentCycleFirstDepositDate!);
-              if (fallbackWithdrawal) retraitDate = new Date(fallbackWithdrawal.date).toLocaleDateString('fr-FR');
-            }
-          }
-
-          cycleDetails.push({
-            index: cycleIdx,
-            amount: currentCycleAmount,
-            disponible: isRetire ? 0 : currentCycleAmount,
-            commission: comm,
-            decaissable: isRetire ? 0 : netCycleAmount,
-            cases: isRetire ? 0 : Math.floor(currentCycleAmount / dailyMise),
-            period: `${fmt(currentCycleFirstDepositDate!)} au ${fmt(txDate)}`,
-            isRetire: isRetire,
-            montantRetire: mRetire,
-            dateRetrait: retraitDate,
-            dates: [...currentCycleDates]
-          });
-          totalComm += dailyMise;
-          cycleIdx++;
-          currentCycleFirstDepositDate = null;
-          currentCycleCases = 0;
-          currentCycleAmount = 0;
-          currentCycleDates = [];
         } else {
           currentCycleAmount += remainingAmount;
           for (let m = 0; m < casesToAdd; m++) {
@@ -207,6 +174,71 @@ const TontineWithdrawal: React.FC = () => {
           }
           currentCycleCases += casesToAdd;
           remainingAmount = 0;
+        }
+
+        // Ensuite on vérifie si le cycle doit être clôturé (expiration ou retrait)
+        const cycleEndDateLimit = new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
+        const withdrawalDuringCycle = allWithdrawals.find(w => {
+          const wDate = new Date(w.date);
+          const isSameDay = wDate.toDateString() === txDate.toDateString();
+          return !usedWithdrawalIds.has(w.id) && (isSameDay || (wDate >= currentCycleFirstDepositDate! && wDate <= txDate));
+        });
+
+        if (txDate >= cycleEndDateLimit || withdrawalDuringCycle || currentCycleCases === 31) {
+          if (withdrawalDuringCycle) usedWithdrawalIds.add(withdrawalDuringCycle.id);
+          let isRetire = false;
+          let retraitDate = null;
+          let mRetire = 0;
+          
+          const comm = currentCycleAmount > 0 ? dailyMise : 0;
+          const netCycleAmount = Math.max(0, currentCycleAmount - comm);
+          
+          specificWithdrawal = withdrawalDuringCycle || allWithdrawals.find(h => {
+            if (usedWithdrawalIds.has(h.id)) return false;
+            const matches = h.description.match(/Cycles: ([\d, ]+)/);
+            if (matches) {
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              return indices.includes(cycleIdx);
+            }
+            return false;
+          });
+
+          if (specificWithdrawal) {
+            usedWithdrawalIds.add(specificWithdrawal.id);
+            isRetire = true;
+            retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
+            mRetire = specificWithdrawal.amount;
+            remainingWithdrawals = Math.max(0, remainingWithdrawals - specificWithdrawal.amount);
+          } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
+            const fallbackWithdrawal = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id) && !w.description.includes('Cycles:'));
+            if (fallbackWithdrawal) {
+              usedWithdrawalIds.add(fallbackWithdrawal.id);
+              isRetire = true;
+              mRetire = netCycleAmount;
+              remainingWithdrawals -= netCycleAmount;
+              retraitDate = new Date(fallbackWithdrawal.date).toLocaleDateString('fr-FR');
+            }
+          }
+
+          cycleDetails.push({
+            index: cycleIdx,
+            amount: currentCycleAmount,
+            disponible: Math.max(0, currentCycleAmount - mRetire),
+            commission: comm,
+            decaissable: Math.max(0, netCycleAmount - mRetire),
+            cases: currentCycleCases,
+            period: `${fmt(currentCycleFirstDepositDate)} au ${txDate >= cycleEndDateLimit ? fmt(cycleEndDateLimit) : fmt(txDate)}`,
+            isRetire: isRetire,
+            montantRetire: mRetire,
+            dateRetrait: retraitDate,
+            dates: [...currentCycleDates]
+          });
+          if (currentCycleAmount > 0) totalComm += comm;
+          cycleIdx++;
+          currentCycleFirstDepositDate = remainingAmount > 0 ? txDate : null;
+          currentCycleCases = 0;
+          currentCycleAmount = 0;
+          currentCycleDates = [];
         }
       }
     }
@@ -219,69 +251,93 @@ const TontineWithdrawal: React.FC = () => {
       const comm = currentCycleAmount > 0 ? Math.min(currentCycleAmount, dailyMise) : 0;
       const netCycleAmount = Math.max(0, currentCycleAmount - comm);
 
-      specificWithdrawal = allWithdrawals.find(h => 
-        h.description.includes(`Cycles:`) && h.description.includes(`${cycleIdx}`)
-      );
+      specificWithdrawal = allWithdrawals.find(h => {
+        if (usedWithdrawalIds.has(h.id)) return false;
+        const matches = h.description.match(/Cycles: ([\d, ]+)/);
+        if (matches) {
+          const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+          return indices.includes(cycleIdx);
+        }
+        return false;
+      });
 
       if (specificWithdrawal) {
+        usedWithdrawalIds.add(specificWithdrawal.id);
         isRetire = true;
         retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
         mRetire = specificWithdrawal.amount;
         currentCycleCases = 0;
+        remainingWithdrawals = Math.max(0, remainingWithdrawals - specificWithdrawal.amount);
       } else if (remainingWithdrawals > 0) {
-        const hasFutureWithdrawal = allWithdrawals.some(w => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate!);
-        if (hasFutureWithdrawal) {
-          if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-            isRetire = true;
-            mRetire = netCycleAmount;
-            withdrawalValue = netCycleAmount;
-            currentCycleCases = 0;
-            remainingWithdrawals -= netCycleAmount;
-            const fallbackWithdrawal = [...allWithdrawals].reverse().find(h => h.amount >= netCycleAmount && new Date(h.date) >= currentCycleFirstDepositDate!);
-            if (fallbackWithdrawal) retraitDate = new Date(fallbackWithdrawal.date).toLocaleDateString('fr-FR');
-          } else {
-            withdrawalValue = remainingWithdrawals;
-            const withdrawnCases = Math.floor(remainingWithdrawals / dailyMise);
-            currentCycleCases = Math.max(0, currentCycleCases - withdrawnCases);
-            remainingWithdrawals = 0;
-          }
+        const fallbackWithdrawal = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id) && !w.description.includes('Cycles:'));
+        if (fallbackWithdrawal) {
+          usedWithdrawalIds.add(fallbackWithdrawal.id);
+          isRetire = true;
+          mRetire = fallbackWithdrawal.amount;
+          withdrawalValue = netCycleAmount;
+          currentCycleCases = 0;
+          remainingWithdrawals = Math.max(0, remainingWithdrawals - fallbackWithdrawal.amount);
+          retraitDate = new Date(fallbackWithdrawal.date).toLocaleDateString('fr-FR');
+        } else {
+          isRetire = true; 
+          mRetire = remainingWithdrawals;
+          withdrawalValue = netCycleAmount;
+          currentCycleCases = 0; 
+          remainingWithdrawals = 0;
         }
       }
+
+      const now = new Date();
+      const isExpired = now >= cycleEndDateLimit;
 
       cycleDetails.push({
         index: cycleIdx,
         amount: currentCycleAmount,
-        disponible: isRetire ? 0 : Math.max(0, currentCycleAmount - withdrawalValue),
+        disponible: Math.max(0, currentCycleAmount - mRetire),
         commission: comm,
-        decaissable: isRetire ? 0 : Math.max(0, (currentCycleAmount - withdrawalValue) - comm),
-        cases: isRetire ? 0 : Math.floor(Math.max(0, currentCycleAmount - withdrawalValue) / dailyMise),
-        period: `${fmt(currentCycleFirstDepositDate)} au ${today >= cycleEndDateLimit ? fmt(cycleEndDateLimit) : fmt(today)}`,
+        decaissable: Math.max(0, netCycleAmount - mRetire),
+        cases: Math.floor(currentCycleAmount / dailyMise),
+        period: `${fmt(currentCycleFirstDepositDate)} au ${specificWithdrawal ? fmt(new Date(specificWithdrawal.date)) : (isExpired ? fmt(cycleEndDateLimit) : fmt(today))}`,
         isRetire: isRetire,
+        isExpired: isExpired,
         montantRetire: mRetire,
         dateRetrait: retraitDate,
         dates: [...currentCycleDates]
       });
       if (currentCycleAmount > 0) totalComm += comm;
+      if (isRetire || isExpired) cycleIdx++;
+    }
+
+    // Gérer les retraits restants qui n'ont pas de dépôts associés
+    while (remainingWithdrawals > 0 || allWithdrawals.some(w => !usedWithdrawalIds.has(w.id))) {
+      const nextW = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id));
+      if (!nextW && remainingWithdrawals <= 0) break;
+      
+      const currentMRetire = nextW ? nextW.amount : remainingWithdrawals;
+      if (nextW) usedWithdrawalIds.add(nextW.id);
+      
+      cycleDetails.push({
+        index: cycleIdx,
+        amount: 0,
+        disponible: 0,
+        commission: 0,
+        decaissable: 0,
+        cases: 0,
+        period: `Cycle ${cycleIdx} (Retiré)`,
+        isRetire: true,
+        dateRetrait: nextW ? new Date(nextW.date).toLocaleDateString('fr-FR') : null,
+        montantRetire: currentMRetire,
+        dates: []
+      });
+      
+      remainingWithdrawals = Math.max(0, remainingWithdrawals - currentMRetire);
+      cycleIdx++;
     }
 
     const lastCycle = cycleDetails[cycleDetails.length - 1];
     let displayCycles = cycleIdx;
-    let displayCycleCases = lastCycle ? lastCycle.cases : 0;
+    let displayCycleCases = (lastCycle && lastCycle.index === cycleIdx) ? lastCycle.cases : 0;
     let displayCycleDates = currentCycleDates.slice(0, displayCycleCases);
-
-    if (lastCycle) {
-      if (lastCycle.index < cycleIdx) {
-        displayCycleCases = 0;
-        displayCycleDates = [];
-      } else {
-        const isExpired = currentCycleFirstDepositDate && today >= new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
-        if (lastCycle.isRetire || isExpired) {
-          displayCycles = cycleIdx + 1;
-          displayCycleCases = 0;
-          displayCycleDates = [];
-        }
-      }
-    }
 
     return { 
       netBalance: cycleDetails.reduce((sum, c) => sum + c.decaissable, 0), 
@@ -297,7 +353,18 @@ const TontineWithdrawal: React.FC = () => {
     let allMembers = [];
     
     if (saved) {
-      allMembers = JSON.parse(saved);
+      allMembers = JSON.parse(saved).map((m: any) => {
+        const updatedTontineAccounts = (m.tontineAccounts || []).map((acc: any, index: number) => ({
+          ...acc,
+          id: acc.id || `${m.id}_tn_${index + 1}`
+        }));
+
+        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+        if (savedHistory) {
+          return { ...m, tontineAccounts: updatedTontineAccounts, history: JSON.parse(savedHistory) };
+        }
+        return { ...m, tontineAccounts: updatedTontineAccounts };
+      });
     } else {
       allMembers = [
         {
@@ -335,66 +402,66 @@ const TontineWithdrawal: React.FC = () => {
     const validated = savedValidated ? JSON.parse(savedValidated).filter((r: any) => !r.isDeleted) : [];
     const allRequests = [...pending, ...validated];
 
-      const tontiniers = allMembers.filter((m: any) => {
+      const tontiniers: any[] = [];
+      allMembers.forEach((m: any) => {
         const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
-        if (!hasTontine) return false;
+        if (!hasTontine) return;
         
         // Filtrage par zone pour l'agent commercial
-      if (currentUser?.role === 'agent commercial') {
-        const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
-        if (agentZones.length > 0) {
-          return agentZones.includes(m.zone) || agentZones.includes(m.zoneCollecte);
-        }
-      }
-        return true;
-      }).map((m: any) => {
-        const acc = m.tontineAccounts[0];
-        
-        // On passe toutes les demandes (en attente et validées) à getTontineStats pour qu'il puisse scinder les cycles
-        const clientRequests = allRequests.filter(r => r.clientId === m.id);
-        const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientRequests);
-        
-        // Extraction des indices de cycles déjà présents dans des demandes
-        const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
-        clientRequests.forEach(r => {
-          const matches = r.reason.match(/Cycles: ([\d, ]+)/);
-          if (matches) {
-            matches[1].split(',').forEach(s => {
-              const num = parseInt(s.trim());
-              if (!isNaN(num)) requestedCycleIndices.push({idx: num, date: r.date, amount: r.amount, status: r.status});
-            });
+        if (currentUser?.role === 'agent commercial') {
+          const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+          if (agentZones.length > 0) {
+            if (!(agentZones.includes(m.zone) || agentZones.includes(m.zoneCollecte))) return;
           }
-        });
+        }
 
-        // Calcul du montant total des demandes EN ATTENTE pour ce client
-        const pendingAmount = clientRequests
-          .filter(r => r.status === 'En attente')
-          .reduce((sum, r) => sum + r.amount, 0);
-
-        // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
-        const updatedCycleDetails = stats.cycleDetails.map(c => {
-          const request = requestedCycleIndices.find(r => r.idx === c.index);
-          // On ne bloque le cycle que s'il y a une demande EN ATTENTE ou VALIDÉE non encore en historique.
-          // Les demandes VALIDÉES déjà en historique sont gérées par getTontineStats.
-          const isPending = request?.status === 'En attente' || request?.status === 'Validée';
+        m.tontineAccounts.forEach((acc: any) => {
+          // On passe toutes les demandes (en attente et validées) à getTontineStats pour qu'il puisse scinder les cycles
+          const clientRequests = allRequests.filter(r => r.clientId === m.id && (r.tontineAccountId === acc.id || r.tontineAccountNumber === acc.number));
+          const isFirstAccount = m.tontineAccounts[0]?.id === acc.id;
+          const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientRequests, isFirstAccount, acc.number);
           
-          return {
-            ...c,
-            isRetire: c.isRetire || isPending,
-            montantRetire: c.isRetire ? c.montantRetire : (request ? request.amount : 0),
-            dateRetrait: c.isRetire ? c.dateRetrait : (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
-          };
-        });
+          // Extraction des indices de cycles déjà présents dans des demandes
+          const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
+          clientRequests.forEach(r => {
+            const matches = r.reason.match(/Cycles: ([\d, ]+)/);
+            if (matches) {
+              matches[1].split(',').forEach(s => {
+                const num = parseInt(s.trim());
+                if (!isNaN(num)) requestedCycleIndices.push({idx: num, date: r.date, amount: r.amount, status: r.status});
+              });
+            }
+          });
 
-        return {
-          ...m,
-          availableTontine: Math.max(0, stats.netBalance),
-          cycles: stats.cycles,
-          currentCycleCases: stats.currentCycleCases,
-          currentCycleDates: stats.currentCycleDates,
-          cycleDetails: updatedCycleDetails,
-          accountNumber: acc.number
-        };
+          // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
+          const updatedCycleDetails = stats.cycleDetails.map(c => {
+            const request = requestedCycleIndices.find(r => r.idx === c.index);
+            // On ne bloque le cycle que s'il y a une demande EN ATTENTE ou VALIDÉE non encore en historique.
+            // Les demandes VALIDÉES déjà en historique sont gérées par getTontineStats.
+            const isPending = request?.status === 'En attente' || request?.status === 'Validé';
+            
+            return {
+              ...c,
+              isRetire: c.isRetire || isPending,
+              montantRetire: c.isRetire ? c.montantRetire : (request ? request.amount : 0),
+              dateRetrait: c.isRetire ? c.dateRetrait : (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
+            };
+          });
+
+          tontiniers.push({
+            ...m,
+            id: `${m.id}_${acc.id}`,
+            realClientId: m.id,
+            tontineAccountId: acc.id,
+            isFirstAccount: isFirstAccount,
+            availableTontine: Math.max(0, stats.netBalance),
+            cycles: stats.cycles,
+            currentCycleCases: stats.currentCycleCases,
+            currentCycleDates: stats.currentCycleDates,
+            cycleDetails: updatedCycleDetails,
+            accountNumber: acc.number
+          });
+        });
       });
     setClients(tontiniers);
 
@@ -418,8 +485,9 @@ const TontineWithdrawal: React.FC = () => {
       const selectedData = selectedClient.cycleDetails.filter((_: any, i: number) => selectedCycleIndices.includes(i));
       const total = selectedData.reduce((acc: number, curr: any) => acc + curr.decaissable, 0);
       const indices = selectedData.map((c: any) => c.index).sort((a: number, b: number) => a - b).join(', ');
+      const periods = selectedData.map((c: any) => c.period).join(' | ');
       setWithdrawalAmount(total.toString());
-      setWithdrawalReason(`Retrait Cycles: ${indices}`);
+      setWithdrawalReason(`Retrait Cycles: ${indices} (${periods})`);
     } else {
       setWithdrawalAmount('');
       setWithdrawalReason('Besoin personnel');
@@ -439,7 +507,8 @@ const TontineWithdrawal: React.FC = () => {
 
     const newRequest = {
       id: Date.now().toString(),
-      clientId: selectedClient.id,
+      clientId: selectedClient.realClientId || selectedClient.id,
+      tontineAccountId: selectedClient.tontineAccountId,
       clientName: selectedClient.name,
       clientCode: selectedClient.code,
       tontineAccountNumber: selectedClient.accountNumber,
@@ -738,19 +807,33 @@ const TontineWithdrawal: React.FC = () => {
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                     {selectedClient.history
-                      .filter((tx: any) => tx.account === 'tontine' && (tx.type === 'cotisation' || tx.type === 'depot') && tx.description?.toLowerCase().includes('livret') !== true)
+                      .filter((tx: any) => 
+                        tx.account === 'tontine' && 
+                        (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'retrait' || tx.type === 'transfert') && 
+                        tx.description?.toLowerCase().includes('livret') !== true &&
+                        (
+                          tx.tontineAccountId === selectedClient.tontineAccountId || 
+                          tx.tontineAccountNumber === selectedClient.accountNumber ||
+                          (!tx.tontineAccountId && !tx.tontineAccountNumber && (
+                            (selectedClient.isFirstAccount && !tx.description?.includes('Compte:')) ||
+                            tx.description?.includes(selectedClient.accountNumber || '')
+                          ))
+                        )
+                      )
                       .map((tx: any) => (
                         <div key={tx.id} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between transition-all hover:border-emerald-100">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                              <ArrowDownLeft size={14} />
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.type === 'cotisation' || tx.type === 'depot' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                              {tx.type === 'cotisation' || tx.type === 'depot' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                             </div>
                             <div>
                               <p className="text-[10px] font-black text-[#121c32] uppercase">{tx.description}</p>
                               <p className="text-[8px] font-bold text-gray-400 uppercase">{new Date(tx.date).toLocaleDateString()}</p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-black text-emerald-600">+{tx.amount.toLocaleString()} F</span>
+                          <span className={`text-[10px] font-black ${tx.type === 'cotisation' || tx.type === 'depot' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {tx.type === 'cotisation' || tx.type === 'depot' ? '+' : '-'}{tx.amount.toLocaleString()} F
+                          </span>
                         </div>
                       ))}
                   </div>

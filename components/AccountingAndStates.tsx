@@ -100,8 +100,9 @@ const AccountingAndStates: React.FC = () => {
                 allEntries.push({ date, account: '251110', label: 'Épargne à vue', desc: `Retrait ${m.name} - ${desc}`, debit: amount, credit: 0 });
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Retrait ${m.name} - ${desc}`, debit: 0, credit: amount });
               } else if (tx.type === 'cotisation' && tx.account === 'tontine') {
-                allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Cotisation Tontine ${m.name}`, debit: amount, credit: 0 });
-                allEntries.push({ date, account: '252110', label: 'Dépôts Tontine', desc: `Cotisation Tontine ${m.name}`, debit: 0, credit: amount });
+                const accountSuffix = tx.tontineAccountNumber ? ` - ${tx.tontineAccountNumber}` : '';
+                allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Cotisation Tontine ${m.name}${accountSuffix}`, debit: amount, credit: 0 });
+                allEntries.push({ date, account: '252110', label: 'Dépôts Tontine', desc: `Cotisation Tontine ${m.name}${accountSuffix}`, debit: 0, credit: amount });
               } else if (tx.type === 'deblocage' && tx.account === 'credit') {
                 allEntries.push({ date, account: '221110', label: 'Prêts aux membres', desc: `Déblocage Crédit ${m.name}`, debit: amount, credit: 0 });
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Déblocage Crédit ${m.name}`, debit: 0, credit: amount });
