@@ -20,7 +20,7 @@ const UserManagement: React.FC = () => {
   });
 
   const zones = ['01', '01A', '02', '02A', '03', '03A', '04', '04A', '05', '05A', '06', '06A', '07', '07A', '08', '08A', '09', '09A'];
-  const caisses = ['CAISSE 1', 'CAISSE 2'];
+  const caisses = ['CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'];
 
   const roles: UserRole[] = [
     'administrateur',
