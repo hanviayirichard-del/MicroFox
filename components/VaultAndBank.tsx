@@ -390,41 +390,59 @@ const VaultAndBank: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {transactions.length > 0 ? (
-                transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="text-xs font-black text-[#121c32]">{new Date(tx.date).toLocaleDateString()}</p>
-                      <p className="text-[10px] font-bold text-gray-400">{new Date(tx.date).toLocaleTimeString()}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-[10px] font-black uppercase tracking-tight text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-                        {tx.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{tx.from}</td>
-                    <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{tx.to}</td>
-                    <td className="px-6 py-4 text-right text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</td>
-                    <td className="px-6 py-4 text-center">
-                      {tx.denominations && (
-                        <button 
-                          onClick={() => setSelectedTxForBilletage(tx)}
-                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                          title="Voir le billetage"
-                        >
-                          <Calculator size={16} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center text-gray-300 italic text-xs font-bold uppercase tracking-widest">
-                    Aucun mouvement enregistré
-                  </td>
-                </tr>
-              )}
+              {(() => {
+                const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+                const isCaissier = currentUser?.role === 'caissier';
+                
+                const filteredTxs = transactions
+                  .filter(tx => {
+                    if (isCaissier) {
+                      const isToMyCaisse = tx.to && currentUser.caisse && tx.to.toUpperCase() === currentUser.caisse.toUpperCase();
+                      const isFromMyCaisse = tx.from && currentUser.caisse && tx.from.toUpperCase() === currentUser.caisse.toUpperCase();
+                      return tx.userId === currentUser.id || isToMyCaisse || isFromMyCaisse;
+                    }
+                    return true;
+                  })
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                if (filteredTxs.length > 0) {
+                  return filteredTxs.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="text-xs font-black text-[#121c32]">{new Date(tx.date).toLocaleDateString()}</p>
+                        <p className="text-[10px] font-bold text-gray-400">{new Date(tx.date).toLocaleTimeString()}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-[10px] font-black uppercase tracking-tight text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                          {tx.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{tx.from}</td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{tx.to}</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</td>
+                      <td className="px-6 py-4 text-center">
+                        {tx.denominations && (
+                          <button 
+                            onClick={() => setSelectedTxForBilletage(tx)}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            title="Voir le billetage"
+                          >
+                            <Calculator size={16} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ));
+                } else {
+                  return (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-20 text-center text-gray-300 italic text-xs font-bold uppercase tracking-widest">
+                        Aucun mouvement enregistré
+                      </td>
+                    </tr>
+                  );
+                }
+              })()}
             </tbody>
           </table>
         </div>

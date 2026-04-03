@@ -13,11 +13,20 @@ const FinancialReports: React.FC = () => {
   });
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedCaisse, setSelectedCaisse] = useState('all');
+  const [selectedCaisse, setSelectedCaisse] = useState<string[]>(['all']);
 
   const savedUsers = localStorage.getItem('microfox_users');
   const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
-  const availableCaisses = Array.from(new Set([...allUsers.filter((u: any) => u.role === 'caissier' && u.caisse).map((u: any) => u.caisse), 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'])) as string[];
+  
+  const userStr = localStorage.getItem('microfox_current_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const isAdminOrDirector = user?.role === 'administrateur' || user?.role === 'directeur';
+
+  const availableCaisses = Array.from(new Set([
+    ...(isAdminOrDirector ? ['CAISSE PRINCIPALE'] : []),
+    ...allUsers.filter((u: any) => u.role === 'caissier' && u.caisse).map((u: any) => u.caisse), 
+    'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'
+  ])) as string[];
 
   const [data, setData] = useState<{
     epargneDepots: any[];
@@ -114,8 +123,11 @@ const FinancialReports: React.FC = () => {
           const txUser = allUsers.find((u: any) => u.id === tx.userId);
           const txCaisse = txUser?.caisse || 'N/A';
           
-          if (isCaissier && tx.userId !== user.id) return;
-          if (selectedCaisse !== 'all' && txCaisse !== selectedCaisse) return;
+          if (isCaissier) {
+            const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
+            if (!isMyOp) return;
+          }
+          if (!selectedCaisse.includes('all') && !selectedCaisse.includes(txCaisse)) return;
           
           const txDate = tx.date.split('T')[0];
           
@@ -200,7 +212,7 @@ const FinancialReports: React.FC = () => {
         const expCaisse = expUser?.caisse || 'N/A';
 
         if (isCaissier && e.recordedBy !== user.identifiant) return;
-        if (selectedCaisse !== 'all' && expCaisse !== selectedCaisse) return;
+        if (!selectedCaisse.includes('all') && !selectedCaisse.includes(expCaisse)) return;
 
         if (eDate < startDate) {
           newData.openingBalance -= e.amount;
@@ -220,7 +232,7 @@ const FinancialReports: React.FC = () => {
 
         if (p.status !== 'Validé') return;
         if (isCaissier && p.validatorId !== user.id) return;
-        if (selectedCaisse !== 'all' && p.caisse !== selectedCaisse) return;
+        if (!selectedCaisse.includes('all') && !selectedCaisse.includes(p.caisse)) return;
 
         if (pDate < startDate) {
           newData.openingBalance += amount;
@@ -251,16 +263,16 @@ const FinancialReports: React.FC = () => {
             isRelevant = true;
             delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement')) ? v.amount : -v.amount;
           }
-        } else if (selectedCaisse !== 'all') {
-          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && v.to?.toUpperCase() === selectedCaisse?.toUpperCase()) {
+        } else if (!selectedCaisse.includes('all')) {
+          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && selectedCaisse.some(c => c.toUpperCase() === v.to?.toUpperCase())) {
             isRelevant = true;
             delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') && v.from?.toUpperCase() === selectedCaisse?.toUpperCase()) {
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') && selectedCaisse.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
             isRelevant = true;
             delta = -v.amount;
           } else {
             const vUser = allUsers.find((u: any) => u.id === v.userId);
-            if (vUser?.caisse?.toUpperCase() === selectedCaisse?.toUpperCase()) {
+            if (vUser?.caisse && selectedCaisse.some(c => c.toUpperCase() === vUser.caisse.toUpperCase())) {
               isRelevant = true;
               delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement')) ? v.amount : -v.amount;
             }
@@ -309,6 +321,30 @@ const FinancialReports: React.FC = () => {
         }
       });
     }
+
+    // Sort all lists chronologically
+    const sortFn = (a: any, b: any) => new Date(b.date || b.validationDate).getTime() - new Date(a.date || a.validationDate).getTime();
+    
+    newData.epargneDepots.sort(sortFn);
+    newData.epargneRetraits.sort(sortFn);
+    newData.creditsAccordes.sort(sortFn);
+    newData.remboursements.sort(sortFn);
+    newData.livretsEpargne.sort(sortFn);
+    newData.garantieDepots.sort(sortFn);
+    newData.garantieRetraits.sort(sortFn);
+    newData.adminExpenses.sort(sortFn);
+    newData.agentPayments.sort(sortFn);
+    newData.vaultTransactions.sort(sortFn);
+    newData.validatedWithdrawals.sort(sortFn);
+    
+    zones.forEach(z => {
+      newData.tontineDepotsByZone[z].sort(sortFn);
+      newData.tontineRetraitsByZone[z].sort(sortFn);
+      newData.livretsTontineByZone[z].sort(sortFn);
+    });
+    newData.tontineDepotsByZone['Inconnue'].sort(sortFn);
+    newData.tontineRetraitsByZone['Inconnue'].sort(sortFn);
+    newData.livretsTontineByZone['Inconnue'].sort(sortFn);
 
     setData(newData);
   };
@@ -971,19 +1007,32 @@ const FinancialReports: React.FC = () => {
         )}
         {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'superviseur') && (
           <div className="space-y-1 md:col-span-3">
-            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Filtrer par Caisse</label>
-            <div className="relative">
-              <select 
-                value={selectedCaisse} 
-                onChange={(e) => setSelectedCaisse(e.target.value)} 
-                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] appearance-none"
+            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Filtrer par Caisse (Plusieurs choix possibles)</label>
+            <div className="flex flex-wrap gap-2 p-3 bg-gray-50 border border-gray-100 rounded-2xl">
+              <button
+                onClick={() => setSelectedCaisse(['all'])}
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedCaisse.includes('all') ? 'bg-[#121c32] text-white' : 'bg-white text-gray-400 border border-gray-100'}`}
               >
-                <option value="all">Toutes les caisses</option>
-                {availableCaisses.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <Landmark className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                Toutes les caisses
+              </button>
+              {availableCaisses.map(c => (
+                <button
+                  key={c}
+                  onClick={() => {
+                    if (selectedCaisse.includes('all')) {
+                      setSelectedCaisse([c]);
+                    } else if (selectedCaisse.includes(c)) {
+                      const next = selectedCaisse.filter(item => item !== c);
+                      setSelectedCaisse(next.length === 0 ? ['all'] : next);
+                    } else {
+                      setSelectedCaisse([...selectedCaisse, c]);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedCaisse.includes(c) ? 'bg-[#121c32] text-white' : 'bg-white text-gray-400 border border-gray-100'}`}
+                >
+                  {c}
+                </button>
+              ))}
             </div>
           </div>
         )}

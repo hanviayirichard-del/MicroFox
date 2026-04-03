@@ -313,7 +313,7 @@ const PiecesAImprimer: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                ${txs.length > 0 ? txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(t => {
+                ${txs.length > 0 ? txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => {
                   const isCredit = ['depot', 'cotisation', 'remboursement'].includes(t.type);
                   return `
                     <tr style="border-bottom: 1px solid #f0f0f0;">

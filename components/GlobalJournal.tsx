@@ -13,7 +13,7 @@ const GlobalJournal: React.FC = () => {
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [selectedCaisse, setSelectedCaisse] = useState('Toutes les caisses');
+  const [selectedCaisse, setSelectedCaisse] = useState<string[]>(['Toutes les caisses']);
   const [selectedUser, setSelectedUser] = useState('Tous les utilisateurs');
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
@@ -44,7 +44,8 @@ const GlobalJournal: React.FC = () => {
           member.history.forEach((tx: any) => {
             // Filter by user if caissier
             if (user.role === 'caissier') {
-              if (tx.userId !== user.id) return;
+              const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
+              if (!isMyOp) return;
             }
             
             // Filter by zone if agent commercial
@@ -61,7 +62,8 @@ const GlobalJournal: React.FC = () => {
               memberCode: member.code,
               caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A',
               epargneAccountNumber: member.epargneAccountNumber || 'N/A',
-              tontineAccountNumber: tontineNumber
+              tontineAccountNumber: tontineNumber,
+              cashierName: tx.cashierName || users.find((u: any) => u.id === tx.userId)?.identifiant || 'N/A'
             });
           });
         }
@@ -147,7 +149,7 @@ const GlobalJournal: React.FC = () => {
         }
       }
 
-      // Sort by date desc
+      // Sort by date asc (chronological)
       allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTransactions(allTxs);
     }
@@ -268,7 +270,7 @@ const GlobalJournal: React.FC = () => {
     const txDate = tx.date.split('T')[0];
     const matchesStartDate = !startDate || txDate >= startDate;
     const matchesEndDate = !endDate || txDate <= endDate;
-    const matchesCaisse = selectedCaisse === 'Toutes les caisses' || (tx.caisse && tx.caisse.toUpperCase() === selectedCaisse.toUpperCase());
+    const matchesCaisse = selectedCaisse.includes('Toutes les caisses') || (tx.caisse && selectedCaisse.some(c => c.toUpperCase() === tx.caisse.toUpperCase()));
     const matchesUser = selectedUser === 'Tous les utilisateurs' || (tx.userId === selectedUser || tx.cashierName === selectedUser);
     return matchesSearch && matchesStartDate && matchesEndDate && matchesCaisse && matchesUser;
   });
@@ -343,20 +345,34 @@ const GlobalJournal: React.FC = () => {
           </div>
           {isAdminOrDirector && (
             <>
-              <div className="space-y-1">
-                <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Caisse</label>
-                <select 
-                  value={selectedCaisse} 
-                  onChange={(e) => setSelectedCaisse(e.target.value)} 
-                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm uppercase"
-                >
-                  <option value="Toutes les caisses">Toutes les caisses</option>
-                  <option value="CAISSE PRINCIPALE">CAISSE PRINCIPALE</option>
-                  <option value="CAISSE 1">CAISSE 1</option>
-                  <option value="CAISSE 2">CAISSE 2</option>
-                  <option value="CAISSE 3">CAISSE 3</option>
-                  <option value="CAISSE 4">CAISSE 4</option>
-                </select>
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Caisses (Plusieurs choix possibles)</label>
+                <div className="flex flex-wrap gap-2 p-3 bg-gray-50 border border-gray-100 rounded-2xl">
+                  <button
+                    onClick={() => setSelectedCaisse(['Toutes les caisses'])}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedCaisse.includes('Toutes les caisses') ? 'bg-[#121c32] text-white' : 'bg-white text-gray-400 border border-gray-100'}`}
+                  >
+                    Toutes les caisses
+                  </button>
+                  {['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'].map(c => (
+                    <button
+                      key={c}
+                      onClick={() => {
+                        if (selectedCaisse.includes('Toutes les caisses')) {
+                          setSelectedCaisse([c]);
+                        } else if (selectedCaisse.includes(c)) {
+                          const next = selectedCaisse.filter(item => item !== c);
+                          setSelectedCaisse(next.length === 0 ? ['Toutes les caisses'] : next);
+                        } else {
+                          setSelectedCaisse([...selectedCaisse, c]);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedCaisse.includes(c) ? 'bg-[#121c32] text-white' : 'bg-white text-gray-400 border border-gray-100'}`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-black text-gray-600 uppercase tracking-widest ml-1">Utilisateur</label>

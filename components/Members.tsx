@@ -2053,6 +2053,140 @@ const Members: React.FC = () => {
     });
   };
   const [isActionsOpen, setIsActionsOpen] = useState<boolean>(false);
+  const handlePrintReleve = () => {
+    if (!selectedClient) return;
+    setIsActionsOpen(false);
+
+    const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
+    const dateRange = journalStartDate && journalEndDate 
+      ? `DU ${new Date(journalStartDate).toLocaleDateString()} AU ${new Date(journalEndDate).toLocaleDateString()}`
+      : "RELEVÉ COMPLET";
+
+    const filteredHistory = selectedClient.history.filter(tx => {
+      const txDate = tx.date.split('T')[0];
+      if (journalStartDate && txDate < journalStartDate) return false;
+      if (journalEndDate && txDate > journalEndDate) return false;
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const headerHtml = `
+      <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 20px;">
+        <h1 style="font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32;">${mfConfig.nom}</h1>
+        <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0;">${mfConfig.adresse}</p>
+        <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0;">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+      </div>
+      <div style="margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+          <h2 style="font-size: 18px; font-weight: 900; color: #121c32; margin: 0 0 10px 0; text-transform: uppercase;">RELEVÉ DE COMPTE</h2>
+          <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 0;">${dateRange}</p>
+        </div>
+        <div style="text-align: right; background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+          <p style="font-size: 10px; font-weight: 900; color: #64748b; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px;">Client</p>
+          <p style="font-size: 14px; font-weight: 900; color: #121c32; margin: 0; text-transform: uppercase;">${selectedClient.name}</p>
+          <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 2px 0 0 0;">Code: ${selectedClient.code}</p>
+        </div>
+      </div>
+    `;
+
+    const tableHtml = `
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px;">
+        <thead>
+          <tr style="background-color: #121c32; color: white;">
+            <th style="padding: 10px; text-align: left; border: 1px solid #121c32;">DATE</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #121c32;">COMPTE</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #121c32;">DESCRIPTION</th>
+            <th style="padding: 10px; text-align: right; border: 1px solid #121c32;">DÉBIT</th>
+            <th style="padding: 10px; text-align: right; border: 1px solid #121c32;">CRÉDIT</th>
+            <th style="padding: 10px; text-align: right; border: 1px solid #121c32;">SOLDE</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredHistory.map(tx => {
+            const isCredit = tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
+            const isDebit = tx.type === 'retrait' || tx.type === 'deblocage' || tx.type === 'transfert';
+            return `
+              <tr>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">${new Date(tx.date).toLocaleDateString()}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; text-transform: uppercase; font-weight: bold;">${tx.account}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">${tx.description}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: right; color: #ef4444; font-weight: bold;">${isDebit ? tx.amount.toLocaleString() : ''}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: right; color: #10b981; font-weight: bold;">${isCredit ? tx.amount.toLocaleString() : ''}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: right; font-weight: 900;">${(tx.balance || 0).toLocaleString()} F</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+
+    const summaryHtml = `
+      <div style="margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        <div style="background: #f0fdf4; padding: 15px; border-radius: 12px; border: 1px solid #bbf7d0;">
+          <p style="font-size: 10px; font-weight: 900; color: #166534; margin: 0 0 5px 0; text-transform: uppercase;">Épargne</p>
+          <p style="font-size: 18px; font-weight: 900; color: #166534; margin: 0;">${selectedClient.balances.epargne.toLocaleString()} F</p>
+        </div>
+        <div style="background: #fefce8; padding: 15px; border-radius: 12px; border: 1px solid #fef08a;">
+          <p style="font-size: 10px; font-weight: 900; color: #854d0e; margin: 0 0 5px 0; text-transform: uppercase;">Tontine</p>
+          <p style="font-size: 18px; font-weight: 900; color: #854d0e; margin: 0;">${selectedClient.balances.tontine.toLocaleString()} F</p>
+        </div>
+        <div style="background: #eff6ff; padding: 15px; border-radius: 12px; border: 1px solid #bfdbfe;">
+          <p style="font-size: 10px; font-weight: 900; color: #1e40af; margin: 0 0 5px 0; text-transform: uppercase;">Garantie</p>
+          <p style="font-size: 18px; font-weight: 900; color: #1e40af; margin: 0;">${selectedClient.balances.garantie.toLocaleString()} F</p>
+        </div>
+      </div>
+    `;
+
+    const footerHtml = `
+      <div style="margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px;">
+        <div style="text-align: center;">
+          <p style="font-weight: bold; margin-bottom: 40px;">Signature Client</p>
+          <div style="width: 150px; border-bottom: 1px solid #ccc;"></div>
+        </div>
+        <div style="text-align: center;">
+          <p style="font-weight: bold; margin-bottom: 40px;">Le Caissier</p>
+          <div style="width: 150px; border-bottom: 1px solid #ccc;"></div>
+        </div>
+      </div>
+      <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px;">
+        Document généré le ${new Date().toLocaleString()} par MicroFoX
+      </div>
+    `;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Relevé - ${selectedClient.name}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #334155; line-height: 1.5; }
+            @media print {
+              body { padding: 0; }
+              @page { margin: 1cm; }
+            }
+          </style>
+        </head>
+        <body>
+          ${headerHtml}
+          ${tableHtml}
+          ${summaryHtml}
+          ${footerHtml}
+          <script>
+            window.onload = () => {
+              window.print();
+              setTimeout(() => window.close(), 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    }
+  };
   const [isEditingCredit, setIsEditingCredit] = useState<boolean>(false);
   const [creditFormData, setCreditFormData] = useState<any>({});
   
@@ -2144,7 +2278,7 @@ const Members: React.FC = () => {
           (accountNumber && h.description?.includes(accountNumber))
         ))
       ) && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
-      .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     // On fusionne l'historique réel avec les demandes en attente pour le calcul des cycles
     const allWithdrawals = [
@@ -2164,7 +2298,7 @@ const Members: React.FC = () => {
         amount: pw.amount,
         description: `Retrait en attente: ${pw.reason || ''}`
       }))
-    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const accountWithdrawalsAmount = allWithdrawals.reduce((sum, h) => sum + h.amount, 0);
 
@@ -3424,7 +3558,7 @@ const Members: React.FC = () => {
                           {currentUser?.role !== 'agent commercial' && currentUser?.role !== 'caissier' && (
                             <button onClick={() => { setActiveTab('profile'); setIsActionsOpen(false); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-300 hover:bg-white/5 uppercase">Modifier Profil</button>
                           )}
-                          <button onClick={() => setIsActionsOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-300 hover:bg-white/5 uppercase">Imprimer Relevé</button>
+                          <button onClick={handlePrintReleve} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-300 hover:bg-white/5 uppercase">Imprimer Relevé</button>
                           <div className="h-px bg-white/5 my-1"></div>
                           <button onClick={() => setIsActionsOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 uppercase">Clôturer Compte</button>
                         </div>
@@ -3643,40 +3777,48 @@ const Members: React.FC = () => {
                     </div>
                     
                     <div className="space-y-4">
-                      {selectedClient.history.filter(tx => tx.account === 'epargne' || tx.destinationAccount === 'epargne').length > 0 ? (
-                        selectedClient.history.filter(tx => tx.account === 'epargne' || tx.destinationAccount === 'epargne').map((tx) => {
-                          const isIncoming = tx.destinationAccount === 'epargne' || tx.type === 'depot';
-                          return (
-                            <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all">
-                              <div className="flex items-center gap-4 flex-1 min-w-0">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                  {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                      {(() => {
+                        const sortedHistory = [...(selectedClient?.history || [])]
+                          .filter(tx => tx.account === 'epargne' || tx.destinationAccount === 'epargne')
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        
+                        if (sortedHistory.length > 0) {
+                          return sortedHistory.map((tx) => {
+                            const isIncoming = tx.destinationAccount === 'epargne' || tx.type === 'depot';
+                            return (
+                              <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all">
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                    {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase">
+                                      {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase">
-                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                <div className="text-right shrink-0 ml-4">
+                                  <p className={`text-base font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
                                   </p>
+                                  <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                                    <p className="text-[9px] font-bold text-gray-600 uppercase">Avant: {tx.balanceBefore?.toLocaleString() || '---'} F</p>
+                                    <p className="text-[9px] font-black text-blue-400 uppercase">Solde: {tx.balance?.toLocaleString() || '---'} F</p>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="text-right shrink-0 ml-4">
-                                <p className={`text-base font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
-                                </p>
-                                <div className="flex flex-col items-end gap-0.5 mt-0.5">
-                                  <p className="text-[9px] font-bold text-gray-600 uppercase">Avant: {tx.balanceBefore?.toLocaleString() || '---'} F</p>
-                                  <p className="text-[9px] font-black text-blue-400 uppercase">Solde: {tx.balance?.toLocaleString() || '---'} F</p>
-                                </div>
-                              </div>
+                            );
+                          });
+                        } else {
+                          return (
+                            <div className="py-12 text-center">
+                              <p className="text-gray-600 italic text-sm">Aucune opération d'épargne enregistrée</p>
                             </div>
                           );
-                        })
-                      ) : (
-                        <div className="py-12 text-center">
-                          <p className="text-gray-600 italic text-sm">Aucune opération d'épargne enregistrée</p>
-                        </div>
-                      )}
+                        }
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -3738,22 +3880,8 @@ const Members: React.FC = () => {
                         </div>
                       </div>
 
-                      {selectedClient.history.filter(tx => {
-                        const matchesAccount = tx.account === 'tontine' && (
-                          tx.tontineAccountId === activeTontine.id || 
-                          tx.tontineAccountNumber === activeTontine.number ||
-                          (!tx.tontineAccountId && !tx.tontineAccountNumber && (
-                            (selectedClient.tontineAccounts[0]?.id === activeTontine.id && !tx.description?.includes('Compte:')) ||
-                            tx.description?.includes(activeTontine.number)
-                          ))
-                        );
-                        if (!matchesAccount) return false;
-                        const txDate = tx.date.split('T')[0];
-                        if (journalStartDate && txDate < journalStartDate) return false;
-                        if (journalEndDate && txDate > journalEndDate) return false;
-                        return true;
-                      }).length > 0 ? (
-                        selectedClient.history
+                      {(() => {
+                        const sortedHistory = [...(selectedClient?.history || [])]
                           .filter(tx => {
                             const matchesAccount = tx.account === 'tontine' && (
                               tx.tontineAccountId === activeTontine.id || 
@@ -3769,7 +3897,10 @@ const Members: React.FC = () => {
                             if (journalEndDate && txDate > journalEndDate) return false;
                             return true;
                           })
-                          .map((tx) => {
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        
+                        if (sortedHistory.length > 0) {
+                          return sortedHistory.map((tx) => {
                             const isIncoming = tx.type === 'depot' || tx.type === 'cotisation';
                             return (
                               <div key={tx.id} className="bg-[#121c32] p-4 rounded-2xl border border-white/5 shadow-sm flex items-center justify-between">
@@ -3794,12 +3925,15 @@ const Members: React.FC = () => {
                                 </div>
                               </div>
                             );
-                          })
-                      ) : (
-                        <div className="bg-[#121c32] rounded-[2rem] p-12 text-center border border-white/5">
-                          <p className="text-gray-600 italic text-sm">Aucune opération trouvée pour cette période.</p>
-                        </div>
-                      )}
+                          });
+                        } else {
+                          return (
+                            <div className="bg-[#121c32] rounded-[2rem] p-12 text-center border border-white/5">
+                              <p className="text-gray-600 italic text-sm">Aucune opération trouvée pour cette période.</p>
+                            </div>
+                          );
+                        }
+                      })()}
                     </div>
                   )}
 
@@ -4064,34 +4198,42 @@ const Members: React.FC = () => {
                     </div>
                     
                     <div className="space-y-4">
-                      {selectedClient.history.filter(tx => tx.account === 'garantie' || tx.destinationAccount === 'garantie').length > 0 ? (
-                        selectedClient.history.filter(tx => tx.account === 'garantie' || tx.destinationAccount === 'garantie').map((tx) => {
-                          const isIncoming = tx.destinationAccount === 'garantie' || tx.type === 'depot';
-                          return (
-                            <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all">
-                              <div className="flex items-center gap-4 flex-1 min-w-0">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                  {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                      {(() => {
+                        const sortedHistory = [...(selectedClient?.history || [])]
+                          .filter(tx => tx.account === 'garantie' || tx.destinationAccount === 'garantie')
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        
+                        if (sortedHistory.length > 0) {
+                          return sortedHistory.map((tx) => {
+                            const isIncoming = tx.destinationAccount === 'garantie' || tx.type === 'depot';
+                            return (
+                              <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all">
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                    {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                      {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
-                                  </p>
-                                </div>
+                                <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                </p>
                               </div>
-                              <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
-                              </p>
+                            );
+                          });
+                        } else {
+                          return (
+                            <div className="py-12 text-center text-gray-600 italic text-sm">
+                              Aucune garantie enregistrée pour ce client
                             </div>
                           );
-                        })
-                      ) : (
-                        <div className="py-12 text-center text-gray-600 italic text-sm">
-                          Aucune garantie enregistrée pour ce client
-                        </div>
-                      )}
+                        }
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -4123,34 +4265,42 @@ const Members: React.FC = () => {
                     </div>
                     
                     <div className="space-y-4">
-                      {selectedClient.history.filter(tx => tx.account === 'partSociale' || tx.destinationAccount === 'partSociale').length > 0 ? (
-                        selectedClient.history.filter(tx => tx.account === 'partSociale' || tx.destinationAccount === 'partSociale').map((tx) => {
-                          const isIncoming = tx.destinationAccount === 'partSociale' || tx.type === 'depot';
-                          return (
-                            <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all">
-                              <div className="flex items-center gap-4 flex-1 min-w-0">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400'}`}>
-                                  {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                      {(() => {
+                        const sortedHistory = [...(selectedClient?.history || [])]
+                          .filter(tx => tx.account === 'partSociale' || tx.destinationAccount === 'partSociale')
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        
+                        if (sortedHistory.length > 0) {
+                          return sortedHistory.map((tx) => {
+                            const isIncoming = tx.destinationAccount === 'partSociale' || tx.type === 'depot';
+                            return (
+                              <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all">
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400'}`}>
+                                    {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                      {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      {tx.cashierName && ` • OP: ${tx.cashierName}`}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-black text-white uppercase">{tx.description}</p>
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                                    {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    {tx.cashierName && ` • OP: ${tx.cashierName}`}
-                                  </p>
-                                </div>
+                                <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-pink-400'}`}>
+                                  {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                </p>
                               </div>
-                              <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-pink-400'}`}>
-                                {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
-                              </p>
+                            );
+                          });
+                        } else {
+                          return (
+                            <div className="py-12 text-center text-gray-600 italic text-sm">
+                              Aucun mouvement de part sociale enregistré
                             </div>
                           );
-                        })
-                      ) : (
-                        <div className="py-12 text-center text-gray-600 italic text-sm">
-                          Aucun mouvement de part sociale enregistré
-                        </div>
-                      )}
+                        }
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -4387,7 +4537,7 @@ const Members: React.FC = () => {
                   {(() => {
                     const credits: any[] = [];
                     let currentCredit: any = null;
-                    const sortedHistory = [...(selectedClient?.history || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    const sortedHistory = [...(selectedClient?.history || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
                     sortedHistory.forEach(tx => {
                       if (tx.account === 'credit') {

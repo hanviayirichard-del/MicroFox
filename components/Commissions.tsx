@@ -241,18 +241,20 @@ const Commissions: React.FC = () => {
     return () => window.removeEventListener('storage', calculateCommissions);
   }, [startDate, endDate, selectedZone]);
 
-  const filteredList = stats.list.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (item.accountNumber && item.accountNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.agent && item.agent.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesZone = currentUser?.role === 'agent commercial' 
-      ? (selectedZone !== '' && item.zone === selectedZone)
-      : (selectedZone === '' || item.zone === selectedZone);
-    
-    return matchesSearch && matchesZone;
-  });
+  const filteredList = stats.list
+    .filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (item.accountNumber && item.accountNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.agent && item.agent.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesZone = currentUser?.role === 'agent commercial' 
+        ? (selectedZone !== '' && item.zone === selectedZone)
+        : (selectedZone === '' || item.zone === selectedZone);
+      
+      return matchesSearch && matchesZone;
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const displayTotal = filteredList.reduce((acc, curr) => acc + curr.amount, 0);
   const displayCycles = filteredList.length;
