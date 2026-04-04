@@ -125,6 +125,17 @@ const AccountBalance: React.FC = () => {
               `;
             }).join('')}
           </tbody>
+          <tfoot style="background: #f8fafc; font-weight: bold; border-top: 2px solid #e2e8f0;">
+            <tr>
+              <td colspan="3">TOTAUX (${stats.totalClients} clients)</td>
+              <td class="text-right">${stats.totalEpargne.toLocaleString()}</td>
+              <td class="text-right">${stats.totalTontine.toLocaleString()}</td>
+              <td class="text-right">${stats.totalGarantie.toLocaleString()}</td>
+              <td class="text-right">${stats.totalPartSociale.toLocaleString()}</td>
+              <td class="text-right">${stats.totalCreditCap.toLocaleString()}</td>
+              <td class="text-right">${stats.totalCreditInt.toLocaleString()}</td>
+            </tr>
+          </tfoot>
         </table>
         ${isForPrint ? '<script>window.print();</script>' : ''}
       </body>
