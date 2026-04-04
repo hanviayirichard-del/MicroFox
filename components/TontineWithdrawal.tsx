@@ -181,6 +181,11 @@ const TontineWithdrawal: React.FC = () => {
         const withdrawalDuringCycle = allWithdrawals.find(w => {
           const wDate = new Date(w.date);
           const isSameDay = wDate.toDateString() === txDate.toDateString();
+          const matches = w.description.match(/Cycles: ([\d, ]+)/);
+          if (matches) {
+            const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+            if (!indices.includes(cycleIdx)) return false;
+          }
           return !usedWithdrawalIds.has(w.id) && (isSameDay || (wDate >= currentCycleFirstDepositDate! && wDate <= txDate));
         });
 
@@ -713,7 +718,7 @@ const TontineWithdrawal: React.FC = () => {
                     <h4 className="text-[10px] font-black text-[#121c32] uppercase tracking-widest">Choisir le cycle à retirer</h4>
                   </div>
                   <div className="space-y-3">
-                    {selectedClient.cycleDetails.map((cycle: any, idx: number) => (
+                    {selectedClient.cycleDetails.map((cycle: any, idx: number) => ({ cycle, idx })).reverse().map(({ cycle, idx }) => (
                       <button 
                         key={idx}
                         onClick={() => {
@@ -753,6 +758,7 @@ const TontineWithdrawal: React.FC = () => {
                                   <span className="text-[8px] font-black text-red-500 uppercase">Déjà retiré</span>
                                   <span className="text-[10px] font-black text-[#121c32]">{cycle.montantRetire.toLocaleString()} F</span>
                                   <span className="text-[8px] font-bold text-gray-400 uppercase">{cycle.dateRetrait ? `Le ${cycle.dateRetrait}` : ''}</span>
+                                  <span className="text-[7px] font-bold text-emerald-600 uppercase mt-0.5">{cycle.period}</span>
                                </div>
                             </div>
                          )}

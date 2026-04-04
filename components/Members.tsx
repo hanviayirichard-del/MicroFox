@@ -2278,7 +2278,7 @@ const Members: React.FC = () => {
           (accountNumber && h.description?.includes(accountNumber))
         ))
       ) && (h.type === 'cotisation' || h.type === 'depot') && !h.description?.toLowerCase().includes('livret'))
-      .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     // On fusionne l'historique réel avec les demandes en attente pour le calcul des cycles
     const allWithdrawals = [
@@ -2298,7 +2298,7 @@ const Members: React.FC = () => {
         amount: pw.amount,
         description: `Retrait en attente: ${pw.reason || ''}`
       }))
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const accountWithdrawalsAmount = allWithdrawals.reduce((sum, h) => sum + h.amount, 0);
 
@@ -2438,6 +2438,11 @@ const Members: React.FC = () => {
         const withdrawalDuringCycle = allWithdrawals.find(w => {
           const wDate = new Date(w.date);
           const isSameDay = wDate.toDateString() === txDate.toDateString();
+          const matches = w.description.match(/Cycles: ([\d, ]+)/);
+          if (matches) {
+            const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+            if (!indices.includes(cycleIdx)) return false;
+          }
           return !usedWithdrawalIds.has(w.id) && (isSameDay || (wDate >= currentCycleFirstDepositDate! && wDate <= txDate));
         });
 
@@ -3983,7 +3988,7 @@ const Members: React.FC = () => {
                         </div>
                         
                         <div ref={cyclesListRef} className="space-y-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
-                          {activeTontineStats.cycleDetails.filter(c => c.amount >= 0).map((cycle, i) => (
+                          {[...activeTontineStats.cycleDetails].reverse().filter(c => c.amount >= 0).map((cycle, i) => (
                             <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 mr-1">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">C{cycle.index}</div>
