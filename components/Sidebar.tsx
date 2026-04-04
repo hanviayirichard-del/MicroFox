@@ -32,7 +32,8 @@ import {
   Printer,
   TrendingUp,
   TrendingDown,
-  Search
+  Search,
+  Scale as BalanceIcon
 } from 'lucide-react';
 import { MenuItem, SidebarProps } from '../types';
 import { useState, useEffect } from 'react';
@@ -190,6 +191,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       items: [
         { id: 'Analyse', label: 'Analyse', icon: <TrendingUp size={20} /> },
         { id: 'Journal Global', label: 'Journal Global', icon: <BookOpen size={20} />, badge: 0 },
+        { id: 'Balance des comptes', label: 'Balance des comptes', icon: <BalanceIcon size={20} /> },
         { id: 'Reçu de caisse', label: 'Reçu de caisse', icon: <Printer size={20} /> },
         { id: 'Comptabilité & États', label: 'Comptabilité & États', icon: <Calculator size={20} /> },
         { id: 'États Réglementaires', label: 'États Réglementaires', icon: <FileCheck size={20} /> },
@@ -277,7 +279,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Validation de Crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 
                   'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 
                   'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Déblocage de crédit', 
-                  'Commissions', 'Journal Global', 'Comptabilité & États', 'États Réglementaires', 
+                  'Commissions', 'Journal Global', 'Balance des comptes', 'Comptabilité & États', 'États Réglementaires', 
                   'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Reçu de caisse', 'Contrôle Terrain', 
                   'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'
                 ];

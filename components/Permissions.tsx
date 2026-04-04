@@ -40,6 +40,7 @@ const ALL_TABS = [
   'Journal Global',
   'Reçu de caisse',
   'Comptabilité & États',
+  'Balance des comptes',
   'États Réglementaires',
   'Etats des écarts',
   'Écarts de Caisse',
@@ -68,7 +69,7 @@ const Permissions: React.FC = () => {
     } else {
       // Initialize with current hardcoded defaults if none exist
       const defaults: Record<string, string[]> = {
-        'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'],
+        'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'],
         'caissier': ['Membres', 'Analyse', 'Déblocage de crédit', 'Crédit actif', 'Tontine Journalière', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Dépenses administratives', 'Frais & Parts Sociales', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification'],
         'contrôleur': ['Carte Géographique', 'Contrôle Terrain', 'Notification'],
         'auditeur': ['Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification'],

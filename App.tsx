@@ -40,6 +40,7 @@ import StocksLivrets from './components/StocksLivrets';
 import Notifications from './components/Notifications';
 import DuplicateAlert from './components/DuplicateAlert';
 import GuidePratique from './components/GuidePratique';
+import AccountBalance from './components/AccountBalance';
 import MicrofinanceLogin from './components/MicrofinanceLogin';
 import CashGaps from './components/CashGaps';
 import { User, Microfinance } from './types';
@@ -548,6 +549,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Journal Global') {
       return <GlobalJournal />;
+    }
+
+    if (activeSection === 'Balance des comptes') {
+      return <AccountBalance />;
     }
 
     if (activeSection === 'Reçu de caisse') {
