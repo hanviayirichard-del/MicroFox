@@ -181,6 +181,11 @@ const GlobalJournal: React.FC = () => {
           .credit { color: #059669; font-weight: bold; }
           .debit { color: #dc2626; font-weight: bold; }
           .text-right { text-align: center; }
+          .totals-section { margin-top: 30px; border-top: 2px solid #121c32; padding-top: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+          .total-item { display: flex; gap: 20px; font-size: 14px; font-weight: bold; align-items: center; }
+          .total-label { color: #64748b; text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
+          .total-value { min-width: 120px; text-align: right; }
+          .flux-net { font-size: 16px; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 5px; color: #121c32; }
         </style>
       </head>
       <body>
@@ -219,6 +224,22 @@ const GlobalJournal: React.FC = () => {
             `}).join('')}
           </tbody>
         </table>
+
+        <div class="totals-section">
+          <div class="total-item">
+            <span class="total-label">Total Entrées:</span>
+            <span class="total-value credit">${totals.credit.toLocaleString()} F</span>
+          </div>
+          <div class="total-item">
+            <span class="total-label">Total Sorties:</span>
+            <span class="total-value debit">${totals.debit.toLocaleString()} F</span>
+          </div>
+          <div class="total-item flux-net">
+            <span class="total-label">Flux Net:</span>
+            <span class="total-value">${(totals.credit - totals.debit).toLocaleString()} F</span>
+          </div>
+        </div>
+
         ${isForPrint ? `
           <script>
             window.onload = () => {
