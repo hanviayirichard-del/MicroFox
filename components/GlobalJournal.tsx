@@ -119,7 +119,7 @@ const GlobalJournal: React.FC = () => {
               account: 'coffre',
               caisse: isToCaisse ? v.to : (isFromCaisse ? v.from : 'COFFRE'),
               userId: v.userId,
-              cashierName: v.cashierName || 'Système'
+              cashierName: v.cashierName || users.find((u: any) => u.id === v.userId)?.identifiant || 'Système'
             });
           });
         }

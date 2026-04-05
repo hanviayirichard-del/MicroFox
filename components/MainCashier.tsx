@@ -339,7 +339,8 @@ const MainCashier: React.FC = () => {
       theoreticalAmount: theoreticalAmount,
       gap: gap,
       date: new Date().toISOString(),
-      userId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id
+      userId: currentUser.id,
+      cashierName: currentUser.identifiant
     };
     localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...transactions]));
     localStorage.setItem('microfox_pending_sync', 'true');
