@@ -38,10 +38,15 @@ const GlobalJournal: React.FC = () => {
         return acc;
       }, {});
 
+      const agentIds = users.filter((u: any) => u.role === 'agent commercial').map((u: any) => u.id);
+      
       let allTxs: any[] = [];
       allMembers.forEach((member: any) => {
         if (member.history) {
           member.history.forEach((tx: any) => {
+            // Filter out agent operations (they are added via agent payments)
+            if (agentIds.includes(tx.userId)) return;
+
             // Filter by user if caissier
             if (user.role === 'caissier') {
               const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
@@ -107,11 +112,15 @@ const GlobalJournal: React.FC = () => {
 
             const isToCaisse = v.to && v.to.toUpperCase().startsWith('CAISSE');
             const isFromCaisse = v.from && v.from.toUpperCase().startsWith('CAISSE');
+            const isCreditType = v.type === 'Approvisionnement Caisse' || 
+                                v.type === 'Fonds de caisse' || 
+                                v.type === 'Régularisation Écart' ||
+                                v.type.toLowerCase().includes('versement');
 
             allTxs.push({
               id: v.id,
               date: v.date,
-              type: isToCaisse ? 'depot' : (isFromCaisse ? 'retrait' : (v.type.toLowerCase().includes('versement') ? 'depot' : 'retrait')),
+              type: isToCaisse || isCreditType ? 'depot' : 'retrait',
               amount: v.amount,
               description: v.type === 'Fonds de caisse' ? 'Approvisionnement Caisse' : v.type,
               memberName: 'COFFRE/BANQUE',
@@ -297,8 +306,25 @@ const GlobalJournal: React.FC = () => {
   });
 
   const totals = filteredTxs.reduce((acc, tx) => {
-    const isCredit = tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
-    const isDebit = tx.type === 'retrait' || tx.type === 'deblocage'; // Exclude 'transfert' from cash flow
+    const desc = (tx.description || '').toLowerCase();
+    const isCredit = tx.type === 'depot' || 
+                     tx.type === 'cotisation' || 
+                     tx.type === 'remboursement' || 
+                     tx.type === 'adhesion' || 
+                     tx.type === 'part_sociale' || 
+                     tx.type === 'vente_livret' || 
+                     desc.includes('livret') || 
+                     desc.includes('adhésion') || 
+                     desc.includes('part sociale') ||
+                     tx.type === 'Approvisionnement Caisse' ||
+                     tx.type === 'Régularisation Écart' ||
+                     tx.type === 'Fonds de caisse';
+
+    const isDebit = tx.type === 'retrait' || 
+                    tx.type === 'deblocage' || 
+                    tx.type === 'dépense' ||
+                    tx.account === 'dépense';
+
     if (isCredit) acc.credit += tx.amount;
     else if (isDebit) acc.debit += tx.amount;
     return acc;

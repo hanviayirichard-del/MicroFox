@@ -625,8 +625,8 @@ const FinancialReports: React.FC = () => {
     { id: 'tontine_gaps', label: 'Écarts sur retrait tontine' },
   ];
 
-  const totalInflow = totalDepotMemb + totalDepotTontNonAgent + totalVenteLivretTontineNonAgent + totalCreditRemb + totalVersementAgents + totalDepotGarantie + totalVaultInflow + totalPaidGaps;
-  const totalOutflow = totalRetraitMemb + totalRetraitTont + totalCreditAccor + totalAdminExpenses + totalVaultOutflow + totalRetraitGarantie;
+  const totalInflow = displayDepotMemb + displayDepotTont + totalDepotGarantie + totalCreditRemb + totalVersementAgents + totalFraisDossierCredit + totalFraisTenueCompte + totalPartSocialeDepot + totalAdhesion + totalVenteLivretCompte + totalVenteLivretTontineNonAgent + totalPaidGaps + totalVaultInflow;
+  const totalOutflow = displayRetraitMemb + displayRetraitTont + totalRetraitGarantie + totalCreditAccor + totalAdminExpenses + totalPartSocialeRetrait + totalGapTontine + totalVaultOutflow;
   const currentBalance = startingBalance + totalInflow - totalOutflow;
 
   useEffect(() => {
