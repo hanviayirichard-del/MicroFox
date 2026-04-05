@@ -290,7 +290,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                   'Membres',
                   'Analyse',
                   'Crédit actif',
-                  'Tontine Journalière',
                   'Vente Livrets',
                   'Gestion Caisse',
                   'Dépenses administratives',

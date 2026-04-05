@@ -48,10 +48,12 @@ const mergeObjects = (obj1: any, obj2: any): any => {
   }
 
   // If obj1 is a status that is "more final" than obj2, prefer obj1
-  const finalStatuses = ['Validé', 'Annulé', 'Payé', 'Terminé', 'Approuvé', 'Rejeté'];
+  const finalStatuses = ['En attente', 'Validé', 'Approuvé', 'Débloqué', 'Régularisé', 'Litige', 'Payé', 'Terminé', 'Annulé', 'Rejeté'];
   if (typeof obj1 === 'string' && typeof obj2 === 'string') {
-    if (finalStatuses.includes(obj1) && !finalStatuses.includes(obj2)) {
-      return obj1;
+    const idx1 = finalStatuses.indexOf(obj1);
+    const idx2 = finalStatuses.indexOf(obj2);
+    if (idx1 !== -1 || idx2 !== -1) {
+      return idx1 >= idx2 ? obj1 : obj2;
     }
   }
 
