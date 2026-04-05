@@ -110,7 +110,11 @@ const Analyse: React.FC = () => {
         if (tx.type === 'deblocage') result.creditDeblocages += amount;
         if (tx.type === 'remboursement') result.creditRemboursements += amount;
       } else if (tx.account === 'frais') {
-        result.creditFrais += amount;
+        if (desc.includes('part sociale')) {
+          result.partsSociales += amount;
+        } else {
+          result.creditFrais += amount;
+        }
       } else if (tx.account === 'partSociale') {
         if (tx.type === 'depot') result.partsSociales += amount;
         if (tx.type === 'retrait') result.partsSociales -= amount;
@@ -217,6 +221,7 @@ const Analyse: React.FC = () => {
       }
 
       const amount = Number(tx.amount) || 0;
+      const desc = (tx.description || '').toLowerCase();
       if (tx.account === 'tontine') {
         if (tx.type === 'depot' || tx.type === 'cotisation') groups[key].tontineDepots += amount;
         if (tx.type === 'retrait') groups[key].tontineRetraits += amount;
@@ -227,7 +232,11 @@ const Analyse: React.FC = () => {
         if (tx.type === 'deblocage') groups[key].creditDeblocages += amount;
         if (tx.type === 'remboursement') groups[key].creditRemboursements += amount;
       } else if (tx.account === 'frais') {
-        groups[key].creditFrais += amount;
+        if (desc.includes('part sociale')) {
+          groups[key].partsSociales += amount;
+        } else {
+          groups[key].creditFrais += amount;
+        }
       } else if (tx.account === 'partSociale') {
         if (tx.type === 'depot') groups[key].partsSociales += amount;
         if (tx.type === 'retrait') groups[key].partsSociales -= amount;
