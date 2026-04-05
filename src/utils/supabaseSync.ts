@@ -112,7 +112,8 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
 export const pullFromSupabase = async (
   prefix: string, 
   originalSetItem: (key: string, value: string) => void,
-  originalGetItem: (key: string) => string | null
+  originalGetItem: (key: string) => string | null,
+  isDirty?: (key: string) => boolean
 ) => {
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return;
@@ -132,6 +133,11 @@ export const pullFromSupabase = async (
       data.forEach(item => {
         const localValue = originalGetItem(item.key);
         if (localValue !== item.value) {
+          // If the key is dirty locally, we skip pulling it to avoid overwriting unpushed changes
+          if (isDirty && isDirty(item.key)) {
+            return;
+          }
+
           const finalValue = localValue ? mergeJSON(localValue, item.value) : item.value;
           if (finalValue !== localValue) {
             originalSetItem(item.key, finalValue);

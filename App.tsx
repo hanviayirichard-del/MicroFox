@@ -71,6 +71,15 @@ const App: React.FC = () => {
     setIsSyncing(true);
     setIsBackgroundSyncing(false);
     
+    const isDirty = (key: string) => {
+      try {
+        const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+        return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
+      } catch (e) {
+        return false;
+      }
+    };
+
     const syncPromise = (async () => {
       try {
         const { pullFromSupabase, syncToSupabase } = await import('./src/utils/supabaseSync');
@@ -108,14 +117,15 @@ const App: React.FC = () => {
           if (pushSuccess || !import.meta.env.VITE_SUPABASE_URL) {
             // Clear pending sync flag only if all pushed successfully or no sync configured
             nativeRemoveItem('microfox_pending_sync');
+            nativeRemoveItem('microfox_dirty_keys');
           }
         }
 
         // Pull global and tenant data in parallel
         const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
         const [globalChanged, tenantChanged] = await Promise.all([
-          pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem),
-          pullFromSupabase(prefix, nativeSetItem, nativeGetItem)
+          pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty),
+          pullFromSupabase(prefix, nativeSetItem, nativeGetItem, isDirty)
         ]);
         
         if (globalChanged || tenantChanged) {
@@ -273,9 +283,19 @@ const App: React.FC = () => {
       if (currentMfCode) {
         const currentPrefix = `mf_${currentMfCode.toLowerCase().replace(/\s+/g, '_')}_`;
         setIsBackgroundSyncing(true);
+        
+        const isDirty = (key: string) => {
+          try {
+            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+            return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
+          } catch (e) {
+            return false;
+          }
+        };
+
         import('./src/utils/supabaseSync').then(async (m) => {
-          const globalChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
-          const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem);
+          const globalChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty);
+          const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem, isDirty);
           if (globalChanged || tenantChanged) {
             setSyncVersion(v => v + 1);
           }
@@ -310,9 +330,39 @@ const App: React.FC = () => {
         const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
         const fullKey = isGlobal ? key : prefix + key;
         nativeSetItem(fullKey, value);
+
+        // Mark as dirty locally to avoid being overwritten by a pull before this change is pushed
+        if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+          try {
+            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+            if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+              dirtyKeys.push(fullKey);
+              nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+            }
+          } catch (e) {
+            nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
+          }
+        }
+
         // Sync to Supabase in background if not in offline mode
         if (nativeGetItem('microfox_offline_mode') !== 'true') {
-          import('./src/utils/supabaseSync').then(m => m.syncToSupabase(fullKey, value));
+          import('./src/utils/supabaseSync').then(async m => {
+            const success = await m.syncToSupabase(fullKey, value);
+            if (success) {
+              try {
+                const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+                if (Array.isArray(dirtyKeys)) {
+                  const updated = dirtyKeys.filter(k => k !== fullKey);
+                  if (updated.length === 0) {
+                    nativeRemoveItem('microfox_dirty_keys');
+                    nativeRemoveItem('microfox_pending_sync');
+                  } else {
+                    nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                  }
+                }
+              } catch (e) {}
+            }
+          });
         }
         // Mark as pending sync for UI feedback
         if (key !== 'microfox_pending_sync') {
@@ -331,13 +381,41 @@ const App: React.FC = () => {
         const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
         const fullKey = isGlobal ? key : prefix + key;
         nativeRemoveItem(fullKey);
+
+        // Mark as dirty locally
+        if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+          try {
+            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+            if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+              dirtyKeys.push(fullKey);
+              nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+            }
+          } catch (e) {
+            nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
+          }
+        }
+
         // Remove from Supabase in background if not in offline mode
         if (nativeGetItem('microfox_offline_mode') !== 'true') {
-          import('./src/supabase').then(m => {
+          import('./src/supabase').then(async m => {
             if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-              m.supabase.from('storage').delete().eq('key', fullKey).then(({ error }: { error: any }) => {
-                if (error) console.error('Error removing from Supabase:', error);
-              });
+              const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
+              if (!error) {
+                try {
+                  const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+                  if (Array.isArray(dirtyKeys)) {
+                    const updated = dirtyKeys.filter(k => k !== fullKey);
+                    if (updated.length === 0) {
+                      nativeRemoveItem('microfox_dirty_keys');
+                      nativeRemoveItem('microfox_pending_sync');
+                    } else {
+                      nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                    }
+                  }
+                } catch (e) {}
+              } else {
+                console.error('Error removing from Supabase:', error);
+              }
             }
           });
         }

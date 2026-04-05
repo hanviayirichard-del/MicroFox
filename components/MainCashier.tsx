@@ -9,7 +9,7 @@ const MainCashier: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Tous');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [transferAmount, setTransferAmount] = useState('');
+  const [transferType, setTransferType] = useState<'total' | 'partial'>('total');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -234,7 +234,7 @@ const MainCashier: React.FC = () => {
 
   const handleTransferToVault = () => {
     const physicalAmount = calculateTotalBilletage();
-    const theoreticalAmount = Number(transferAmount) || 0;
+    const theoreticalAmount = transferType === 'total' ? cashBalance : physicalAmount;
     const gap = physicalAmount - theoreticalAmount;
 
     if (cashBalance === 0) {
@@ -410,7 +410,7 @@ const MainCashier: React.FC = () => {
           {(selectedCaisse !== 'CAISSE PRINCIPALE' || isAdminOrDirector) && (
             <button 
               onClick={() => {
-                setTransferAmount(cashBalance.toString());
+                setTransferType('total');
                 setIsTransferModalOpen(true);
               }}
               className="flex items-center gap-2 px-6 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-tight shadow-lg hover:bg-amber-700 transition-all active:scale-95"
@@ -456,19 +456,49 @@ const MainCashier: React.FC = () => {
                     <p className="text-xl font-black text-[#121c32]">{cashBalance.toLocaleString()} F</p>
                   </div>
                 </div>
+
+                <div className="flex gap-2 p-1 bg-gray-200/50 rounded-xl">
+                  <button 
+                    onClick={() => {
+                      setTransferType('total');
+                    }}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${transferType === 'total' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-400'}`}
+                  >
+                    Total
+                  </button>
+                  <button 
+                    onClick={() => setTransferType('partial')}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${transferType === 'partial' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-400'}`}
+                  >
+                    Partiel
+                  </button>
+                </div>
+
                 <div className="pt-4 border-t border-gray-200">
                   <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Montant à verser</label>
                   <div className="relative mt-1">
                     <input 
                       type="number" 
-                      value={transferAmount}
-                      onChange={(e) => setTransferAmount(e.target.value)}
-                      className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-xl font-black text-[#121c32] outline-none focus:border-amber-500 transition-all"
+                      value={calculateTotalBilletage()}
+                      readOnly
+                      className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-xl font-black text-[#121c32] outline-none transition-all opacity-70 cursor-not-allowed"
                       placeholder="0"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-gray-400">F</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 font-bold mt-2 italic">* Par défaut : solde total pour clôture</p>
+                  <div className="flex justify-between items-center mt-2 px-1">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                      {transferType === 'total' ? 'Écart de clôture' : 'Reste en caisse'}
+                    </p>
+                    <p className={`text-xs font-black ${transferType === 'total' && calculateTotalBilletage() - cashBalance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                      {transferType === 'total' 
+                        ? (calculateTotalBilletage() - cashBalance).toLocaleString() + ' F'
+                        : (cashBalance - calculateTotalBilletage()).toLocaleString() + ' F'}
+                    </p>
+                  </div>
+                  {transferType === 'total' && (
+                    <p className="text-[10px] text-gray-400 font-bold mt-1 italic">* Versement de la totalité du solde pour clôture</p>
+                  )}
                 </div>
               </div>
 
