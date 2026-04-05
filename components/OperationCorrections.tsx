@@ -26,7 +26,11 @@ interface OperationWithMember extends Transaction {
 const OperationCorrections: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterUser, setFilterUser] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [members, setMembers] = useState<ClientAccount[]>([]);
+  const [users, setUsers] = useState<{id: string, identifiant: string}[]>([]);
   const [allOperations, setAllOperations] = useState<OperationWithMember[]>([]);
   const [editingOp, setEditingOp] = useState<OperationWithMember | null>(null);
   const [editAmount, setEditAmount] = useState<string>('');
@@ -36,6 +40,12 @@ const OperationCorrections: React.FC = () => {
 
   const loadData = () => {
     const savedMembers = localStorage.getItem('microfox_members_data');
+    const savedUsers = localStorage.getItem('microfox_users');
+    
+    if (savedUsers) {
+      setUsers(JSON.parse(savedUsers));
+    }
+
     if (savedMembers) {
       const parsedMembers: ClientAccount[] = JSON.parse(savedMembers);
       
@@ -235,7 +245,13 @@ const OperationCorrections: React.FC = () => {
                          op.memberCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          op.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || op.type === filterType || op.account === filterType;
-    return matchesSearch && matchesType;
+    const matchesUser = filterUser === 'all' || op.userId === filterUser || op.cashierName === filterUser;
+    
+    const opDate = new Date(op.date).toISOString().split('T')[0];
+    const matchesStartDate = !startDate || opDate >= startDate;
+    const matchesEndDate = !endDate || opDate <= endDate;
+
+    return matchesSearch && matchesType && matchesUser && matchesStartDate && matchesEndDate;
   });
 
   return (
@@ -294,6 +310,41 @@ const OperationCorrections: React.FC = () => {
             <option value="epargne">Compte Épargne</option>
             <option value="tontine">Compte Tontine</option>
           </select>
+        </div>
+        <div className="relative">
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <select 
+            value={filterUser}
+            onChange={(e) => setFilterUser(e.target.value)}
+            className="w-full pl-12 pr-4 py-4 bg-white border-2 border-gray-100 rounded-2xl font-bold text-[#121c32] outline-none appearance-none focus:border-[#121c32] transition-all"
+          >
+            <option value="all">Tous les utilisateurs</option>
+            {users.map(u => (
+              <option key={u.id} value={u.identifiant}>{u.identifiant}</option>
+            ))}
+          </select>
+        </div>
+        <div className="md:col-span-2 flex items-center gap-2 bg-white border-2 border-gray-100 rounded-2xl px-4 py-2">
+          <Calendar className="text-gray-400 shrink-0" size={20} />
+          <div className="flex flex-col w-full">
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Du</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-[#121c32] outline-none"
+            />
+          </div>
+          <div className="w-px h-8 bg-gray-100 mx-1" />
+          <div className="flex flex-col w-full">
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Au</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-[#121c32] outline-none"
+            />
+          </div>
         </div>
       </div>
 

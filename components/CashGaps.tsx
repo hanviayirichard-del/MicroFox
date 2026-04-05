@@ -551,10 +551,10 @@ const CashGaps: React.FC = () => {
                             className="p-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-black uppercase outline-none focus:border-[#121c32] text-[#121c32] disabled:opacity-50"
                           >
                              <option value="En attente">En attente</option>
-                             <option value="Régularisé">Régularisé</option>
+                             {currentUser?.role !== 'caissier' && <option value="Régularisé">Régularisé</option>}
                              <option value="Payé" disabled={item.gapAmount >= 0}>Payé</option>
-                             <option value="Litige">Litige</option>
-                             <option value="Annulé">Annulé</option>
+                             {currentUser?.role !== 'caissier' && <option value="Litige">Litige</option>}
+                             {currentUser?.role !== 'caissier' && <option value="Annulé">Annulé</option>}
                           </select>
                        </div>
                     </td>

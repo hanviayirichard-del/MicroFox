@@ -926,7 +926,8 @@ const RegistrationForm: React.FC<{
           date: new Date().toISOString(),
           description: 'Paiement part sociale à l\'adhésion',
           userId: currentUser?.id,
-          cashierName: currentUser?.identifiant
+          cashierName: currentUser?.identifiant,
+          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
         });
       }
       if (fraisAdhesion > 0) {
@@ -938,7 +939,8 @@ const RegistrationForm: React.FC<{
           date: new Date().toISOString(),
           description: 'Frais d\'adhésion',
           userId: currentUser?.id,
-          cashierName: currentUser?.identifiant
+          cashierName: currentUser?.identifiant,
+          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
         });
       }
       if (fraisLivret > 0) {
@@ -950,7 +952,8 @@ const RegistrationForm: React.FC<{
           date: new Date().toISOString(),
           description: `Vente de Livret Épargne - Agent ${currentUser?.identifiant || 'Système'}`,
           userId: currentUser?.id,
-          cashierName: currentUser?.identifiant
+          cashierName: currentUser?.identifiant,
+          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
         });
       }
       if (depotInitialEpargne > 0) {
@@ -962,7 +965,8 @@ const RegistrationForm: React.FC<{
           date: new Date().toISOString(),
           description: 'Dépôt initial épargne',
           userId: currentUser?.id,
-          cashierName: currentUser?.identifiant
+          cashierName: currentUser?.identifiant,
+          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
         });
       }
     }
@@ -2763,7 +2767,8 @@ const Members: React.FC = () => {
             date: now,
             description: 'Ouverture compte: Part sociale',
             userId: currentUser?.id,
-            cashierName: currentUser?.identifiant
+            cashierName: currentUser?.identifiant,
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
           });
         }
         if (info.adhesion > 0) {
@@ -2775,7 +2780,8 @@ const Members: React.FC = () => {
             date: now,
             description: 'Ouverture compte: Frais d\'adhésion',
             userId: currentUser?.id,
-            cashierName: currentUser?.identifiant
+            cashierName: currentUser?.identifiant,
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
           });
         }
         if (info.livret > 0) {
@@ -2787,7 +2793,8 @@ const Members: React.FC = () => {
             date: now,
             description: `Vente de Livret Épargne - Agent ${currentUser?.identifiant || 'Système'}`,
             userId: currentUser?.id,
-            cashierName: currentUser?.identifiant
+            cashierName: currentUser?.identifiant,
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
           });
         }
         if (info.depot > 0) {
@@ -2799,7 +2806,8 @@ const Members: React.FC = () => {
             date: now,
             description: 'Ouverture compte: Dépôt initial',
             userId: currentUser?.id,
-            cashierName: currentUser?.identifiant
+            cashierName: currentUser?.identifiant,
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
           });
         }
 
@@ -3109,6 +3117,29 @@ const Members: React.FC = () => {
             const agentBalanceKey = `microfox_agent_balance_${responsibleAgentId}`;
             const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
             localStorage.setItem(agentBalanceKey, (currentAgentBalance - totalGap).toString());
+
+            // Enregistrer l'écart dans microfox_all_gaps pour l'historique et les rapports
+            const savedGaps = localStorage.getItem('microfox_all_gaps');
+            const allGaps = savedGaps ? JSON.parse(savedGaps) : [];
+            const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+            const agentForGap = savedUsers.find((u: any) => u.id === responsibleAgentId);
+            
+            const newGapEntry = {
+              id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+              date: new Date().toISOString(),
+              type: 'TONTINE',
+              sourceId: responsibleAgentId,
+              sourceName: agentForGap ? agentForGap.identifiant : 'Agent Inconnu',
+              sourceCode: agentForGap ? agentForGap.id : '',
+              gapAmount: totalGap,
+              status: 'En attente',
+              zone: selectedClient?.zone || 'N/A',
+              userId: currentUser?.id,
+              caisse: targetCaisse,
+              observation: `Écart sur retrait tontine - Membre: ${selectedClient?.name} (${selectedClient?.code})`
+            };
+            
+            localStorage.setItem('microfox_all_gaps', JSON.stringify([newGapEntry, ...allGaps]));
           }
         } else if (currentUser?.role === 'agent commercial') {
           const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;

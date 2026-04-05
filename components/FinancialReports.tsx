@@ -31,6 +31,7 @@ const FinancialReports: React.FC = () => {
   const [data, setData] = useState<{
     epargneDepots: any[];
     epargneRetraits: any[];
+    cashGaps: any[];
     tontineDepotsByZone: Record<string, any[]>;
     tontineRetraitsByZone: Record<string, any[]>;
     creditsAccordes: any[];
@@ -47,6 +48,7 @@ const FinancialReports: React.FC = () => {
   }>({
     epargneDepots: [],
     epargneRetraits: [],
+    cashGaps: [],
     tontineDepotsByZone: {},
     tontineRetraitsByZone: {},
     creditsAccordes: [],
@@ -82,6 +84,7 @@ const FinancialReports: React.FC = () => {
     const newData: any = {
       epargneDepots: [],
       epargneRetraits: [],
+      cashGaps: [],
       tontineDepotsByZone: {},
       tontineRetraitsByZone: {},
       creditsAccordes: [],
@@ -121,13 +124,13 @@ const FinancialReports: React.FC = () => {
 
         history.forEach((tx: any) => {
           const txUser = allUsers.find((u: any) => u.id === tx.userId);
-          const txCaisse = txUser?.caisse || 'N/A';
+          const txCaisse = tx.caisse || txUser?.caisse || 'N/A';
           
           if (isCaissier) {
             const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
             if (!isMyOp) return;
           }
-          if (!selectedCaisse.includes('all') && !selectedCaisse.includes(txCaisse)) return;
+          if (!selectedCaisse.includes('all') && !selectedCaisse.some(c => c.toUpperCase() === txCaisse.toUpperCase())) return;
           
           const txDate = tx.date.split('T')[0];
           
@@ -232,7 +235,7 @@ const FinancialReports: React.FC = () => {
 
         if (p.status !== 'Validé') return;
         if (isCaissier && p.validatorId !== user.id) return;
-        if (!selectedCaisse.includes('all') && !selectedCaisse.includes(p.caisse)) return;
+        if (!selectedCaisse.includes('all') && !selectedCaisse.some(c => c.toUpperCase() === (p.caisse || 'N/A').toUpperCase())) return;
 
         if (pDate < startDate) {
           newData.openingBalance += amount;
@@ -256,30 +259,30 @@ const FinancialReports: React.FC = () => {
           if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && v.to?.toUpperCase() === user.caisse?.toUpperCase()) {
             isRelevant = true;
             delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') && v.from === user.caisse) {
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Régularisation Écart') && v.from === user.caisse) {
             isRelevant = true;
             delta = -v.amount;
           } else if (v.userId === user.id) {
             isRelevant = true;
-            delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement')) ? v.amount : -v.amount;
+            delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
           }
         } else if (!selectedCaisse.includes('all')) {
           if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && selectedCaisse.some(c => c.toUpperCase() === v.to?.toUpperCase())) {
             isRelevant = true;
             delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') && selectedCaisse.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Régularisation Écart') && selectedCaisse.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
             isRelevant = true;
             delta = -v.amount;
           } else {
             const vUser = allUsers.find((u: any) => u.id === v.userId);
             if (vUser?.caisse && selectedCaisse.some(c => c.toUpperCase() === vUser.caisse.toUpperCase())) {
               isRelevant = true;
-              delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement')) ? v.amount : -v.amount;
+              delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
             }
           }
         } else {
           // All caisses
-          if (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') {
+          if (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Régularisation Écart') {
             isRelevant = true;
             delta = v.amount;
           } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') {
@@ -312,12 +315,32 @@ const FinancialReports: React.FC = () => {
         const gap = v.gap || 0;
 
         if (isCaissier && v.userId !== user.id) return;
-        if (selectedCaisse !== 'all' && vCaisse !== selectedCaisse) return;
+        if (!selectedCaisse.includes('all') && !selectedCaisse.some(c => c.toUpperCase() === (vCaisse || 'N/A').toUpperCase())) return;
 
         if (vDate < startDate) {
           newData.openingBalance -= gap;
         } else if (vDate <= endDate) {
           newData.validatedWithdrawals.push(v);
+        }
+      });
+    }
+
+    // Load Cash Gaps
+    const savedGaps = localStorage.getItem('microfox_all_gaps');
+    if (savedGaps) {
+      const allGaps = JSON.parse(savedGaps);
+      allGaps.forEach((g: any) => {
+        const gDate = g.date.split('T')[0];
+        const gUser = allUsers.find((u: any) => u.id === g.userId);
+        const gCaisse = g.caisse || gUser?.caisse || 'N/A';
+
+        if (isCaissier && g.userId !== user.id) return;
+        if (!selectedCaisse.includes('all') && !selectedCaisse.some(c => c.toUpperCase() === (gCaisse || 'N/A').toUpperCase())) return;
+
+        if (gDate < startDate) {
+          // Removed redundant opening balance adjustment as it's handled by vault transactions
+        } else if (gDate <= endDate) {
+          newData.cashGaps.push(g);
         }
       });
     }
@@ -361,7 +384,12 @@ const FinancialReports: React.FC = () => {
   const totalDepotMemb = calculateTotal(data.epargneDepots);
   const totalRetraitMemb = calculateTotal(data.epargneRetraits);
   const totalDepotTont = Object.values(data.tontineDepotsByZone).reduce((acc: number, list) => acc + calculateTotal(list as any[]), 0) as number;
+  const totalGapTontine = data.cashGaps
+    .filter(g => g.type === 'TONTINE')
+    .reduce((acc, g) => acc + (g.gapAmount || 0), 0);
+
   const totalRetraitTont = Object.values(data.tontineRetraitsByZone).reduce((acc: number, list) => acc + calculateTotal(list as any[]), 0) as number;
+  const displayRetraitTont = totalRetraitTont - totalGapTontine;
   const totalCreditAccor = calculateTotal(data.creditsAccordes);
   
   const totalCapitalRemb = data.remboursements.reduce((acc, tx) => {
@@ -437,7 +465,9 @@ const FinancialReports: React.FC = () => {
     .filter(v => v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée')
     .reduce((acc, v) => acc + v.amount, 0);
 
-  const totalGapTontine = data.validatedWithdrawals.reduce((acc, v) => acc + (v.gap || 0), 0);
+  const totalPaidGaps = data.vaultTransactions
+    .filter(v => v.type === 'Régularisation Écart')
+    .reduce((acc, v) => acc + v.amount, 0);
 
   const pureDepotEpargne = data.epargneDepots.filter(tx => 
     tx.account !== 'partSociale' &&
@@ -476,7 +506,7 @@ const FinancialReports: React.FC = () => {
 
   const displayDepotMemb = totalDepotMemb - (totalPartSocialeDepot + totalAdhesion + totalVenteLivretCompte + totalFraisDossierCredit + totalFraisTenueCompte);
   const displayRetraitMemb = totalRetraitMemb - totalPartSocialeRetrait;
-  const displayDepotTont = totalDepotTontNonAgent;
+  const displayDepotTont = totalDepotTontNonAgent - totalVenteLivretTontineNonAgent;
 
   const [physicalBalance, setPhysicalBalance] = useState(0);
   const [isPhysicalBalanceValidated, setIsPhysicalBalanceValidated] = useState(false);
@@ -595,8 +625,8 @@ const FinancialReports: React.FC = () => {
     { id: 'tontine_gaps', label: 'Écarts sur retrait tontine' },
   ];
 
-  const totalInflow = totalDepotMemb + totalDepotTontNonAgent + totalVenteLivretTontineNonAgent + totalCreditRemb + totalVersementAgents + totalDepotGarantie + totalVaultInflow;
-  const totalOutflow = totalRetraitMemb + totalRetraitTont + totalCreditAccor + totalAdminExpenses + totalVaultOutflow + totalRetraitGarantie + totalGapTontine;
+  const totalInflow = totalDepotMemb + totalDepotTontNonAgent + totalVenteLivretTontineNonAgent + totalCreditRemb + totalVersementAgents + totalDepotGarantie + totalVaultInflow + totalPaidGaps;
+  const totalOutflow = totalRetraitMemb + totalRetraitTont + totalCreditAccor + totalAdminExpenses + totalVaultOutflow + totalRetraitGarantie;
   const currentBalance = startingBalance + totalInflow - totalOutflow;
 
   useEffect(() => {
@@ -624,33 +654,42 @@ const FinancialReports: React.FC = () => {
 
       if (id === 'all' || id === 'recapitulatif') {
         const rows = [
+          ['SOLDE INITIAL', startingBalance],
+          ['', ''],
+          ['ENTRÉES', ''],
           ['DEPOT SUR COMPTE ÉPARGNE', displayDepotMemb],
-          ['RETRAIT SUR COMPTE ÉPARGNE', displayRetraitMemb],
           ['DEPOT TONTINE', displayDepotTont],
-          ['RETRAIT TONTINE', totalRetraitTont],
           ['DÉPÔT GARANTIE', totalDepotGarantie],
-          ['RETRAIT GARANTIE', totalRetraitGarantie],
-          ['CRÉDIT ACCORDÉ', totalCreditAccor],
           ['CAPITAL REMBOURSÉ', totalCapitalRemb],
           ['INTERET REMBOURSÉ', totalInteretRemb],
           ['PÉNALITÉ REMBOURSÉ', totalPenaliteRemb],
-          ['ÉCARTS SUR RETRAIT TONTINE PAYÉ', totalGapTontine],
-          ['DÉPENSES ADMINISTRATIVES', totalAdminExpenses],
           ['VERSEMENT DES AGENTS COMMERCIAUX', totalVersementAgents],
           ['FRAIS DE DOSSIER DE CRÉDIT', totalFraisDossierCredit],
           ['FRAIS DE TENUE DE COMPTE', totalFraisTenueCompte],
           ['DEPOT PART SOCIALE', totalPartSocialeDepot],
-          ['RETRAIT PART SOCIALE', totalPartSocialeRetrait],
           ['ADHÉSION', totalAdhesion],
           ['VENTE LIVRET DE COMPTE', totalVenteLivretCompte],
           ['VENTE LIVRET TONTINE', totalVenteLivretTontineNonAgent],
+          ['ÉCARTS PAYÉS', totalPaidGaps],
           ['APPROVISIONNEMENT CAISSE', totalVaultInflow],
-          ['VERSEMENT AU COFFRE', totalVaultOutflow],
+          ['TOTAL ENTRÉES', totalInflow],
           ['', ''],
-          ['Solde Initial', startingBalance],
-          ['Solde Actuel (Théorique)', currentBalance],
-          ['Solde Physique (Réel)', physicalBalance],
-          ['Écart de Caisse', physicalBalance - currentBalance]
+          ['SORTIES', ''],
+          ['RETRAIT SUR COMPTE ÉPARGNE', displayRetraitMemb],
+          ['RETRAIT TONTINE', displayRetraitTont],
+          ['RETRAIT GARANTIE', totalRetraitGarantie],
+          ['CRÉDIT ACCORDÉ', totalCreditAccor],
+          ['DÉPENSES ADMINISTRATIVES', totalAdminExpenses],
+          ['RETRAIT PART SOCIALE', totalPartSocialeRetrait],
+          ['ÉCARTS SUR RETRAIT TONTINE', totalGapTontine],
+          ['VERSEMENT AU COFFRE', totalVaultOutflow],
+          ['TOTAL SORTIES', totalOutflow],
+          ['', ''],
+          ['FLUX NET', totalInflow - totalOutflow],
+          ['', ''],
+          ['SOLDE THÉORIQUE', currentBalance],
+          ['SOLDE PHYSIQUE (RÉEL)', physicalBalance],
+          ['ÉCART DE CAISSE', physicalBalance - currentBalance]
         ];
 
         bodyContent += `
@@ -1061,26 +1100,19 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-gray-50 p-4 text-[11px] font-black text-gray-600 uppercase tracking-widest">Libellé</div>
                 <div className="bg-gray-50 p-4 text-[11px] font-black text-gray-600 uppercase tracking-widest text-right">Montant (F)</div>
                 
+                <div className="bg-amber-50 p-4 text-xs font-black text-amber-900 uppercase">Solde Initial</div>
+                <div className="bg-amber-50 p-4 text-sm font-black text-amber-900 text-right">{startingBalance.toLocaleString()}</div>
+
+                <div className="col-span-2 bg-gray-100 p-2 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Entrées</div>
+
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">DEPOT SUR COMPTE ÉPARGNE</div>
                 <div className="bg-white p-4 text-sm font-black text-[#121c32] text-right">{displayDepotMemb.toLocaleString()}</div>
-                
-                <div className="bg-white p-4 text-xs font-bold text-gray-700">RETRAIT SUR COMPTE ÉPARGNE</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{displayRetraitMemb.toLocaleString()}</div>
                 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">DEPOT TONTINE</div>
                 <div className="bg-white p-4 text-sm font-black text-[#121c32] text-right">{displayDepotTont.toLocaleString()}</div>
                 
-                <div className="bg-white p-4 text-xs font-bold text-gray-700">RETRAIT TONTINE</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalRetraitTont.toLocaleString()}</div>
-                
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Dépôt Garantie</div>
                 <div className="bg-white p-4 text-sm font-black text-[#121c32] text-right">{totalDepotGarantie.toLocaleString()}</div>
-                
-                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Retrait Garantie</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalRetraitGarantie.toLocaleString()}</div>
-                
-                <div className="bg-white p-4 text-xs font-bold text-gray-700">CRÉDIT ACCORDÉ</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalCreditAccor.toLocaleString()}</div>
                 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">CAPITAL REMBOURSÉ</div>
                 <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalCapitalRemb.toLocaleString()}</div>
@@ -1091,12 +1123,6 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">PÉNALITÉ REMBOURSÉ</div>
                 <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalPenaliteRemb.toLocaleString()}</div>
 
-                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Écarts sur retrait tontine payé</div>
-                <div className="bg-white p-4 text-sm font-black text-amber-600 text-right">{totalGapTontine.toLocaleString()}</div>
-                
-                <div className="bg-white p-4 text-xs font-bold text-gray-700">DÉPENSES ADMINISTRATIVES</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalAdminExpenses.toLocaleString()}</div>
-                
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Versement des Agents Commerciaux</div>
                 <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalVersementAgents.toLocaleString()}</div>
 
@@ -1109,9 +1135,6 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">DEPOT PART SOCIALE</div>
                 <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalPartSocialeDepot.toLocaleString()}</div>
 
-                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">RETRAIT PART SOCIALE</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalPartSocialeRetrait.toLocaleString()}</div>
-
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">ADHÉSION</div>
                 <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalAdhesion.toLocaleString()}</div>
 
@@ -1121,11 +1144,50 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">VENTE LIVRET TONTINE</div>
                 <div className="bg-white p-4 text-sm font-black text-indigo-600 text-right">{totalVenteLivretTontineNonAgent.toLocaleString()}</div>
 
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Écarts Payés</div>
+                <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalPaidGaps.toLocaleString()}</div>
+
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Approvisionnement Caisse</div>
                 <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalVaultInflow.toLocaleString()}</div>
 
+                <div className="bg-emerald-50 p-4 text-xs font-black text-emerald-900 uppercase">Total Entrées</div>
+                <div className="bg-emerald-50 p-4 text-sm font-black text-emerald-900 text-right">{totalInflow.toLocaleString()}</div>
+
+                <div className="col-span-2 bg-gray-100 p-2 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Sorties</div>
+
+                <div className="bg-white p-4 text-xs font-bold text-gray-700">RETRAIT SUR COMPTE ÉPARGNE</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{displayRetraitMemb.toLocaleString()}</div>
+
+                <div className="bg-white p-4 text-xs font-bold text-gray-700">RETRAIT TONTINE</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{displayRetraitTont.toLocaleString()}</div>
+                
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Retrait Garantie</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalRetraitGarantie.toLocaleString()}</div>
+                
+                <div className="bg-white p-4 text-xs font-bold text-gray-700">CRÉDIT ACCORDÉ</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalCreditAccor.toLocaleString()}</div>
+                
+                <div className="bg-white p-4 text-xs font-bold text-gray-700">DÉPENSES ADMINISTRATIVES</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalAdminExpenses.toLocaleString()}</div>
+                
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">RETRAIT PART SOCIALE</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalPartSocialeRetrait.toLocaleString()}</div>
+
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Écarts sur retrait tontine</div>
+                <div className="bg-white p-4 text-sm font-black text-amber-600 text-right">{totalGapTontine.toLocaleString()}</div>
+                
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Versement au Coffre</div>
                 <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalVaultOutflow.toLocaleString()}</div>
+
+                <div className="bg-red-50 p-4 text-xs font-black text-red-900 uppercase">Total Sorties</div>
+                <div className="bg-red-50 p-4 text-sm font-black text-red-900 text-right">{totalOutflow.toLocaleString()}</div>
+
+                <div className="col-span-2 bg-blue-50 p-4 flex justify-between items-center">
+                  <span className="text-xs font-black text-blue-900 uppercase">Flux Net de la Période</span>
+                  <span className={`text-lg font-black ${(totalInflow - totalOutflow) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {(totalInflow - totalOutflow).toLocaleString()} F
+                  </span>
+                </div>
               </div>
             </div>
 
