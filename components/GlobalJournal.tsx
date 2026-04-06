@@ -104,32 +104,42 @@ const GlobalJournal: React.FC = () => {
         if (savedVault) {
           const vaultTxs = JSON.parse(savedVault);
           vaultTxs.forEach((v: any) => {
+            const addVaultEntry = (type: 'depot' | 'retrait', caisseName: string, side: string) => {
+              allTxs.push({
+                id: `${v.id}_${side}`,
+                date: v.date,
+                type: type,
+                amount: v.amount,
+                description: v.type === 'Fonds de caisse' ? 'Approvisionnement Caisse' : v.type,
+                memberName: 'COFFRE/BANQUE',
+                memberCode: caisseName,
+                account: 'coffre',
+                caisse: caisseName,
+                userId: v.userId,
+                cashierName: v.cashierName || users.find((u: any) => u.id === v.userId)?.identifiant || 'Système'
+              });
+            };
+
             if (user.role === 'caissier') {
               const isToMyCaisse = v.to && user.caisse && v.to.toUpperCase() === user.caisse.toUpperCase();
               const isFromMyCaisse = v.from && user.caisse && v.from.toUpperCase() === user.caisse.toUpperCase();
-              if (v.userId !== user.id && !isToMyCaisse && !isFromMyCaisse) return;
+              
+              if (isToMyCaisse) {
+                addVaultEntry('depot', v.to, 'to');
+              } 
+              if (isFromMyCaisse) {
+                addVaultEntry('retrait', v.from, 'from');
+              }
+              return;
             }
 
-            const isToCaisse = v.to && v.to.toUpperCase().startsWith('CAISSE');
-            const isFromCaisse = v.from && v.from.toUpperCase().startsWith('CAISSE');
-            const isCreditType = v.type === 'Approvisionnement Caisse' || 
-                                v.type === 'Fonds de caisse' || 
-                                v.type === 'Régularisation Écart' ||
-                                v.type.toLowerCase().includes('versement');
-
-            allTxs.push({
-              id: v.id,
-              date: v.date,
-              type: isToCaisse || isCreditType ? 'depot' : 'retrait',
-              amount: v.amount,
-              description: v.type === 'Fonds de caisse' ? 'Approvisionnement Caisse' : v.type,
-              memberName: 'COFFRE/BANQUE',
-              memberCode: isToCaisse ? v.to : (isFromCaisse ? v.from : v.from),
-              account: 'coffre',
-              caisse: isToCaisse ? v.to : (isFromCaisse ? v.from : 'COFFRE'),
-              userId: v.userId,
-              cashierName: v.cashierName || users.find((u: any) => u.id === v.userId)?.identifiant || 'Système'
-            });
+            // For Admin/Director, record both sides of the movement if they involve internal accounts
+            if (v.from && v.from !== 'Système') {
+              addVaultEntry('retrait', v.from, 'from');
+            }
+            if (v.to && v.to !== 'Système') {
+              addVaultEntry('depot', v.to, 'to');
+            }
           });
         }
 
@@ -306,23 +316,17 @@ const GlobalJournal: React.FC = () => {
   });
 
   const totals = filteredTxs.reduce((acc, tx) => {
-    const desc = (tx.description || '').toLowerCase();
     const isCredit = tx.type === 'depot' || 
                      tx.type === 'cotisation' || 
                      tx.type === 'remboursement' || 
                      tx.type === 'adhesion' || 
                      tx.type === 'part_sociale' || 
-                     tx.type === 'vente_livret' || 
-                     desc.includes('livret') || 
-                     desc.includes('adhésion') || 
-                     desc.includes('part sociale') ||
-                     tx.type === 'Approvisionnement Caisse' ||
-                     tx.type === 'Régularisation Écart' ||
-                     tx.type === 'Fonds de caisse';
+                     tx.type === 'vente_livret';
 
     const isDebit = tx.type === 'retrait' || 
                     tx.type === 'deblocage' || 
                     tx.type === 'dépense' ||
+                    tx.type === 'transfert' ||
                     tx.account === 'dépense';
 
     if (isCredit) acc.credit += tx.amount;

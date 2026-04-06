@@ -328,8 +328,7 @@ const MainCashier: React.FC = () => {
     }
 
     // Enregistrer la transaction
-    const transactionsSaved = localStorage.getItem('microfox_vault_transactions');
-    const transactions = transactionsSaved ? JSON.parse(transactionsSaved) : [];
+    const newTxs = [];
     const newTx = {
       id: Date.now().toString(),
       type: 'Versement Caisse',
@@ -342,7 +341,26 @@ const MainCashier: React.FC = () => {
       userId: currentUser.id,
       cashierName: currentUser.identifiant
     };
-    localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...transactions]));
+    newTxs.push(newTx);
+
+    if (transferType === 'total' && gap !== 0) {
+      const gapTx = {
+        id: (Date.now() + 1).toString(),
+        type: 'Régularisation Écart',
+        from: selectedCaisse,
+        to: 'ÉCART',
+        amount: -gap,
+        date: new Date().toISOString(),
+        userId: currentUser.id,
+        cashierName: currentUser.identifiant,
+        observation: `Régularisation automatique lors du versement total (${selectedCaisse})`
+      };
+      newTxs.push(gapTx);
+    }
+
+    const transactionsSaved = localStorage.getItem('microfox_vault_transactions');
+    const transactions = transactionsSaved ? JSON.parse(transactionsSaved) : [];
+    localStorage.setItem('microfox_vault_transactions', JSON.stringify([...newTxs, ...transactions]));
     localStorage.setItem('microfox_pending_sync', 'true');
 
     setCashBalance(newCashBalance);
@@ -435,9 +453,9 @@ const MainCashier: React.FC = () => {
 
       {/* Modal de Transfert */}
       {isTransferModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200 my-4 sm:my-8">
-            <div className="flex items-center gap-3 mb-6">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md max-h-[90vh] overflow-y-auto p-8 shadow-2xl animate-in zoom-in-95 duration-200 custom-scrollbar">
+            <div className="flex items-center gap-3 mb-6 sticky top-0 bg-white pb-4 z-10">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
                 <Send size={24} />
               </div>

@@ -256,10 +256,10 @@ const FinancialReports: React.FC = () => {
         let delta = 0;
 
         if (isCaissier) {
-          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && v.to?.toUpperCase() === user.caisse?.toUpperCase()) {
+          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse') && v.to?.toUpperCase() === user.caisse?.toUpperCase()) {
             isRelevant = true;
             delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Régularisation Écart') && v.from === user.caisse) {
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') && v.from === user.caisse) {
             isRelevant = true;
             delta = -v.amount;
           } else if (v.userId === user.id) {
@@ -267,10 +267,10 @@ const FinancialReports: React.FC = () => {
             delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
           }
         } else if (!selectedCaisse.includes('all')) {
-          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') && selectedCaisse.some(c => c.toUpperCase() === v.to?.toUpperCase())) {
+          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse') && selectedCaisse.some(c => c.toUpperCase() === v.to?.toUpperCase())) {
             isRelevant = true;
             delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Régularisation Écart') && selectedCaisse.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
+          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') && selectedCaisse.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
             isRelevant = true;
             delta = -v.amount;
           } else {
@@ -282,10 +282,10 @@ const FinancialReports: React.FC = () => {
           }
         } else {
           // All caisses
-          if (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Régularisation Écart') {
+          if (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') {
             isRelevant = true;
             delta = v.amount;
-          } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') {
+          } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse') {
             isRelevant = true;
             delta = -v.amount;
           }
@@ -394,7 +394,17 @@ const FinancialReports: React.FC = () => {
   
   const totalCapitalRemb = data.remboursements.reduce((acc, tx) => {
     const match = tx.description?.match(/Cap: (\d+)/);
-    return acc + (match ? Number(match[1]) : tx.amount);
+    if (match) return acc + Number(match[1]);
+    
+    const intMatch = tx.description?.match(/Int: (\d+)/);
+    const penMatch = tx.description?.match(/Pen: (\d+)/);
+    
+    if (intMatch || penMatch) {
+      const otherAmounts = (intMatch ? Number(intMatch[1]) : 0) + (penMatch ? Number(penMatch[1]) : 0);
+      return acc + Math.max(0, tx.amount - otherAmounts);
+    }
+    
+    return acc + tx.amount;
   }, 0);
   const totalInteretRemb = data.remboursements.reduce((acc, tx) => {
     const match = tx.description?.match(/Int: (\d+)/);
@@ -411,7 +421,10 @@ const FinancialReports: React.FC = () => {
   const totalRetraitGarantie = calculateTotal(data.garantieRetraits);
 
   const totalAdminExpenses = calculateTotal(data.adminExpenses);
-  const totalVersementAgents = calculateTotal(data.agentPayments.map(p => ({ amount: p.observedAmount || p.totalAmount })));
+  const totalExpectedVersementAgents = calculateTotal(data.agentPayments.map(p => ({ amount: p.totalAmount })));
+  const totalObservedVersementAgents = calculateTotal(data.agentPayments.map(p => ({ amount: p.observedAmount || p.totalAmount })));
+  const totalVersementAgents = totalObservedVersementAgents;
+  const ecartVersementAgents = totalObservedVersementAgents - totalExpectedVersementAgents;
   
   const totalPartSocialeDepot = data.epargneDepots.filter(tx => 
     tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
@@ -663,7 +676,9 @@ const FinancialReports: React.FC = () => {
           ['CAPITAL REMBOURSÉ', totalCapitalRemb],
           ['INTERET REMBOURSÉ', totalInteretRemb],
           ['PÉNALITÉ REMBOURSÉ', totalPenaliteRemb],
-          ['VERSEMENT DES AGENTS COMMERCIAUX', totalVersementAgents],
+          ['VERSEMENT ATTENDU DES AGENTS', totalExpectedVersementAgents],
+          ['VERSEMENT RÉEL DES AGENTS', totalObservedVersementAgents],
+          ['ÉCART DE VERSEMENT AGENTS', ecartVersementAgents],
           ['FRAIS DE DOSSIER DE CRÉDIT', totalFraisDossierCredit],
           ['FRAIS DE TENUE DE COMPTE', totalFraisTenueCompte],
           ['DEPOT PART SOCIALE', totalPartSocialeDepot],
@@ -1528,9 +1543,9 @@ const FinancialReports: React.FC = () => {
 
       {/* Modal Billetage pour Solde Physique */}
       {isBilletageModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 my-4 sm:my-8">
-            <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 custom-scrollbar">
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white pb-4 z-10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                   <Calculator size={20} />

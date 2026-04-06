@@ -19,6 +19,7 @@ import {
   GraduationCap,
   Settings,
   ShieldCheck,
+  Activity,
   LayoutDashboard,
   Scale,
   MessageSquare,
@@ -208,6 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         { id: 'Corrections d\'opération', label: 'Corrections d\'opération', icon: <RefreshCw size={20} /> },
         { id: 'Conformité (Ratios & LAB)', label: 'Conformité (Ratios & LAB)', icon: <Scale size={20} /> },
         { id: 'Audit & Accès Sécurité', label: 'Audit & Accès Sécurité', icon: <ShieldCheck size={20} /> },
+        { id: 'Suivi des Activités', label: 'Suivi des Activités', icon: <Activity size={20} /> },
       ]
     },
     {
@@ -269,75 +271,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                 return permissions[userRole].includes(item.id);
               }
 
-              // Fallback to hardcoded defaults if no permissions stored yet for this role
-              if (userRole === 'gestionnaire de crédit') {
-                return ((item.label.toLowerCase().includes('crédit') || item.id.toLowerCase().includes('crédit')) && item.label !== 'Déblocage de crédit') || item.id === 'Notification';
-              }
-              if (userRole === 'directeur') {
-                const allowedIds = [
-                  'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 
-                  'Validation de Crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 
-                  'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 
-                  'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Déblocage de crédit', 
-                  'Commissions', 'Journal Global', 'Balance des comptes', 'Comptabilité & États', 'États Réglementaires', 
-                  'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Reçu de caisse', 'Contrôle Terrain', 
-                  'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'
-                ];
-                return allowedIds.includes(item.id);
-              }
-              if (userRole === 'caissier') {
-                const allowedIds = [
-                  'Membres',
-                  'Analyse',
-                  'Crédit actif',
-                  'Vente Livrets',
-                  'Gestion Caisse',
-                  'Dépenses administratives',
-                  'Frais & Parts Sociales',
-                  'Déblocage de crédit',
-                  'Journal Global',
-                  'Reçu de caisse',
-                  'Etats des écarts',
-                  'Rapports Financiers',
-                  'Notification'
-                ];
-                return allowedIds.includes(item.id);
-              }
-              if (userRole === 'contrôleur') {
-                const allowedIds = ['Carte Géographique', 'Contrôle Terrain', 'Notification'];
-                return allowedIds.includes(item.id);
-              }
-              if (userRole === 'auditeur') {
-                const allowedIds = [
-                  'Carte Géographique',
-                  'Alerte Doublons',
-                  'Réclamations Clients',
-                  'Vérification de retrait tontine',
-                  'Notification'
-                ];
-                return allowedIds.includes(item.id);
-              }
-              if (userRole === 'agent commercial') {
-                const allowedIds = [
-                  'Tableau de Bord',
-                  'Carte Géographique',
-                  'Membres',
-                  'Analyse',
-                  'Alerte Doublons',
-                  'Crédit actif',
-                  'Tontine Journalière',
-                  'Demande de retrait tontine',
-                  'Versements Agents',
-                  'Vente Livrets',
-                  'Commissions',
-                  'Journal Global',
-                  'Reçu de caisse',
-                  'Etats des écarts',
-                  'Notification'
-                ];
-                return allowedIds.includes(item.id);
-              }
-              return true;
+              // If no permissions stored yet, return false to avoid showing unauthorized tabs
+              // The permissions will be loaded from localStorage via updateState
+              return false;
             });
 
             if (filteredItems.length === 0) return null;

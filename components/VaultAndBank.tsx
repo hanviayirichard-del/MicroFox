@@ -535,9 +535,9 @@ const VaultAndBank: React.FC = () => {
 
       {/* Modal de Transaction */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-[2rem] w-full max-w-lg p-5 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 my-2 sm:my-8">
-            <div className="flex items-center gap-3 mb-6">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 custom-scrollbar">
+            <div className="flex items-center gap-3 mb-6 sticky top-0 bg-white pb-4 z-10">
               <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
                 <ArrowRightLeft size={24} />
               </div>

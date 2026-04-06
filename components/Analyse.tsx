@@ -85,12 +85,15 @@ const Analyse: React.FC = () => {
       epargneRetraits: 0,
       ventesLivretTontine: 0,
       ventesLivretEpargne: 0,
+      revenuVentesLivret: 0,
       commissionsTontine: 0,
       ouverturesEpargne: 0,
       ouverturesTontine: 0,
       creditDeblocages: 0,
       creditRemboursements: 0,
       creditInterets: 0,
+      creditInteretsCollectes: 0,
+      creditPenalitesCollectees: 0,
       creditFrais: 0,
       partsSociales: 0,
       depensesAdmin: 0
@@ -100,6 +103,18 @@ const Analyse: React.FC = () => {
       const desc = (tx.description || '').toLowerCase();
       const amount = Number(tx.amount) || 0;
 
+      // Gérer les ventes de livrets séparément des dépôts
+      if (desc.includes('vente de livret')) {
+        if (desc.includes('épargne')) {
+          result.ventesLivretEpargne += 1;
+          result.revenuVentesLivret += amount;
+        } else {
+          result.ventesLivretTontine += 1;
+          result.revenuVentesLivret += amount;
+        }
+        return; // Ne pas compter comme dépôt
+      }
+
       if (tx.account === 'tontine') {
         if (tx.type === 'depot' || tx.type === 'cotisation') result.tontineDepots += amount;
         if (tx.type === 'retrait') result.tontineRetraits += amount;
@@ -108,7 +123,12 @@ const Analyse: React.FC = () => {
         if (tx.type === 'retrait') result.epargneRetraits += amount;
       } else if (tx.account === 'credit') {
         if (tx.type === 'deblocage') result.creditDeblocages += amount;
-        if (tx.type === 'remboursement') result.creditRemboursements += amount;
+        if (tx.type === 'remboursement') {
+          result.creditRemboursements += amount;
+          // Extraire les intérêts et pénalités si disponibles
+          if (tx.rembInterest) result.creditInteretsCollectes += Number(tx.rembInterest) || 0;
+          if (tx.rembPenalty) result.creditPenalitesCollectees += Number(tx.rembPenalty) || 0;
+        }
       } else if (tx.account === 'frais') {
         if (desc.includes('part sociale')) {
           result.partsSociales += amount;
@@ -118,11 +138,6 @@ const Analyse: React.FC = () => {
       } else if (tx.account === 'partSociale') {
         if (tx.type === 'depot') result.partsSociales += amount;
         if (tx.type === 'retrait') result.partsSociales -= amount;
-      }
-
-      if (desc.includes('vente de livret')) {
-        if (desc.includes('épargne')) result.ventesLivretEpargne += 1;
-        else result.ventesLivretTontine += 1;
       }
     });
 
@@ -211,17 +226,27 @@ const Analyse: React.FC = () => {
           creditDeblocages: 0,
           creditRemboursements: 0,
           creditInterets: 0,
+          creditInteretsCollectes: 0,
+          creditPenalitesCollectees: 0,
           creditFrais: 0,
           commissionsTontine: 0,
           partsSociales: 0,
           depensesAdmin: 0,
           ventesLivret: 0,
+          revenuVentesLivret: 0,
           ouvertures: 0
         };
       }
 
       const amount = Number(tx.amount) || 0;
       const desc = (tx.description || '').toLowerCase();
+
+      if (desc.includes('vente de livret')) {
+        groups[key].ventesLivret += 1;
+        groups[key].revenuVentesLivret += amount;
+        return;
+      }
+
       if (tx.account === 'tontine') {
         if (tx.type === 'depot' || tx.type === 'cotisation') groups[key].tontineDepots += amount;
         if (tx.type === 'retrait') groups[key].tontineRetraits += amount;
@@ -230,7 +255,11 @@ const Analyse: React.FC = () => {
         if (tx.type === 'retrait') groups[key].epargneRetraits += amount;
       } else if (tx.account === 'credit') {
         if (tx.type === 'deblocage') groups[key].creditDeblocages += amount;
-        if (tx.type === 'remboursement') groups[key].creditRemboursements += amount;
+        if (tx.type === 'remboursement') {
+          groups[key].creditRemboursements += amount;
+          if (tx.rembInterest) groups[key].creditInteretsCollectes += Number(tx.rembInterest) || 0;
+          if (tx.rembPenalty) groups[key].creditPenalitesCollectees += Number(tx.rembPenalty) || 0;
+        }
       } else if (tx.account === 'frais') {
         if (desc.includes('part sociale')) {
           groups[key].partsSociales += amount;
@@ -240,10 +269,6 @@ const Analyse: React.FC = () => {
       } else if (tx.account === 'partSociale') {
         if (tx.type === 'depot') groups[key].partsSociales += amount;
         if (tx.type === 'retrait') groups[key].partsSociales -= amount;
-      }
-
-      if ((tx.description || '').toLowerCase().includes('vente de livret')) {
-        groups[key].ventesLivret += 1;
       }
     });
 
@@ -268,7 +293,7 @@ const Analyse: React.FC = () => {
         groups[key].ouvertures += 1;
       }
 
-      // Intérêts par période
+      // Intérêts attendus par période (basé sur le déblocage)
       if (m.lastCreditRequest?.disbursementDate) {
         const dDate = new Date(m.lastCreditRequest.disbursementDate);
         let dKey = '';
@@ -354,6 +379,13 @@ const Analyse: React.FC = () => {
       const dateStr = tx.date.split('T')[0];
       if (days[dateStr]) {
         const amount = Number(tx.amount) || 0;
+        const desc = (tx.description || '').toLowerCase();
+
+        if (desc.includes('vente de livret')) {
+          days[dateStr].ventesLivret += 1;
+          return;
+        }
+
         if (tx.account === 'tontine') {
           if (tx.type === 'depot' || tx.type === 'cotisation') days[dateStr].tontineDepots += amount;
           if (tx.type === 'retrait') days[dateStr].tontineRetraits += amount;
@@ -363,9 +395,6 @@ const Analyse: React.FC = () => {
         } else if (tx.account === 'credit') {
           if (tx.type === 'deblocage') days[dateStr].creditDeblocages += amount;
           if (tx.type === 'remboursement') days[dateStr].creditRemboursements += amount;
-        }
-        if ((tx.description || '').toLowerCase().includes('vente de livret')) {
-          days[dateStr].ventesLivret += 1;
         }
       }
     });
@@ -389,8 +418,9 @@ const Analyse: React.FC = () => {
         const match = desc.match(/- agent (.*)/);
         if (match && match[1]) {
           const agentName = match[1].trim().toUpperCase();
-          if (!agents[agentName]) agents[agentName] = { name: agentName, ventes: 0 };
+          if (!agents[agentName]) agents[agentName] = { name: agentName, ventes: 0, revenu: 0 };
           agents[agentName].ventes += 1;
+          agents[agentName].revenu += Number(tx.amount) || 0;
         }
       }
     });
@@ -606,12 +636,18 @@ const Analyse: React.FC = () => {
             <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest bg-amber-50 px-2 py-1 rounded-lg">Revenus</span>
           </div>
           <div className="space-y-1">
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Intérêts & Frais</p>
-            <h3 className="text-xl font-black text-[#121c32]">{(stats.creditInterets + stats.creditFrais + stats.commissionsTontine).toLocaleString()} FCFA</h3>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Revenus Encaissés</p>
+            <h3 className="text-xl font-black text-[#121c32]">{(stats.creditInteretsCollectes + stats.creditPenalitesCollectees + stats.creditFrais + stats.commissionsTontine + stats.revenuVentesLivret).toLocaleString()} FCFA</h3>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Commissions Tontine</span>
-            <span className="text-sm font-black text-amber-600">{stats.commissionsTontine.toLocaleString()} F</span>
+          <div className="mt-4 pt-4 border-t border-gray-50 grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase">Intérêts</p>
+              <p className="text-xs font-black text-amber-600">{stats.creditInteretsCollectes.toLocaleString()} F</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase">Commissions</p>
+              <p className="text-xs font-black text-amber-600">{stats.commissionsTontine.toLocaleString()} F</p>
+            </div>
           </div>
         </div>
 
@@ -692,15 +728,15 @@ const Analyse: React.FC = () => {
           </div>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="space-y-1">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Bénéfice / Perte (Période)</p>
-              <h3 className={`text-3xl font-black ${(stats.creditInterets + stats.creditFrais + stats.commissionsTontine - stats.depensesAdmin) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {(stats.creditInterets + stats.creditFrais + stats.commissionsTontine - stats.depensesAdmin).toLocaleString()} FCFA
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Flux Net (Cash Flow Période)</p>
+              <h3 className={`text-3xl font-black ${(stats.creditInteretsCollectes + stats.creditPenalitesCollectees + stats.creditFrais + stats.commissionsTontine + stats.revenuVentesLivret - stats.depensesAdmin) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {(stats.creditInteretsCollectes + stats.creditPenalitesCollectees + stats.creditFrais + stats.commissionsTontine + stats.revenuVentesLivret - stats.depensesAdmin).toLocaleString()} FCFA
               </h3>
             </div>
             <div className="flex gap-6">
               <div className="text-right">
                 <p className="text-[10px] font-bold text-gray-400 uppercase">Total Revenus</p>
-                <p className="text-sm font-black text-emerald-600">{(stats.creditInterets + stats.creditFrais + stats.commissionsTontine).toLocaleString()} F</p>
+                <p className="text-sm font-black text-emerald-600">{(stats.creditInteretsCollectes + stats.creditPenalitesCollectees + stats.creditFrais + stats.commissionsTontine + stats.revenuVentesLivret).toLocaleString()} F</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-bold text-gray-400 uppercase">Total Dépenses</p>

@@ -29,6 +29,7 @@ import UserManagement from './components/UserManagement';
 import Permissions from './components/Permissions';
 import OperationCorrections from './components/OperationCorrections';
 import AuditSecurity from './components/AuditSecurity';
+import UserActivity from './components/UserActivity';
 import FieldControl from './components/FieldControl';
 import PiecesAImprimer from './components/PiecesAImprimer';
 import FinancialReports from './components/FinancialReports';
@@ -445,6 +446,24 @@ const App: React.FC = () => {
       localStorage.setItem('microfox_reset_v1', 'true');
     }
 
+    // Force cleanup for agent commercial permissions
+    const savedPerms = localStorage.getItem('microfox_permissions');
+    if (savedPerms) {
+      try {
+        const perms = JSON.parse(savedPerms);
+        if (perms['agent commercial']) {
+          const originalLength = perms['agent commercial'].length;
+          perms['agent commercial'] = perms['agent commercial'].filter((p: string) => 
+            p !== 'Analyse' && p !== 'Tableau de Bord' && p !== 'Reçu de caisse'
+          );
+          if (perms['agent commercial'].length !== originalLength) {
+            localStorage.setItem('microfox_permissions', JSON.stringify(perms));
+            window.dispatchEvent(new Event('storage'));
+          }
+        }
+      } catch (e) {}
+    }
+
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
         setIsSidebarOpen(true);
@@ -671,6 +690,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Audit & Accès Sécurité') {
       return <AuditSecurity />;
+    }
+
+    if (activeSection === 'Suivi des Activités') {
+      return <UserActivity />;
     }
 
     if (activeSection === 'Gestion des Utilisateurs') {
