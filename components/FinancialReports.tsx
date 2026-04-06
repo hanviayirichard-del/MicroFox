@@ -584,7 +584,7 @@ const FinancialReports: React.FC = () => {
       physicalBalance: total,
       gap: total - currentBalance,
       denominations: { ...denominations },
-      validator: currentUser?.nom || currentUser?.username || 'Inconnu'
+      validator: user?.nom || user?.identifiant || user?.username || 'Inconnu'
     };
     
     const updatedHistory = [newHistoryItem, ...billetageHistory];
@@ -647,13 +647,17 @@ const FinancialReports: React.FC = () => {
     setPhysicalBalance(0);
   }, [startDate, endDate]);
 
-  const generateHTMLReport = (isForPrint = false, reportIds?: string[]) => {
+    const generateHTMLReport = (isForPrint = false, reportIds?: string[]) => {
     const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
     const dateRange = `DU ${new Date(startDate).toLocaleDateString()} AU ${new Date(endDate).toLocaleDateString()}`;
+    const caisseMention = selectedCaisse.includes('all') 
+      ? 'TOUTES LES CAISSES' 
+      : selectedCaisse.join(', ');
     
     const headerHtml = `
       <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px;">
         <h1 style="font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32;">${mfConfig.nom}</h1>
+        <p style="font-size: 14px; font-weight: bold; color: #121c32; margin: 10px 0;">CAISSE: ${caisseMention}</p>
         <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0;">${mfConfig.adresse}</p>
         <p style="font-size: 12px; font-weight: bold; color: #64748b; margin: 5px 0;">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
       </div>
@@ -1420,6 +1424,7 @@ const FinancialReports: React.FC = () => {
                 <thead className="sticky top-0 bg-white shadow-sm z-10">
                   <tr className="bg-gray-50/50">
                     <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                    <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Caissier</th>
                     <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Théorique</th>
                     <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Physique</th>
                     <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Écart</th>
@@ -1433,6 +1438,9 @@ const FinancialReports: React.FC = () => {
                         <td className="px-4 py-4">
                           <p className="text-xs font-black text-[#121c32]">{new Date(item.date).toLocaleDateString()}</p>
                           <p className="text-[10px] font-bold text-gray-400">{new Date(item.date).toLocaleTimeString()}</p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="text-[10px] font-black text-[#121c32] uppercase">{item.validator || 'Inconnu'}</p>
                         </td>
                         <td className="px-4 py-4 text-right text-xs font-bold text-gray-600">{item.theoreticalBalance.toLocaleString()} F</td>
                         <td className="px-4 py-4 text-right text-xs font-black text-blue-600">{item.physicalBalance.toLocaleString()} F</td>
@@ -1466,7 +1474,7 @@ const FinancialReports: React.FC = () => {
       {/* Modal Détails Billetage Historique */}
       {selectedHistoryItem && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-4 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[95vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -1490,34 +1498,34 @@ const FinancialReports: React.FC = () => {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-100/50 border-b border-gray-100">
-                      <th className="px-4 py-2 font-black text-gray-400 uppercase text-left">Billet/Pièce</th>
-                      <th className="px-4 py-2 font-black text-gray-400 uppercase text-center">Nombre</th>
-                      <th className="px-4 py-2 font-black text-gray-400 uppercase text-right">Montant</th>
+                      <th className="px-2 py-2 font-black text-gray-400 uppercase text-left">Billet/Pièce</th>
+                      <th className="px-2 py-2 font-black text-gray-400 uppercase text-center">Nombre</th>
+                      <th className="px-2 py-2 font-black text-gray-400 uppercase text-right">Montant</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map((denom) => (
                       <tr key={denom}>
-                        <td className="px-4 py-2 font-bold text-gray-600">{denom.toLocaleString()} F</td>
-                        <td className="px-4 py-2 text-center font-black text-[#121c32]">
+                        <td className="px-2 py-2 font-bold text-gray-600 whitespace-nowrap">{denom.toLocaleString()} F</td>
+                        <td className="px-2 py-2 text-center font-black text-[#121c32]">
                           {selectedHistoryItem.denominations[denom.toString()] || 0}
                         </td>
-                        <td className="px-4 py-2 text-right font-black text-gray-400">
+                        <td className="px-2 py-2 text-right font-black text-gray-400 whitespace-nowrap">
                           {((selectedHistoryItem.denominations[denom.toString()] || 0) * denom).toLocaleString()} F
                         </td>
                       </tr>
                     ))}
                     <tr>
-                      <td className="px-4 py-2 font-bold text-gray-600 uppercase">Monnaie</td>
-                      <td colSpan={2} className="px-4 py-2 text-right font-black text-[#121c32]">
+                      <td className="px-2 py-2 font-bold text-gray-600 uppercase">Monnaie</td>
+                      <td colSpan={2} className="px-2 py-2 text-right font-black text-[#121c32]">
                         {(selectedHistoryItem.denominations.monnaie || 0).toLocaleString()} F
                       </td>
                     </tr>
                   </tbody>
                   <tfoot>
                     <tr className="bg-blue-50 border-t border-blue-100">
-                      <td colSpan={2} className="px-4 py-3 font-black text-[#121c32] uppercase tracking-widest">Total Physique</td>
-                      <td className="px-4 py-3 text-right font-black text-blue-600">
+                      <td colSpan={2} className="px-2 py-3 font-black text-[#121c32] uppercase tracking-widest text-[10px]">Total Physique</td>
+                      <td className="px-2 py-3 text-right font-black text-blue-600 whitespace-nowrap">
                         {selectedHistoryItem.physicalBalance.toLocaleString()} F
                       </td>
                     </tr>
@@ -1544,7 +1552,7 @@ const FinancialReports: React.FC = () => {
       {/* Modal Billetage pour Solde Physique */}
       {isBilletageModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 custom-scrollbar">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md max-h-[95vh] overflow-y-auto p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 custom-scrollbar">
             <div className="flex items-center justify-between mb-6 sticky top-0 bg-white pb-4 z-10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
