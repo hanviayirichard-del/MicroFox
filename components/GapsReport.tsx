@@ -17,6 +17,7 @@ const GapsReport: React.FC = () => {
   const [selectedCaisse, setSelectedCaisse] = useState('all');
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [actionObservation, setActionObservation] = useState('');
   const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
   const [stats, setStats] = useState({
@@ -106,6 +107,8 @@ const GapsReport: React.FC = () => {
     if (gap.status && gap.status !== 'En attente') return;
     if (newStatus === 'En attente') return;
     
+    setActionObservation(gap.observation || '');
+    
     const confirmMsg = newStatus === 'Payé' || newStatus === 'Régularisé'
       ? `Confirmer la régularisation de l'écart de ${Math.abs(gap.gapAmount).toLocaleString()} F ?`
       : newStatus === 'Annulé'
@@ -168,7 +171,8 @@ const GapsReport: React.FC = () => {
                 ...item, 
                 status: newStatus,
                 regDate: new Date().toLocaleDateString('fr-FR'),
-                regMode: newStatus
+                regMode: newStatus,
+                observation: actionObservation
               };
             }
             return item;
@@ -566,6 +570,17 @@ const GapsReport: React.FC = () => {
             </div>
             <h3 className="text-xl font-black text-[#121c32] uppercase tracking-tight">Confirmation</h3>
             <p className="text-gray-500 font-medium leading-relaxed">{confirmModal.message}</p>
+            
+            <div className="w-full space-y-2 text-left">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Commentaire / Observation</label>
+              <textarea
+                value={actionObservation}
+                onChange={(e) => setActionObservation(e.target.value)}
+                placeholder="Saisir un commentaire..."
+                className="w-full p-4 bg-gray-50 border border-transparent focus:border-[#121c32] rounded-2xl outline-none text-sm font-medium text-[#121c32] transition-all min-h-[100px] resize-none"
+              />
+            </div>
+
             <div className="flex gap-3 w-full pt-4">
               <button 
                 onClick={() => {
