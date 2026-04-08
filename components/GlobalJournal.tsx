@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square } from 'lucide-react';
+import { Search, History, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, X } from 'lucide-react';
 
 const GlobalJournal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,18 +44,13 @@ const GlobalJournal: React.FC = () => {
       allMembers.forEach((member: any) => {
         if (member.history) {
           member.history.forEach((tx: any) => {
-            // Filter out agent operations (they are added via agent payments)
-            if (agentIds.includes(tx.userId)) return;
+            // Filter out agent operations for non-agents (they are added via agent payments)
+            if (user.role !== 'agent commercial' && agentIds.includes(tx.userId)) return;
 
-            // Filter by user if caissier
-            if (user.role === 'caissier') {
+            // Filter by user if caissier or agent commercial
+            if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
               if (!isMyOp) return;
-            }
-            
-            // Filter by zone if agent commercial
-            if (user.role === 'agent commercial') {
-              if (member.zone !== user.zoneCollecte) return;
             }
 
             const tontineAcc = member.tontineAccounts?.find((ta: any) => ta.id === tx.tontineAccountId);
@@ -74,14 +69,15 @@ const GlobalJournal: React.FC = () => {
         }
       });
 
-      // Load Caisse operations for caissiers, admins and directors
-      if (user.role === 'caissier' || user.role === 'administrateur' || user.role === 'directeur') {
+      // Load Caisse operations for caissiers, agents, admins and directors
+      if (user.role === 'caissier' || user.role === 'agent commercial' || user.role === 'administrateur' || user.role === 'directeur') {
         const savedPayments = localStorage.getItem('microfox_agent_payments');
         if (savedPayments) {
           const payments = JSON.parse(savedPayments);
           payments.forEach((p: any) => {
             if (p.status === 'Validé') {
               if (user.role === 'caissier' && p.validatorId !== user.id) return;
+              if (user.role === 'agent commercial' && p.agentId !== user.id) return;
               
               allTxs.push({
                 id: p.id,
@@ -120,14 +116,15 @@ const GlobalJournal: React.FC = () => {
               });
             };
 
-            if (user.role === 'caissier') {
+            if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isToMyCaisse = v.to && user.caisse && v.to.toUpperCase() === user.caisse.toUpperCase();
               const isFromMyCaisse = v.from && user.caisse && v.from.toUpperCase() === user.caisse.toUpperCase();
+              const isMyOp = v.userId === user.id;
               
-              if (isToMyCaisse) {
+              if (isToMyCaisse || (isMyOp && v.to && v.to !== 'Système')) {
                 addVaultEntry('depot', v.to, 'to');
               } 
-              if (isFromMyCaisse) {
+              if (isFromMyCaisse || (isMyOp && v.from && v.from !== 'Système')) {
                 addVaultEntry('retrait', v.from, 'from');
               }
               return;
@@ -148,8 +145,8 @@ const GlobalJournal: React.FC = () => {
         if (savedExpenses) {
           const expenses = JSON.parse(savedExpenses);
           expenses.forEach((e: any) => {
-            // Filter by user if caissier
-            if (user.role === 'caissier' && e.recordedBy !== user.identifiant) return;
+            // Filter by user if caissier or agent commercial
+            if ((user.role === 'caissier' || user.role === 'agent commercial') && e.recordedBy !== user.identifiant) return;
 
             allTxs.push({
               id: e.id,
@@ -223,9 +220,10 @@ const GlobalJournal: React.FC = () => {
             ${filteredTxs.map(tx => {
               const isCredit = tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
               const isDebit = tx.type === 'retrait' || tx.type === 'transfert' || tx.type === 'deblocage';
-              const typeLabel = isCredit ? 'Entrée' : (isDebit ? 'Sortie' : 'Autre');
+              const isCancelled = tx.type === 'annulation';
+              const typeLabel = isCancelled ? 'Annulé' : (isCredit ? 'Entrée' : (isDebit ? 'Sortie' : 'Autre'));
               return `
-              <tr>
+              <tr style="${isCancelled ? 'text-decoration: line-through; opacity: 0.6; background-color: #fef2f2;' : ''}">
                 <td>${new Date(tx.date).toLocaleDateString()} ${new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
                 <td>
                   <div style="font-weight: bold;">${tx.memberName}</div>
@@ -237,8 +235,8 @@ const GlobalJournal: React.FC = () => {
                 <td>${tx.description}</td>
                 <td>${tx.account.toUpperCase()}</td>
                 <td>${tx.cashierName || 'N/A'}</td>
-                <td class="${isCredit ? 'credit' : (isDebit ? 'debit' : '')}">${typeLabel}</td>
-                <td class="text-right ${isCredit ? 'credit' : (isDebit ? 'debit' : '')}">${isCredit ? '+' : (isDebit ? '-' : '')}${tx.amount.toLocaleString()} F</td>
+                <td class="${isCancelled ? 'debit' : (isCredit ? 'credit' : (isDebit ? 'debit' : ''))}">${typeLabel}</td>
+                <td class="text-right ${isCancelled ? 'debit' : (isCredit ? 'credit' : (isDebit ? 'debit' : ''))}">${isCancelled ? '0' : (isCredit ? '+' : (isDebit ? '-' : ''))}${tx.amount.toLocaleString()} F</td>
               </tr>
             `}).join('')}
           </tbody>
@@ -502,11 +500,11 @@ const GlobalJournal: React.FC = () => {
                     </td>
                     <td className="px-4 py-5">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                          {tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                        <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${tx.type === 'annulation' ? 'bg-red-100 text-red-600' : (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}`}>
+                          {tx.type === 'annulation' ? <X size={18} /> : (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-black text-[#121c32] uppercase">{tx.description}</p>
+                          <p className={`text-sm font-black uppercase ${tx.type === 'annulation' ? 'text-red-500 line-through' : 'text-[#121c32]'}`}>{tx.description}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(tx.date).toLocaleDateString()} {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</p>
                         </div>
                       </div>

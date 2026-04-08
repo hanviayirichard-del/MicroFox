@@ -8,6 +8,10 @@ interface Expense {
   description: string;
   amount: number;
   recordedBy: string;
+  personnelId?: string;
+  personnelName?: string;
+  salaryType?: 'Avance' | 'Reste' | 'Total';
+  salaryPeriod?: string;
 }
 
 const AdministrativeExpenses: React.FC = () => {
@@ -30,6 +34,10 @@ const AdministrativeExpenses: React.FC = () => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [personnelId, setPersonnelId] = useState('');
+  const [salaryType, setSalaryType] = useState<'Avance' | 'Reste' | 'Total'>('Total');
+  const [salaryPeriod, setSalaryPeriod] = useState(new Date().toISOString().substring(0, 7));
+  const [personnelList, setPersonnelList] = useState<any[]>([]);
 
   const categories = [
     'Fournitures',
@@ -47,6 +55,10 @@ const AdministrativeExpenses: React.FC = () => {
     const saved = localStorage.getItem('microfox_admin_expenses');
     if (saved) {
       setExpenses(JSON.parse(saved));
+    }
+    const savedPersonnel = localStorage.getItem('microfox_personnel');
+    if (savedPersonnel) {
+      setPersonnelList(JSON.parse(savedPersonnel));
     }
   };
 
@@ -69,6 +81,10 @@ const AdministrativeExpenses: React.FC = () => {
       alert("Échec de l'enregistrement : Le montant doit être un nombre supérieur à 0.");
       return;
     }
+    if (category === 'Salaires' && !personnelId) {
+      alert("Échec de l'enregistrement : Veuillez sélectionner un membre du personnel.");
+      return;
+    }
 
     try {
       const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
@@ -85,13 +101,19 @@ const AdministrativeExpenses: React.FC = () => {
         localStorage.setItem(cashKey, (currentCashBalance - Number(amount)).toString());
       }
       
-      const newExpense: Expense = {
+      const selectedPersonnel = personnelList.find(p => p.id === personnelId);
+
+      const newExpense: any = {
         id: Date.now().toString(),
         date,
         category,
         description,
         amount: Number(amount),
-        recordedBy: currentUser.identifiant || 'Admin'
+        recordedBy: currentUser.identifiant || 'Admin',
+        personnelId: category === 'Salaires' ? personnelId : undefined,
+        personnelName: category === 'Salaires' ? selectedPersonnel?.name : undefined,
+        salaryType: category === 'Salaires' ? salaryType : undefined,
+        salaryPeriod: category === 'Salaires' ? salaryPeriod : undefined
       };
 
       const updatedExpenses = [newExpense, ...expenses];
@@ -103,6 +125,8 @@ const AdministrativeExpenses: React.FC = () => {
       // Reset form
       setDescription('');
       setAmount('');
+      setPersonnelId('');
+      setSalaryType('Total');
       
       window.dispatchEvent(new Event('storage'));
     } catch (error) {
@@ -314,6 +338,9 @@ const AdministrativeExpenses: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm font-black text-[#121c32]">{e.description}</p>
+                      {e.personnelName && (
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-tight">Personnel: {e.personnelName} ({e.salaryType})</p>
+                      )}
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Par: {e.recordedBy}</p>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -375,12 +402,85 @@ const AdministrativeExpenses: React.FC = () => {
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Catégorie</label>
                 <select 
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={(e) => {
+                    const newCat = e.target.value;
+                    setCategory(newCat);
+                    if (newCat !== 'Salaires') {
+                      setDescription('');
+                      setPersonnelId('');
+                    } else if (personnelId) {
+                      const p = personnelList.find(pers => pers.id === personnelId);
+                      if (p) {
+                        setDescription(`Salaire ${salaryType} - ${p.name} (${salaryPeriod})`);
+                      }
+                    }
+                  }}
                   className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-[#121c32]"
                 >
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
+
+              {category === 'Salaires' && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Personnel</label>
+                    <select 
+                      value={personnelId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setPersonnelId(id);
+                        const p = personnelList.find(pers => pers.id === id);
+                        if (p) {
+                          setDescription(`Salaire ${salaryType} - ${p.name} (${salaryPeriod})`);
+                        }
+                      }}
+                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-[#121c32]"
+                    >
+                      <option value="">Sélectionner un employé</option>
+                      {personnelList.map(p => <option key={p.id} value={p.id}>{p.name} ({p.position})</option>)}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Type de Paiement</label>
+                      <select 
+                        value={salaryType}
+                        onChange={(e) => {
+                          const type = e.target.value as any;
+                          setSalaryType(type);
+                          const p = personnelList.find(pers => pers.id === personnelId);
+                          if (p) {
+                            setDescription(`Salaire ${type} - ${p.name} (${salaryPeriod})`);
+                          }
+                        }}
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-[#121c32]"
+                      >
+                        <option value="Total">Total</option>
+                        <option value="Avance">Avance</option>
+                        <option value="Reste">Reste</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Période (Mois)</label>
+                      <input 
+                        type="month" 
+                        value={salaryPeriod}
+                        onChange={(e) => {
+                          const period = e.target.value;
+                          setSalaryPeriod(period);
+                          const p = personnelList.find(pers => pers.id === personnelId);
+                          if (p) {
+                            setDescription(`Salaire ${salaryType} - ${p.name} (${period})`);
+                          }
+                        }}
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-[#121c32]"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Description / Motif</label>

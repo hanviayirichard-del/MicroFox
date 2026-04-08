@@ -55,6 +55,49 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
       }
     }
 
+    // 1.5 Tontine Validation Notifications (Agent Commercial)
+    if (user.role === 'agent commercial') {
+      const savedMembersAgent = localStorage.getItem('microfox_members_data');
+      const savedValidatedAgent = localStorage.getItem('microfox_validated_zone_cotisations');
+      const validatedZonesAgent = savedValidatedAgent ? JSON.parse(savedValidatedAgent) : {};
+      const todayAgent = new Date().toISOString().split('T')[0];
+      
+      if (savedMembersAgent) {
+        const members = JSON.parse(savedMembersAgent);
+        let hasUnvalidated = false;
+        
+        members.forEach((m: any) => {
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+          
+          history.forEach((tx: any) => {
+            const txDate = new Date(tx.date);
+            const txDay = txDate.toISOString().split('T')[0];
+            if (txDay === todayAgent && tx.type === 'cotisation' && tx.account === 'tontine' && tx.userId === user.id) {
+              const validationKey = `${txDay}_${m.zone}`;
+              const zoneValidation = validatedZonesAgent[validationKey];
+              const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+              if (!isTxValidated) {
+                hasUnvalidated = true;
+              }
+            }
+          });
+        });
+
+        if (hasUnvalidated) {
+          newNotifications.push({
+            id: 'agent_tontine_unvalidated',
+            type: 'warning',
+            title: 'Cotisations non validées',
+            message: 'Certaines de vos cotisations tontine d\'aujourd\'hui n\'ont pas encore été validées par la caisse.',
+            date: now,
+            role: ['agent commercial'],
+            action: 'Validation Cotisations Zone'
+          });
+        }
+      }
+    }
+
     // 2. Auditeur / Contrôleur Notifications
     if (user.role === 'auditeur' || user.role === 'contrôleur' || user.role === 'administrateur') {
       const savedRequests = localStorage.getItem('microfox_pending_withdrawals');
@@ -106,6 +149,57 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
             date: now,
             role: ['caissier', 'administrateur', 'directeur'],
             action: 'Gestion Caisse'
+          });
+        }
+      }
+
+      // Tontine zones to validate
+      const savedMembersZones = localStorage.getItem('microfox_members_data');
+      const savedValidatedZones = localStorage.getItem('microfox_validated_zone_cotisations');
+      const validatedZonesList = savedValidatedZones ? JSON.parse(savedValidatedZones) : {};
+      const todayZones = new Date().toISOString().split('T')[0];
+
+      if (savedMembersZones) {
+        const members = JSON.parse(savedMembersZones);
+        const zones = Array.from(new Set(members.map((m: any) => m.zone).filter(Boolean))) as string[];
+        let zonesWithPending = 0;
+
+        zones.forEach(zone => {
+          const zoneMembers = members.filter((m: any) => m.zone === zone);
+          let hasPending = false;
+          
+          zoneMembers.forEach((m: any) => {
+            const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+            const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+            
+            history.forEach((tx: any) => {
+              const txDate = new Date(tx.date);
+              const txDay = txDate.toISOString().split('T')[0];
+              if (txDay === todayZones && tx.type === 'cotisation' && tx.account === 'tontine') {
+                const validationKey = `${txDay}_${zone}`;
+                const zoneValidation = validatedZonesList[validationKey];
+                const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+                if (!isTxValidated) {
+                  hasPending = true;
+                }
+              }
+            });
+          });
+
+          if (hasPending) {
+            zonesWithPending++;
+          }
+        });
+
+        if (zonesWithPending > 0) {
+          newNotifications.push({
+            id: 'pending_zone_validations',
+            type: 'warning',
+            title: 'Cotisations tontine à valider',
+            message: `Il y a des cotisations tontine en attente de validation dans ${zonesWithPending} zone(s).`,
+            date: now,
+            role: ['caissier', 'administrateur', 'directeur'],
+            action: 'Validation Cotisations Zone'
           });
         }
       }

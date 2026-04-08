@@ -34,6 +34,7 @@ import {
   TrendingUp,
   TrendingDown,
   Search,
+  RotateCcw,
   Scale as BalanceIcon
 } from 'lucide-react';
 import { MenuItem, SidebarProps } from '../types';
@@ -168,6 +169,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       title: "Tontine & Collecte",
       items: [
         { id: 'Tontine Journalière', label: 'Tontine Journalière', icon: <Clock size={20} /> },
+        { id: 'Validation Cotisations Zone', label: 'Validation Cotisations Zone', icon: <ClipboardCheck size={20} /> },
+        { id: 'Annulation Cotisation', label: 'Annulation Cotisation', icon: <RotateCcw size={20} /> },
         { id: 'Demande de retrait tontine', label: 'Demande de retrait tontine', icon: <RefreshCw size={20} /> },
         { id: 'Vérification de retrait tontine', label: 'Vérification de retrait tontine', icon: <FileCheck size={20} /> },
         { id: 'Versements Agents', label: 'Versements Agents', icon: <Wallet size={20} /> },
@@ -181,6 +184,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         { id: 'CAISSE PRINCIPALE', label: 'CAISSE PRINCIPALE', icon: <Landmark size={20} /> },
         { id: 'Coffre & Banque', label: 'Coffre & Banque', icon: <Vault size={20} /> },
         { id: 'Dépenses administratives', label: 'Dépenses administratives', icon: <TrendingDown size={20} /> },
+        { id: 'Salaire du Personnel', label: 'Salaire du Personnel', icon: <Users size={20} /> },
         { id: 'Stocks Livrets', label: 'Stocks Livrets', icon: <Package size={20} /> },
         { id: 'Frais & Parts Sociales', label: 'Frais & Parts Sociales', icon: <Gem size={20} /> },
         { id: 'Déblocage de crédit', label: 'Déblocage de crédit', icon: <CreditCard size={20} /> },

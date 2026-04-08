@@ -3820,15 +3820,16 @@ const Members: React.FC = () => {
                         
                         if (sortedHistory.length > 0) {
                           return sortedHistory.map((tx) => {
-                            const isIncoming = tx.destinationAccount === 'epargne' || tx.type === 'depot';
+                            const isCancelled = tx.type === 'annulation';
+                            const isIncoming = !isCancelled && (tx.destinationAccount === 'epargne' || tx.type === 'depot');
                             return (
-                              <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all">
+                              <div key={tx.id} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                    {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}`}>
+                                    {isCancelled ? <X size={20} /> : (isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />)}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className={`text-sm font-black uppercase ${isCancelled ? 'line-through text-red-400' : 'text-white'}`}>{tx.description}</p>
                                     <p className="text-[10px] font-bold text-gray-500 uppercase">
                                       {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                       {tx.cashierName && ` • OP: ${tx.cashierName}`}
@@ -3836,8 +3837,8 @@ const Members: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0 ml-4">
-                                  <p className={`text-base font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                  <p className={`text-base font-black ${isCancelled ? 'text-red-400 line-through' : (isIncoming ? 'text-emerald-400' : 'text-red-400')}`}>
+                                    {isCancelled ? '0' : (isIncoming ? '+' : '-')}{tx.amount.toLocaleString()} F
                                   </p>
                                   <div className="flex flex-col items-end gap-0.5 mt-0.5">
                                     <p className="text-[9px] font-bold text-gray-600 uppercase">Avant: {tx.balanceBefore?.toLocaleString() || '---'} F</p>
@@ -3937,15 +3938,16 @@ const Members: React.FC = () => {
                         
                         if (sortedHistory.length > 0) {
                           return sortedHistory.map((tx) => {
-                            const isIncoming = tx.type === 'depot' || tx.type === 'cotisation';
+                            const isCancelled = tx.type === 'annulation';
+                            const isIncoming = !isCancelled && (tx.type === 'depot' || tx.type === 'cotisation');
                             return (
-                              <div key={tx.id} className="bg-[#121c32] p-4 rounded-2xl border border-white/5 shadow-sm flex items-center justify-between">
+                              <div key={tx.id} className={`bg-[#121c32] p-4 rounded-2xl border border-white/5 shadow-sm flex items-center justify-between ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                    {isIncoming ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}`}>
+                                    {isCancelled ? <X size={18} /> : (isIncoming ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className={`text-sm font-black uppercase ${isCancelled ? 'line-through text-red-400' : 'text-white'}`}>{tx.description}</p>
                                     <p className="text-[10px] font-bold text-gray-500 uppercase">
                                       {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                       {tx.cashierName && ` • OP: ${tx.cashierName}`}
@@ -3953,8 +3955,8 @@ const Members: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="flex flex-col items-end gap-0.5 shrink-0 ml-4">
-                                  <p className={`text-sm font-black ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                  <p className={`text-sm font-black ${isCancelled ? 'text-red-400 line-through' : (isIncoming ? 'text-emerald-400' : 'text-red-400')}`}>
+                                    {isCancelled ? '0' : (isIncoming ? '+' : '-')}{tx.amount.toLocaleString()} F
                                   </p>
                                   <p className="text-[9px] font-bold text-gray-600 uppercase">Avant: {tx.balanceBefore?.toLocaleString() || '---'} F</p>
                                   <p className="text-[9px] font-black text-blue-400 uppercase">Solde: {tx.balance?.toLocaleString() || '---'} F</p>
@@ -4241,23 +4243,24 @@ const Members: React.FC = () => {
                         
                         if (sortedHistory.length > 0) {
                           return sortedHistory.map((tx) => {
-                            const isIncoming = tx.destinationAccount === 'garantie' || tx.type === 'depot';
+                            const isCancelled = tx.type === 'annulation';
+                            const isIncoming = !isCancelled && (tx.destinationAccount === 'garantie' || tx.type === 'depot');
                             return (
-                              <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all">
+                              <div key={tx.id} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                    {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400')}`}>
+                                    {isCancelled ? <X size={20} /> : (isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />)}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className={`text-sm font-black uppercase ${isCancelled ? 'line-through text-red-400' : 'text-white'}`}>{tx.description}</p>
                                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
                                       {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                       {tx.cashierName && ` • OP: ${tx.cashierName}`}
                                     </p>
                                   </div>
                                 </div>
-                                <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                <p className={`text-base font-black shrink-0 ml-4 ${isCancelled ? 'text-red-400 line-through' : (isIncoming ? 'text-emerald-400' : 'text-red-400')}`}>
+                                  {isCancelled ? '0' : (isIncoming ? '+' : '-')}{tx.amount.toLocaleString()} F
                                 </p>
                               </div>
                             );
@@ -4308,23 +4311,24 @@ const Members: React.FC = () => {
                         
                         if (sortedHistory.length > 0) {
                           return sortedHistory.map((tx) => {
-                            const isIncoming = tx.destinationAccount === 'partSociale' || tx.type === 'depot';
+                            const isCancelled = tx.type === 'annulation';
+                            const isIncoming = !isCancelled && (tx.destinationAccount === 'partSociale' || tx.type === 'depot');
                             return (
-                              <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all">
+                              <div key={tx.id} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400'}`}>
-                                    {isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400')}`}>
+                                    {isCancelled ? <X size={20} /> : (isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />)}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-black text-white uppercase">{tx.description}</p>
+                                    <p className={`text-sm font-black uppercase ${isCancelled ? 'line-through text-red-400' : 'text-white'}`}>{tx.description}</p>
                                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
                                       {new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                       {tx.cashierName && ` • OP: ${tx.cashierName}`}
                                     </p>
                                   </div>
                                 </div>
-                                <p className={`text-base font-black shrink-0 ml-4 ${isIncoming ? 'text-emerald-400' : 'text-pink-400'}`}>
-                                  {isIncoming ? '+' : '-'}{tx.amount.toLocaleString()} F
+                                <p className={`text-base font-black shrink-0 ml-4 ${isCancelled ? 'text-red-400 line-through' : (isIncoming ? 'text-emerald-400' : 'text-pink-400')}`}>
+                                  {isCancelled ? '0' : (isIncoming ? '+' : '-')}{tx.amount.toLocaleString()} F
                                 </p>
                               </div>
                             );

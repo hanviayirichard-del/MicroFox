@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Save, CheckSquare, Square } from 'lucide-react';
+import { ShieldCheck, Save, CheckSquare, Square, Search, X } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
 const ROLES = [
@@ -27,6 +27,8 @@ const ALL_TABS = [
   'Crédit actif',
   'Autres opérations crédit',
   'Tontine Journalière',
+  'Validation Cotisations Zone',
+  'Annulation Cotisation',
   'Demande de retrait tontine',
   'Vérification de retrait tontine',
   'Versements Agents',
@@ -35,6 +37,7 @@ const ALL_TABS = [
   'CAISSE PRINCIPALE',
   'Coffre & Banque',
   'Dépenses administratives',
+  'Salaire du Personnel',
   'Stocks Livrets',
   'Frais & Parts Sociales',
   'Commissions',
@@ -63,15 +66,16 @@ const Permissions: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState(ROLES[1]); // Default to second role as admin has all
   const [permissions, setPermissions] = useState<Record<string, string[]>>({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('microfox_permissions');
     const defaults: Record<string, string[]> = {
-      'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'],
+      'directeur': ['Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification'],
       'caissier': ['Membres', 'Analyse', 'Crédit actif', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification'],
       'contrôleur': ['Carte Géographique', 'Contrôle Terrain', 'Notification'],
       'auditeur': ['Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification'],
-      'agent commercial': ['Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification'],
+      'agent commercial': ['Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification'],
       'gestionnaire de crédit': ['Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Crédit actif', 'Autres opérations crédit', 'Notification']
     };
 
@@ -113,6 +117,10 @@ const Permissions: React.FC = () => {
     window.dispatchEvent(new Event('storage'));
   };
 
+  const filteredTabs = ALL_TABS.filter(tab => 
+    tab.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-20">
       <div className="flex items-start gap-4">
@@ -146,9 +154,29 @@ const Permissions: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Onglets Disponibles</label>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex-1 space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Onglets Disponibles</label>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Rechercher un onglet..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-blue-500 font-bold text-[#121c32] transition-all text-sm"
+                />
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-4 self-end">
               {showSuccess && (
                 <div className="fixed top-20 right-8 z-[100] bg-emerald-600 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest shadow-2xl animate-bounce flex items-center gap-2">
                   <ShieldCheck size={18} />
@@ -166,7 +194,7 @@ const Permissions: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {ALL_TABS.map(tab => {
+            {filteredTabs.map(tab => {
               const isChecked = (permissions[selectedRole] || []).includes(tab);
               return (
                 <button
@@ -183,6 +211,11 @@ const Permissions: React.FC = () => {
                 </button>
               );
             })}
+            {filteredTabs.length === 0 && (
+              <div className="col-span-full py-10 text-center text-gray-400 italic">
+                Aucun onglet ne correspond à votre recherche.
+              </div>
+            )}
           </div>
         </div>
       </div>

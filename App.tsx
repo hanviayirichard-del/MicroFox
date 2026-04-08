@@ -5,6 +5,8 @@ import Dashboard from './components/Dashboard';
 import GeographicMap from './components/GeographicMap';
 import Members from './components/Members';
 import DailyTontine from './components/DailyTontine';
+import ValidateZoneCotisations from './components/ValidateZoneCotisations';
+import CancelCotisation from './components/CancelCotisation';
 import Commissions from './components/Commissions';
 import CreditManagement from './components/CreditManagement';
 import TontineWithdrawal from './components/TontineWithdrawal';
@@ -19,6 +21,7 @@ import CreditDisbursement from './components/CreditDisbursement';
 import OtherCreditOperations from './components/OtherCreditOperations';
 import ActiveCredits from './components/ActiveCredits';
 import AdministrativeExpenses from './components/AdministrativeExpenses';
+import PersonnelSalaries from './components/PersonnelSalaries';
 import FraisPartsSociales from './components/FraisPartsSociales';
 import AccountingAndStates from './components/AccountingAndStates';
 import RegulatoryReports from './components/RegulatoryReports';
@@ -600,6 +603,14 @@ const App: React.FC = () => {
       return <DailyTontine />;
     }
 
+    if (activeSection === 'Validation Cotisations Zone') {
+      return <ValidateZoneCotisations />;
+    }
+
+    if (activeSection === 'Annulation Cotisation') {
+      return <CancelCotisation />;
+    }
+
     if (activeSection === 'Demande de retrait tontine') {
       return <TontineWithdrawal />;
     }
@@ -726,6 +737,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Dépenses administratives') {
       return <AdministrativeExpenses />;
+    }
+
+    if (activeSection === 'Salaire du Personnel') {
+      return <PersonnelSalaries />;
     }
 
     if (activeSection === 'Stocks Livrets') {
