@@ -431,7 +431,7 @@ const FieldControl: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="space-y-1">
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Observations:</p>
-                          <p className="text-[10px] font-medium text-gray-700 max-w-[200px] line-clamp-2">{report.observations}</p>
+                          <p className="text-[11px] font-bold text-[#121c32] uppercase leading-relaxed max-w-[200px]">{report.observations}</p>
                           {report.recommendations && (
                             <>
                               <p className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter mt-2">Recommandations:</p>

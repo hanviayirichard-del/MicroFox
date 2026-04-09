@@ -501,6 +501,12 @@ const CashGaps: React.FC = () => {
                                 )}
                               </div>
                             )}
+                            {item.observation && (
+                              <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-100 flex items-start gap-2 max-w-[200px]">
+                                <FileText size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                                <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">{item.observation}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -529,9 +535,9 @@ const CashGaps: React.FC = () => {
                     </td>
                     <td className="px-6 py-5">
                       {item.observation ? (
-                        <div className="flex items-start gap-2 max-w-[150px]">
-                          <FileText size={14} className="text-gray-300 shrink-0 mt-0.5" />
-                          <p className="text-[10px] font-black text-gray-500 uppercase leading-relaxed line-clamp-4">{item.observation}</p>
+                        <div className="flex items-start gap-2">
+                          <FileText size={14} className="text-gray-400 shrink-0 mt-0.5" />
+                          <p className="text-[11px] font-bold text-[#121c32] uppercase leading-relaxed">{item.observation}</p>
                         </div>
                       ) : (
                         <span className="text-[10px] text-gray-300 italic">N/A</span>
