@@ -18,6 +18,10 @@ const ValidateZoneCotisations: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mfConfig] = useState(() => {
+    const saved = localStorage.getItem('microfox_mf_config');
+    return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
+  });
 
   useEffect(() => {
     loadZones();
@@ -185,8 +189,113 @@ const ValidateZoneCotisations: React.FC = () => {
   };
 
   const handlePrint = () => {
-    if (!zoneData) return;
-    window.print();
+    if (!zoneData || zoneData.transactions.length === 0) return;
+
+    const agentNames = Array.from(new Set(zoneData.transactions.map(tx => tx.cashierName).filter(Boolean))) as string[];
+    const agentsList = agentNames.length > 0 ? agentNames.join(", ") : "N/A";
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Rapport Cotisations - Zone ${zoneData.zone}</title>
+        <style>
+          body { font-family: sans-serif; padding: 20px; color: #121c32; }
+          .header { border-bottom: 2px solid #121c32; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .header h1 { margin: 0; text-transform: uppercase; font-size: 20px; }
+          .mf-info { font-size: 12px; font-weight: bold; }
+          .info { margin-bottom: 15px; }
+          .info p { margin: 2px 0; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th, td { border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left; font-size: 10px; }
+          th { background-color: #f9fafb; font-weight: bold; text-transform: uppercase; }
+          .text-right { text-align: right; }
+          .credit-mention { color: #ef4444; font-weight: bold; font-size: 8px; }
+          .footer { margin-top: 20px; border-top: 1px solid #121c32; padding-top: 10px; font-size: 12px; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 20px; }
+          .signature-box { width: 200px; border-top: 1px dashed #000; margin-top: 30px; text-align: center; font-size: 10px; }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1>${mfConfig.nom || 'MicroFox'}</h1>
+            <p class="mf-info">${mfConfig.adresse || ''}</p>
+            <p class="mf-info">${mfConfig.telephone || ''}</p>
+            <h2 style="margin-top: 10px; font-size: 16px; text-decoration: underline;">RAPPORT DE ZONE</h2>
+          </div>
+          <div class="text-right">
+            <strong>Total: ${zoneData.totalAmount.toLocaleString()} F</strong><br>
+            Nombre: ${zoneData.count}
+          </div>
+        </div>
+        <div class="info">
+          <p><strong>Zone:</strong> ${zoneData.zone}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+          <p><strong>Agent(s):</strong> ${agentsList}</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Heure</th>
+              <th>Client</th>
+              <th>Tontine / Épargne</th>
+              <th>Agent</th>
+              <th class="text-right">Montant</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${zoneData.transactions.map(tx => `
+              <tr>
+                <td>${new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                <td>
+                  <strong>${tx.memberName.toUpperCase()}</strong>
+                  ${tx.hasActiveCredit ? '<br/><span class="credit-mention">CRÉDIT EN COURS</span>' : ''}
+                </td>
+                <td>
+                  T: ${tx.tontineAccountNumber}<br/>
+                  É: ${tx.epargneAccountNumber}
+                </td>
+                <td>${(tx.cashierName || 'N/A').toUpperCase()}</td>
+                <td class="text-right"><strong>${tx.amount.toLocaleString()} F</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="footer">
+          <div class="signatures">
+            <div>
+              <p><strong>Agent Commercial:</strong> ${agentsList}</p>
+              <div class="signature-box">Signature Agent</div>
+            </div>
+            <div class="text-right">
+              <p><strong>Caisse / Responsable:</strong></p>
+              <div class="signature-box">Signature Responsable</div>
+            </div>
+          </div>
+          <p style="margin-top: 40px; font-style: italic; font-size: 9px;">Imprimé le ${new Date().toLocaleString()}</p>
+        </div>
+        <script>
+          window.onload = () => {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handleExportHTML = () => {
@@ -203,23 +312,29 @@ const ValidateZoneCotisations: React.FC = () => {
         <title>Rapport Cotisations - Zone ${zoneData.zone}</title>
         <style>
           body { font-family: sans-serif; padding: 20px; color: #121c32; }
-          .header { border-bottom: 2px solid #121c32; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-          .header h1 { margin: 0; text-transform: uppercase; font-size: 24px; }
-          .info { margin-bottom: 20px; }
-          .info p { margin: 5px 0; font-size: 14px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; font-size: 10px; }
+          .header { border-bottom: 2px solid #121c32; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .header h1 { margin: 0; text-transform: uppercase; font-size: 20px; }
+          .mf-info { font-size: 12px; font-weight: bold; }
+          .info { margin-bottom: 15px; }
+          .info p { margin: 2px 0; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th, td { border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left; font-size: 10px; }
           th { background-color: #f9fafb; font-weight: bold; text-transform: uppercase; }
           .text-right { text-align: right; }
-          .credit-mention { color: #ef4444; font-weight: bold; font-size: 9px; }
-          .footer { margin-top: 50px; border-top: 1px solid #121c32; padding-top: 20px; font-size: 12px; }
-          .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
-          .signature-box { width: 200px; border-top: 1px dashed #000; margin-top: 40px; text-align: center; font-size: 10px; }
+          .credit-mention { color: #ef4444; font-weight: bold; font-size: 8px; }
+          .footer { margin-top: 20px; border-top: 1px solid #121c32; padding-top: 10px; font-size: 12px; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 20px; }
+          .signature-box { width: 200px; border-top: 1px dashed #000; margin-top: 30px; text-align: center; font-size: 10px; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>MicroFox - Rapport de Zone</h1>
+          <div>
+            <h1>${mfConfig.nom || 'MicroFox'}</h1>
+            <p class="mf-info">${mfConfig.adresse || ''}</p>
+            <p class="mf-info">${mfConfig.telephone || ''}</p>
+            <h2 style="margin-top: 10px; font-size: 16px; text-decoration: underline;">RAPPORT DE ZONE</h2>
+          </div>
           <div class="text-right">
             <strong>Total: ${zoneData.totalAmount.toLocaleString()} F</strong><br>
             Nombre: ${zoneData.count}
@@ -494,11 +609,14 @@ const ValidateZoneCotisations: React.FC = () => {
       </div>
 
       {/* Print Section */}
-      <div className="hidden print:block p-8 bg-white text-black">
-        <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
+      <div className="hidden print:block p-8 bg-white text-black print-section">
+        <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold uppercase">MicroFox - Rapport de Zone</h1>
-            <p className="text-sm">Zone: <span className="font-bold">{zoneData?.zone}</span></p>
+            <h1 className="text-xl font-bold uppercase">{mfConfig.nom || 'MicroFox'}</h1>
+            <p className="text-xs font-bold">{mfConfig.adresse}</p>
+            <p className="text-xs font-bold">{mfConfig.telephone}</p>
+            <h2 className="text-lg font-bold uppercase mt-4 underline">Rapport de Zone</h2>
+            <p className="text-sm mt-2">Zone: <span className="font-bold">{zoneData?.zone}</span></p>
             <p className="text-sm">Date: <span className="font-bold">{new Date().toLocaleDateString()}</span></p>
           </div>
           <div className="text-right">

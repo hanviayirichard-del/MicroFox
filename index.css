@@ -9,3 +9,31 @@
     scrollbar-width: none;
   }
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide everything except the main content or specific print sections */
+  #root > div > aside,
+  #root > div > div > header {
+    display: none !important;
+  }
+
+  #root > div > div > main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .print-section {
+    display: block !important;
+    width: 100% !important;
+  }
+}

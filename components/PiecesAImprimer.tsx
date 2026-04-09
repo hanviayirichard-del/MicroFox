@@ -120,7 +120,7 @@ const PiecesAImprimer: React.FC = () => {
   };
 
   const generatePrint = (doc: PrintableDoc, member: any | null, caisseFilter: string = 'all') => {
-    const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
+    const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "telephone": "", "code": ""}');
     
     let content = '';
     const dateStr = new Date().toLocaleDateString('fr-FR');
@@ -133,6 +133,7 @@ const PiecesAImprimer: React.FC = () => {
               <div style="width: 40px; height: 40px; background: #121c32; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 10px;">MF</div>
               <div>
                 <h2 style="margin: 0; font-size: 12px; font-weight: 900; color: #121c32; text-transform: uppercase;">${mfConfig.nom}</h2>
+                <p style="margin: 0; font-size: 7px; color: #666;">${mfConfig.adresse} | ${mfConfig.telephone}</p>
                 <p style="margin: 0; font-size: 8px; color: #666;">CARTE DE MEMBRE OFFICIELLE</p>
               </div>
             </div>
@@ -142,7 +143,8 @@ const PiecesAImprimer: React.FC = () => {
               </div>
               <div style="flex: 1;">
                 <p style="margin: 0 0 5px 0; font-size: 10px; font-weight: 900; text-transform: uppercase;">${member.name}</p>
-                <p style="margin: 0 0 2px 0; font-size: 8px; color: #666;">CODE: <strong>${member.code}</strong></p>
+                <p style="margin: 0 0 2px 0; font-size: 8px; color: #666;">TONTINE: <strong>${member.tontineAccounts?.[0]?.number || 'N/A'}</strong></p>
+                <p style="margin: 0 0 2px 0; font-size: 8px; color: #666;">ÉPARGNE: <strong>${member.epargneAccountNumber || 'N/A'}</strong></p>
                 <p style="margin: 0 0 2px 0; font-size: 8px; color: #666;">ADHÉSION: ${new Date(member.adhesionDate || Date.now()).toLocaleDateString()}</p>
                 <p style="margin: 0 0 2px 0; font-size: 8px; color: #666;">ZONE: ${member.zone || 'N/A'}</p>
               </div>
@@ -156,7 +158,8 @@ const PiecesAImprimer: React.FC = () => {
           <div style="max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #eee;">
             <div style="text-align: center; border-bottom: 2px solid #121c32; padding-bottom: 20px; margin-bottom: 30px;">
               <h1 style="margin: 0; font-size: 24px; font-weight: 900; color: #121c32; text-transform: uppercase;">LIVRET D'ÉPARGNE</h1>
-              <p style="margin: 5px 0; font-size: 14px; color: #666;">${mfConfig.nom} - ${mfConfig.adresse}</p>
+              <p style="margin: 5px 0; font-size: 14px; color: #666;">${mfConfig.nom}</p>
+              <p style="margin: 2px 0; font-size: 12px; color: #666;">${mfConfig.adresse} | ${mfConfig.telephone}</p>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px;">
               <div>
@@ -284,7 +287,9 @@ const PiecesAImprimer: React.FC = () => {
           <div style="max-width: 800px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', sans-serif; color: #121c32;">
             <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 15px;">
               <h1 style="margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase;">BILAN JOURNALIER - ${dateStr}</h1>
-              <p style="margin: 5px 0; font-size: 14px; font-weight: bold; color: #00c896;">${mfConfig.nom} - ${reportCaisseName}</p>
+              <p style="margin: 5px 0; font-size: 14px; font-weight: bold; color: #00c896;">${mfConfig.nom}</p>
+              <p style="margin: 2px 0; font-size: 12px; color: #666;">${mfConfig.adresse} | ${mfConfig.telephone}</p>
+              <p style="margin: 5px 0; font-size: 13px; font-weight: bold; color: #121c32;">Caisse: ${reportCaisseName}</p>
             </div>
             
             <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 30px;">
