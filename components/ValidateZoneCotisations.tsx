@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardCheck, Search, MapPin, CheckCircle, AlertCircle, ChevronRight, Users, TrendingUp, Printer, Download } from 'lucide-react';
+import { ClipboardCheck, Search, MapPin, CheckCircle, AlertCircle, ChevronRight, Users, TrendingUp, Printer, Download, ChevronDown } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
 interface ZoneCotisation {
@@ -26,7 +26,11 @@ const ValidateZoneCotisations: React.FC = () => {
   useEffect(() => {
     loadZones();
     window.addEventListener('storage', loadZones);
-    return () => window.removeEventListener('storage', loadZones);
+    const interval = setInterval(loadZones, 3000);
+    return () => {
+      window.removeEventListener('storage', loadZones);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -436,35 +440,33 @@ const ValidateZoneCotisations: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Sélectionner une Zone</label>
-            <div className="relative">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <select 
-                value={selectedZone}
-                onChange={(e) => setSelectedZone(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-blue-500 font-bold text-[#121c32] transition-all text-sm appearance-none"
-              >
-                <option value="">Choisir une zone...</option>
-                {zones.map(z => {
-                  const status = zoneStatuses[z];
-                  let colorClass = "";
-                  let style = {};
-                  
-                  if (status === 'pending') {
-                    style = { color: 'white', backgroundColor: '#ef4444' }; // Red
-                  } else if (status === 'validated') {
-                    style = { color: 'white', backgroundColor: '#10b981' }; // Green
-                  } else {
-                    style = { color: '#121c32', backgroundColor: 'white' }; // White
-                  }
-
-                  return (
-                    <option key={z} value={z} style={style}>
-                      {z} {status === 'pending' ? '(À VALIDER)' : status === 'validated' ? '(VALIDÉ)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+              <div className="relative">
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <select 
+                  value={selectedZone}
+                  onChange={(e) => setSelectedZone(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-blue-500 font-bold text-[#121c32] transition-all text-sm appearance-none cursor-pointer"
+                >
+                  <option value="">Choisir une zone...</option>
+                  {zones.map(z => {
+                    const status = zoneStatuses[z];
+                    
+                    return (
+                      <option 
+                        key={z} 
+                        value={z} 
+                        style={{ 
+                          color: status === 'pending' ? '#ef4444' : status === 'validated' ? '#10b981' : '#121c32',
+                          backgroundColor: 'white'
+                        }}
+                      >
+                        {z} {status === 'pending' ? ' (À VALIDER)' : status === 'validated' ? ' (VALIDÉ)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+              </div>
           </div>
 
           {zoneData && (
