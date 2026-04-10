@@ -31,7 +31,11 @@ const GapsReport: React.FC = () => {
 
   const loadGaps = () => {
     const savedUsers = localStorage.getItem('microfox_users');
-    const usersList = savedUsers ? JSON.parse(savedUsers) : [];
+    let usersList = savedUsers ? JSON.parse(savedUsers) : [];
+    
+    if (currentUser?.role === 'agent commercial') {
+      usersList = usersList.filter((u: any) => u.id === currentUser.id);
+    }
     setAllUsers(usersList);
 
     const selectedUser = usersList.find((u: any) => u.id === selectedUserId);
@@ -62,12 +66,11 @@ const GapsReport: React.FC = () => {
           (item.type === 'CAISSIER' && item.sourceName === selectedCaisse) ||
           (item.userId && usersList.find((u: any) => u.id === item.userId)?.caisse === selectedCaisse);
         
-        // Filtrage par zone pour l'agent commercial
+        // Filtrage pour l'agent commercial : ne voit que ses propres écarts
         if (currentUser?.role === 'agent commercial') {
-          const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
-          if (agentZones.length > 0) {
-            return matchesStartDate && matchesEndDate && agentZones.includes(item.zone) && matchesUser && matchesCaisse;
-          }
+          const isOwnGap = item.userId === currentUser.id || 
+                           (item.type === 'AGENT' && item.sourceName === currentUser.identifiant);
+          return matchesStartDate && matchesEndDate && isOwnGap;
         }
         
         return matchesStartDate && matchesEndDate && matchesUser && matchesCaisse;

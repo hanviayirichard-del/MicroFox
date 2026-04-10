@@ -271,6 +271,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
               if (item.id === 'Guide Pratique') return true;
               if (userRole === 'administrateur') return true;
 
+              // Restrictions pour l'agent commercial
+              if (userRole === 'agent commercial') {
+                const restrictedTabs = ['Analyse', 'Alerte Doublons', 'Reçu de caisse'];
+                if (restrictedTabs.includes(item.id)) return false;
+              }
+
               if (permissions[userRole]) {
                 return permissions[userRole].includes(item.id);
               }
