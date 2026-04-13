@@ -111,7 +111,7 @@ const GlobalJournal: React.FC = () => {
                 date: v.date,
                 type: type,
                 amount: v.amount,
-                description: v.type === 'Fonds de caisse' ? 'Approvisionnement Caisse' : v.type,
+                description: v.type === 'Fonds de caisse' ? 'Approvisionnement Caisse' : (v.details || v.observation || v.type),
                 memberName: 'COFFRE/BANQUE',
                 memberCode: caisseName,
                 account: 'coffre',

@@ -136,21 +136,21 @@ const GapsReport: React.FC = () => {
             amountAffected = Math.abs(gap.gapAmount);
             newBal = currentBal + amountAffected;
             txType = 'Régularisation Écart';
-            txDetails = `Régularisation ${gap.type} du ${new Date(gap.date).toLocaleDateString()} (${gap.sourceName})`;
+            txDetails = `Régularisation ${gap.type} - Client: ${gap.sourceName} - Obs: ${obs || gap.observation || 'N/A'}`;
           }
         } else if (newStatus === 'Remis') {
           if (gap.gapAmount > 0) {
             amountAffected = gap.gapAmount;
             newBal = currentBal - amountAffected;
             txType = 'Remise Surplus';
-            txDetails = `Remise surplus ${gap.type} du ${new Date(gap.date).toLocaleDateString()} (${gap.sourceName})`;
+            txDetails = `Remise surplus ${gap.type} - Client: ${gap.sourceName} - Obs: ${obs || gap.observation || 'N/A'}`;
           }
         } else if (newStatus === 'Annulé') {
           if (gap.gapAmount > 0) {
             amountAffected = gap.gapAmount;
             newBal = currentBal - amountAffected;
             txType = 'Annulation Surplus';
-            txDetails = `Annulation surplus ${gap.type} du ${new Date(gap.date).toLocaleDateString()} (${gap.sourceName})`;
+            txDetails = `Annulation surplus ${gap.type} - Client: ${gap.sourceName} - Obs: ${obs || gap.observation || 'N/A'}`;
           }
         }
 

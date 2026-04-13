@@ -191,12 +191,19 @@ const AccountingAndStates: React.FC = () => {
               }
             }
             const date = vDate.toLocaleDateString();
+            const desc = v.details || v.observation || v.type;
             if (v.type === 'Approvisionnement Caisse') {
-              allEntries.push({ date, account: '571100', label: 'Caisse', desc: v.type, debit: v.amount, credit: 0 });
-              allEntries.push({ date, account: '571200', label: 'Coffre', desc: v.type, debit: 0, credit: v.amount });
+              allEntries.push({ date, account: '571100', label: 'Caisse', desc, debit: v.amount, credit: 0 });
+              allEntries.push({ date, account: '571200', label: 'Coffre', desc, debit: 0, credit: v.amount });
             } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée') {
-              allEntries.push({ date, account: '571200', label: 'Coffre', desc: v.type, debit: v.amount, credit: 0 });
-              allEntries.push({ date, account: '571100', label: 'Caisse', desc: v.type, debit: 0, credit: v.amount });
+              allEntries.push({ date, account: '571200', label: 'Coffre', desc, debit: v.amount, credit: 0 });
+              allEntries.push({ date, account: '571100', label: 'Caisse', desc, debit: 0, credit: v.amount });
+            } else if (v.type === 'Régularisation Écart') {
+              allEntries.push({ date, account: '571100', label: 'Caisse', desc, debit: v.amount, credit: 0 });
+              allEntries.push({ date, account: '758000', label: 'Produits divers (Régul. Écart)', desc, debit: 0, credit: v.amount });
+            } else if (v.type === 'Annulation Surplus' || v.type === 'Remise Surplus') {
+              allEntries.push({ date, account: '658000', label: 'Charges diverses (Régul. Écart)', desc, debit: v.amount, credit: 0 });
+              allEntries.push({ date, account: '571100', label: 'Caisse', desc, debit: 0, credit: v.amount });
             }
           }
         });
