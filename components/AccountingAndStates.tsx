@@ -103,6 +103,18 @@ const AccountingAndStates: React.FC = () => {
                 const accountSuffix = tx.tontineAccountNumber ? ` - ${tx.tontineAccountNumber}` : '';
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Cotisation Tontine ${m.name}${accountSuffix}`, debit: amount, credit: 0 });
                 allEntries.push({ date, account: '252110', label: 'Dépôts Tontine', desc: `Cotisation Tontine ${m.name}${accountSuffix}`, debit: 0, credit: amount });
+              } else if (tx.type === 'retrait' && tx.account === 'tontine') {
+                const accountSuffix = tx.tontineAccountNumber ? ` - ${tx.tontineAccountNumber}` : '';
+                allEntries.push({ date, account: '252110', label: 'Dépôts Tontine', desc: `Retrait Tontine ${m.name}${accountSuffix}`, debit: amount, credit: 0 });
+                allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Retrait Tontine ${m.name}${accountSuffix}`, debit: 0, credit: amount });
+              } else if (tx.type === 'transfert' && tx.account === 'tontine') {
+                const accountSuffix = tx.tontineAccountNumber ? ` - ${tx.tontineAccountNumber}` : '';
+                allEntries.push({ date, account: '252110', label: 'Dépôts Tontine', desc: `Transfert Tontine ${m.name}${accountSuffix}`, debit: amount, credit: 0 });
+                if (tx.destinationAccount === 'epargne') {
+                  allEntries.push({ date, account: '251110', label: 'Épargne à vue', desc: `Transfert Tontine ${m.name}${accountSuffix}`, debit: 0, credit: amount });
+                } else if (tx.destinationAccount === 'garantie') {
+                  allEntries.push({ date, account: '251120', label: 'Dépôts de garantie', desc: `Transfert Tontine ${m.name}${accountSuffix}`, debit: 0, credit: amount });
+                }
               } else if (tx.type === 'deblocage' && tx.account === 'credit') {
                 allEntries.push({ date, account: '221110', label: 'Prêts aux membres', desc: `Déblocage Crédit ${m.name}`, debit: amount, credit: 0 });
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Déblocage Crédit ${m.name}`, debit: 0, credit: amount });

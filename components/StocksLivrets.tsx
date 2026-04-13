@@ -55,6 +55,14 @@ const StocksLivrets: React.FC = () => {
   const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
   const [searchTerm, setSearchTerm] = useState('');
   const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  });
+  const [historyEndDate, setHistoryEndDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  });
   const [salesData, setSalesData] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
@@ -640,7 +648,23 @@ const StocksLivrets: React.FC = () => {
             <History className="text-indigo-600" size={20} />
             <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Historique des Mouvements</h2>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-2xl border border-gray-100">
+              <span className="text-[10px] font-black text-gray-400 uppercase">Du</span>
+              <input 
+                type="date" 
+                value={historyStartDate}
+                onChange={(e) => setHistoryStartDate(e.target.value)}
+                className="bg-transparent outline-none text-xs font-bold text-[#121c32]"
+              />
+              <span className="text-[10px] font-black text-gray-400 uppercase">Au</span>
+              <input 
+                type="date" 
+                value={historyEndDate}
+                onChange={(e) => setHistoryEndDate(e.target.value)}
+                className="bg-transparent outline-none text-xs font-bold text-[#121c32]"
+              />
+            </div>
             <div className="relative flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input 
@@ -680,6 +704,19 @@ const StocksLivrets: React.FC = () => {
                 ...salesData.map(s => ({ ...s, mType: 'VENTE', type: s.description.toLowerCase().includes('épargne') ? 'epargne' : 'tontine', quantity: 1 }))
               ]
                 .filter((m: any) => {
+                  const mDate = new Date(m.date);
+                  const start = historyStartDate ? new Date(historyStartDate) : null;
+                  const end = historyEndDate ? new Date(historyEndDate) : null;
+                  
+                  if (start) {
+                    start.setHours(0, 0, 0, 0);
+                    if (mDate < start) return false;
+                  }
+                  if (end) {
+                    end.setHours(23, 59, 59, 999);
+                    if (mDate > end) return false;
+                  }
+
                   const matchesRole = (() => {
                     if (currentUser.role !== 'agent commercial') return true;
                     const myId = currentUser.identifiant.toLowerCase();
