@@ -1,15 +1,27 @@
 
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Send, History, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download } from 'lucide-react';
+import { Package, Plus, Send, History, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download, Search } from 'lucide-react';
 import { User } from '../types';
 import * as XLSX from 'xlsx';
 
 interface StockDistribution {
   id: string;
   date: string;
+  sender?: string;
   recipient: string;
   type: 'epargne' | 'tontine';
   quantity: number;
+  status: 'En attente' | 'Validé';
+}
+
+interface StockReturn {
+  id: string;
+  date: string;
+  from: string;
+  to: string;
+  type: 'epargne' | 'tontine';
+  quantity: number;
+  status: 'En attente' | 'Validé';
 }
 
 interface StockPurchase {
@@ -26,19 +38,26 @@ interface LivretsStocks {
   };
   purchases: StockPurchase[];
   distributions: StockDistribution[];
+  returns?: StockReturn[];
 }
 
 const StocksLivrets: React.FC = () => {
   const [stocks, setStocks] = useState<LivretsStocks>({
     central: { epargne: 0, tontine: 0 },
     purchases: [],
-    distributions: []
+    distributions: [],
+    returns: []
   });
 
   const [purchaseForm, setPurchaseForm] = useState({ type: 'epargne' as 'epargne' | 'tontine', quantity: 0 });
   const [distribForm, setDistribForm] = useState({ recipient: '', type: 'epargne' as 'epargne' | 'tontine', quantity: 0 });
+  const [returnForm, setReturnForm] = useState({ to: '', type: 'tontine' as 'epargne' | 'tontine', quantity: 0 });
+  const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [salesData, setSalesData] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
 
   const loadData = () => {
     const savedStocks = localStorage.getItem('microfox_livrets_stocks');
@@ -51,12 +70,23 @@ const StocksLivrets: React.FC = () => {
       setUsers(JSON.parse(savedUsers));
     }
 
+    const savedPrices = localStorage.getItem('microfox_livret_prices');
+    if (savedPrices) {
+      setPrices(JSON.parse(savedPrices));
+    }
+
     const savedMembers = localStorage.getItem('microfox_members_data');
     if (savedMembers) {
       const members = JSON.parse(savedMembers);
       const allSales: any[] = [];
       members.forEach((m: any) => {
-        (m.history || []).forEach((tx: any) => {
+        let history = m.history || [];
+        if (!history || history.length === 0) {
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          if (savedHistory) history = JSON.parse(savedHistory);
+        }
+        
+        (history || []).forEach((tx: any) => {
           if (tx.description?.toLowerCase().includes('vente de livret')) {
             allSales.push({ ...tx, memberName: m.name });
           }
@@ -105,9 +135,22 @@ const StocksLivrets: React.FC = () => {
   const handleDistribution = (e: React.FormEvent) => {
     e.preventDefault();
     if (distribForm.quantity <= 0 || !distribForm.recipient) return;
-    if (stocks.central[distribForm.type] < distribForm.quantity) {
-      alert("Stock central insuffisant !");
-      return;
+
+    const isCentral = currentUser.role === 'administrateur' || currentUser.role === 'directeur';
+    const senderName = isCentral ? 'ADMIN' : currentUser.identifiant;
+
+    if (isCentral) {
+      if (stocks.central[distribForm.type] < distribForm.quantity) {
+        alert("Stock central insuffisant !");
+        return;
+      }
+    } else {
+      const currentStocks = getAgentStocks();
+      const myStock = currentStocks[senderName.toLowerCase()]?.[distribForm.type] || 0;
+      if (myStock < distribForm.quantity) {
+        alert("Votre stock est insuffisant !");
+        return;
+      }
     }
 
     const recipientUser = users.find(u => u.identifiant === distribForm.recipient);
@@ -119,17 +162,19 @@ const StocksLivrets: React.FC = () => {
     const newDistrib: StockDistribution = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
+      sender: senderName,
       recipient: (distribForm.recipient || '').trim(),
       type: distribForm.type,
-      quantity: distribForm.quantity
+      quantity: distribForm.quantity,
+      status: 'En attente'
     };
 
     const newStocks = {
       ...stocks,
-      central: {
+      central: isCentral ? {
         ...stocks.central,
         [distribForm.type]: stocks.central[distribForm.type] - distribForm.quantity
-      },
+      } : stocks.central,
       distributions: [newDistrib, ...stocks.distributions]
     };
 
@@ -137,14 +182,102 @@ const StocksLivrets: React.FC = () => {
     setDistribForm({ ...distribForm, quantity: 0, recipient: '' });
   };
 
-  // Calculate current stock per agent
-  const getAgentStocks = () => {
-    const agents: Record<string, { epargne: number, tontine: number }> = {};
+  const handleReturn = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (returnForm.quantity <= 0 || !returnForm.to) return;
 
+    const currentStocks = getAgentStocks();
+    const myStock = currentStocks[currentUser.identifiant.toLowerCase()]?.[returnForm.type] || 0;
+
+    if (myStock < returnForm.quantity) {
+      alert("Votre stock est insuffisant pour effectuer ce retour !");
+      return;
+    }
+
+    const newReturn: StockReturn = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      from: currentUser.identifiant,
+      to: returnForm.to,
+      type: returnForm.type,
+      quantity: returnForm.quantity,
+      status: 'En attente'
+    };
+
+    const newStocks = {
+      ...stocks,
+      returns: [newReturn, ...(stocks.returns || [])]
+    };
+
+    saveStocks(newStocks);
+    setReturnForm({ ...returnForm, quantity: 0, to: '' });
+  };
+
+  const handleConfirm = (id: string, mType: 'RÉPARTITION' | 'RETOUR') => {
+    const newStocks = { ...stocks };
+    
+    if (mType === 'RÉPARTITION') {
+      newStocks.distributions = stocks.distributions.map(d => 
+        d.id === id ? { ...d, status: 'Validé' } : d
+      );
+    } else {
+      newStocks.returns = (stocks.returns || []).map(r => {
+        if (r.id === id) {
+          const updated = { ...r, status: 'Validé' as const };
+          if (r.to === 'ADMIN') {
+            newStocks.central = {
+              ...newStocks.central,
+              [r.type]: newStocks.central[r.type] + r.quantity
+            };
+          }
+          return updated;
+        }
+        return r;
+      });
+    }
+
+    saveStocks(newStocks);
+  };
+
+  // Calculate current stock per user
+  const getAgentStocks = () => {
+    const userStocks: Record<string, { epargne: number, tontine: number }> = {};
+
+    // Initialize for all relevant users
+    users.forEach(u => {
+      if (u.role === 'agent commercial' || u.role === 'caissier') {
+        userStocks[u.identifiant.toLowerCase()] = { epargne: 0, tontine: 0 };
+      }
+    });
+
+    // Distributions
     stocks.distributions.forEach(d => {
       const recipient = (d.recipient || '').trim().toLowerCase();
-      if (!agents[recipient]) agents[recipient] = { epargne: 0, tontine: 0 };
-      agents[recipient][d.type] += d.quantity;
+      const sender = (d.sender || 'ADMIN').trim().toLowerCase();
+
+      // Recipient only gets stock if validated
+      if (d.status === 'Validé' && userStocks[recipient]) {
+        userStocks[recipient][d.type] += d.quantity;
+      }
+      // Sender loses stock immediately
+      if (sender !== 'admin' && userStocks[sender]) {
+        userStocks[sender][d.type] -= d.quantity;
+      }
+    });
+
+    // Returns
+    (stocks.returns || []).forEach(r => {
+      const from = (r.from || '').trim().toLowerCase();
+      const to = (r.to || 'ADMIN').trim().toLowerCase();
+
+      // Sender loses stock immediately
+      if (userStocks[from]) {
+        userStocks[from][r.type] -= r.quantity;
+      }
+      // Recipient only gets stock if validated
+      if (r.status === 'Validé' && to !== 'admin' && userStocks[to]) {
+        userStocks[to][r.type] += r.quantity;
+      }
     });
 
     salesData.forEach(s => {
@@ -154,24 +287,30 @@ const StocksLivrets: React.FC = () => {
         agentName = (s.description.split(/ - Agent /i)[1] || "Inconnu").trim().toLowerCase();
       }
 
-      if (agents[agentName]) {
-        if (desc.includes('épargne')) agents[agentName].epargne -= 1;
-        else if (desc.includes('tontine')) agents[agentName].tontine -= 1;
+      if (userStocks[agentName]) {
+        if (desc.includes('épargne')) userStocks[agentName].epargne -= 1;
+        else if (desc.includes('tontine')) userStocks[agentName].tontine -= 1;
       }
     });
 
-    return agents;
+    return userStocks;
   };
 
   const agentStocks = getAgentStocks();
 
   const handleExportHistory = () => {
-    const data = [...stocks.purchases.map(p => ({ ...p, mType: 'ACHAT' })), ...stocks.distributions.map(d => ({ ...d, mType: 'RÉPARTITION' }))]
+    const data = [
+      ...stocks.purchases.map(p => ({ ...p, mType: 'ACHAT' })), 
+      ...stocks.distributions.map(d => ({ ...d, mType: 'RÉPARTITION' })),
+      ...(stocks.returns || []).map(r => ({ ...r, mType: 'RETOUR' }))
+    ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .map((m: any) => ({
         'Date': new Date(m.date).toLocaleString(),
         'Type': m.mType,
-        'Détails': m.mType === 'ACHAT' ? `Approvisionnement Livret ${m.type === 'epargne' ? 'Épargne' : 'Tontine'}` : `Remis à ${m.recipient} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})`,
+        'Détails': m.mType === 'ACHAT' ? `Approvisionnement Livret ${m.type === 'epargne' ? 'Épargne' : 'Tontine'}` : 
+                  m.mType === 'RÉPARTITION' ? `Remis à ${m.recipient} par ${m.sender || 'ADMIN'} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})` :
+                  `Retourné par ${m.from} à ${m.to === 'ADMIN' ? 'Stock Central' : m.to} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})`,
         'Quantité': m.quantity
       }));
 
@@ -215,9 +354,16 @@ const StocksLivrets: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
               <ArrowDownCircle size={20} />
             </div>
-            <h2 className="text-sm font-black text-white uppercase tracking-widest">Stock Central Épargne (500F)</h2>
+            <h2 className="text-sm font-black text-white uppercase tracking-widest">
+              {(currentUser.role === 'caissier' || currentUser.role === 'agent commercial') ? 'Votre Stock Épargne' : `Stock Central Épargne (${prices.epargne}F)`}
+            </h2>
           </div>
-          <div className="text-4xl font-black text-emerald-500">{stocks.central.epargne} <span className="text-sm text-gray-400 uppercase">Unités</span></div>
+          <div className="text-4xl font-black text-emerald-500">
+            {(currentUser.role === 'caissier' || currentUser.role === 'agent commercial') 
+              ? (agentStocks[currentUser.identifiant.toLowerCase()]?.epargne || 0)
+              : stocks.central.epargne} 
+            <span className="text-sm text-gray-400 uppercase"> Unités</span>
+          </div>
         </div>
 
         <div className="bg-[#121c32] p-6 rounded-[2rem] border border-gray-800 shadow-xl">
@@ -225,220 +371,410 @@ const StocksLivrets: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
               <ArrowDownCircle size={20} />
             </div>
-            <h2 className="text-sm font-black text-white uppercase tracking-widest">Stock Central Tontine (300F)</h2>
+            <h2 className="text-sm font-black text-white uppercase tracking-widest">
+              {(currentUser.role === 'caissier' || currentUser.role === 'agent commercial') ? 'Votre Stock Tontine' : `Stock Central Tontine (${prices.tontine}F)`}
+            </h2>
           </div>
-          <div className="text-4xl font-black text-amber-500">{stocks.central.tontine} <span className="text-sm text-gray-400 uppercase">Unités</span></div>
+          <div className="text-4xl font-black text-amber-500">
+            {(currentUser.role === 'caissier' || currentUser.role === 'agent commercial') 
+              ? (agentStocks[currentUser.identifiant.toLowerCase()]?.tontine || 0)
+              : stocks.central.tontine} 
+            <span className="text-sm text-gray-400 uppercase"> Unités</span>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Approvisionnement Form */}
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-6">
-            <Plus className="text-indigo-600" size={24} />
-            <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Approvisionner le Stock</h2>
-          </div>
-          <form onSubmit={handlePurchase} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret</label>
-                <select 
-                  value={purchaseForm.type}
-                  onChange={(e) => setPurchaseForm({ ...purchaseForm, type: e.target.value as any })}
-                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
-                >
-                  <option value="epargne">Compte Épargne</option>
-                  <option value="tontine">Compte Tontine</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Quantité</label>
-                <input 
-                  type="number" 
-                  value={purchaseForm.quantity || ''}
-                  onChange={(e) => setPurchaseForm({ ...purchaseForm, quantity: parseInt(e.target.value) || 0 })}
-                  placeholder="Ex: 500"
-                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
-                />
-              </div>
+        {/* Approvisionnement Form - Only for Admin/Director */}
+        {(currentUser.role === 'administrateur' || currentUser.role === 'directeur') && (
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-6">
+              <Plus className="text-indigo-600" size={24} />
+              <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Approvisionner le Stock Central</h2>
             </div>
-            <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all active:scale-95">
-              Enregistrer l'Achat
-            </button>
-          </form>
-        </div>
+            <form onSubmit={handlePurchase} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret</label>
+                  <select 
+                    value={purchaseForm.type}
+                    onChange={(e) => setPurchaseForm({ ...purchaseForm, type: e.target.value as any })}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                  >
+                    <option value="epargne">Compte Épargne</option>
+                    <option value="tontine">Compte Tontine</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Quantité</label>
+                  <input 
+                    type="number" 
+                    value={purchaseForm.quantity || ''}
+                    onChange={(e) => setPurchaseForm({ ...purchaseForm, quantity: parseInt(e.target.value) || 0 })}
+                    placeholder="Ex: 500"
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                  />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all active:scale-95">
+                Enregistrer l'Achat
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Répartition Form */}
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 mb-6">
-            <Send className="text-emerald-600" size={24} />
-            <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Répartir aux Agents</h2>
-          </div>
-          <form onSubmit={handleDistribution} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Bénéficiaire (Agent / Caissière)</label>
-              <select 
-                value={distribForm.recipient}
-                onChange={(e) => {
-                  const recipientId = e.target.value;
-                  const user = users.find(u => u.identifiant === recipientId);
-                  const newType = (user?.role === 'agent commercial' && distribForm.type === 'epargne') ? 'tontine' : distribForm.type;
-                  setDistribForm({ ...distribForm, recipient: recipientId, type: newType as any });
-                }}
-                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
-              >
-                <option value="">-- Sélectionner un bénéficiaire --</option>
-                {users
-                  .filter(u => !u.isBlocked && (u.role === 'agent commercial' || u.role === 'caissier'))
-                  .map(u => (
-                    <option key={u.id} value={u.identifiant}>
-                      {u.identifiant} ({u.role === 'caissier' ? u.caisse || 'Caisse' : `Zone ${u.zoneCollecte || 'N/A'}`})
-                    </option>
-                  ))
-                }
-              </select>
+        {(currentUser.role === 'administrateur' || currentUser.role === 'directeur' || currentUser.role === 'caissier') && (
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-2">
+              <Send className="text-emerald-600" size={24} />
+              <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Répartir les Livrets</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <p className="text-[10px] text-gray-400 font-bold uppercase mb-6 italic">Utilisez ce formulaire pour donner des livrets aux agents commerciaux.</p>
+            <form onSubmit={handleDistribution} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Bénéficiaire</label>
                 <select 
-                  value={distribForm.type}
-                  onChange={(e) => setDistribForm({ ...distribForm, type: e.target.value as any })}
+                  value={distribForm.recipient}
+                  onChange={(e) => {
+                    const recipientId = e.target.value;
+                    const user = users.find(u => u.identifiant === recipientId);
+                    const newType = (user?.role === 'agent commercial' && distribForm.type === 'epargne') ? 'tontine' : distribForm.type;
+                    setDistribForm({ ...distribForm, recipient: recipientId, type: newType as any });
+                  }}
                   className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
                 >
-                  {(() => {
-                    const selectedUser = users.find(u => u.identifiant === distribForm.recipient);
-                    const isAgent = selectedUser?.role === 'agent commercial';
-                    return (
-                      <>
-                        {!isAgent && <option value="epargne">Compte Épargne</option>}
-                        <option value="tontine">Compte Tontine</option>
-                      </>
-                    );
-                  })()}
+                  <option value="">-- Sélectionner un bénéficiaire --</option>
+                  {users
+                    .filter(u => !u.isBlocked && (
+                      (currentUser.role === 'caissier' ? u.role === 'agent commercial' : (u.role === 'agent commercial' || u.role === 'caissier'))
+                    ) && u.identifiant !== currentUser.identifiant)
+                    .map(u => (
+                      <option key={u.id} value={u.identifiant}>
+                        {u.identifiant} ({u.role === 'caissier' ? u.caisse || 'Caisse' : `Zone ${u.zoneCollecte || 'N/A'}`})
+                      </option>
+                    ))
+                  }
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Quantité</label>
-                <input 
-                  type="number" 
-                  value={distribForm.quantity || ''}
-                  onChange={(e) => setDistribForm({ ...distribForm, quantity: parseInt(e.target.value) || 0 })}
-                  placeholder="Ex: 10"
-                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret</label>
+                  <select 
+                    value={distribForm.type}
+                    onChange={(e) => setDistribForm({ ...distribForm, type: e.target.value as any })}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                  >
+                    {(() => {
+                      const selectedUser = users.find(u => u.identifiant === distribForm.recipient);
+                      const isAgent = selectedUser?.role === 'agent commercial';
+                      return (
+                        <>
+                          {!isAgent && <option value="epargne">Compte Épargne</option>}
+                          <option value="tontine">Compte Tontine</option>
+                        </>
+                      );
+                    })()}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Quantité</label>
+                  <input 
+                    type="number" 
+                    value={distribForm.quantity || ''}
+                    onChange={(e) => setDistribForm({ ...distribForm, quantity: parseInt(e.target.value) || 0 })}
+                    placeholder="Ex: 10"
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                  />
+                </div>
               </div>
+              <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 transition-all active:scale-95">
+                Confirmer la Répartition
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Retour Form */}
+        {(currentUser.role === 'agent commercial' || currentUser.role === 'caissier') && (
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-2">
+              <ArrowUpCircle className="text-red-600" size={24} />
+              <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Retourner des Livrets</h2>
             </div>
-            <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 transition-all active:scale-95">
-              Confirmer la Répartition
-            </button>
-          </form>
-        </div>
+            <p className="text-[10px] text-gray-400 font-bold uppercase mb-6 italic">Utilisez ce formulaire pour retourner les livrets restants à l'administration.</p>
+            <form onSubmit={handleReturn} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Destinataire du Retour</label>
+                <select 
+                  value={returnForm.to}
+                  onChange={(e) => setReturnForm({ ...returnForm, to: e.target.value })}
+                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                >
+                  <option value="">-- Sélectionner un destinataire --</option>
+                  {currentUser.role === 'agent commercial' ? (
+                    users
+                      .filter(u => u.role === 'caissier' && !u.isBlocked)
+                      .map(u => (
+                        <option key={u.id} value={u.identifiant}>
+                          {u.identifiant} ({u.caisse || 'Caisse'})
+                        </option>
+                      ))
+                  ) : (
+                    <option value="ADMIN">Administration (Stock Central)</option>
+                  )}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Type de Livret</label>
+                  <select 
+                    value={returnForm.type}
+                    onChange={(e) => setReturnForm({ ...returnForm, type: e.target.value as any })}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                  >
+                    {currentUser.role === 'caissier' && <option value="epargne">Compte Épargne</option>}
+                    <option value="tontine">Compte Tontine</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Quantité</label>
+                  <input 
+                    type="number" 
+                    value={returnForm.quantity || ''}
+                    onChange={(e) => setReturnForm({ ...returnForm, quantity: parseInt(e.target.value) || 0 })}
+                    placeholder="Ex: 5"
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-bold text-[#121c32]"
+                  />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all active:scale-95">
+                Confirmer le Retour
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Agent Stocks Table */}
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+        <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <UserIcon className="text-indigo-600" size={20} />
             <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Stocks Restants par Agent</h2>
           </div>
-          <button 
-            onClick={handleExportAgentStocks}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
-          >
-            <Download size={14} />
-            Exporter
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Rechercher un agent..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-xs font-bold text-[#121c32] w-full sm:w-64 focus:border-indigo-300 transition-all"
+              />
+            </div>
+            <button 
+              onClick={handleExportAgentStocks}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
+            >
+              <Download size={14} />
+              Exporter
+            </button>
+          </div>
         </div>
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">AGENT / DESTINATION</th>
-              <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">LIVRETS ÉPARGNE</th>
-              <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">LIVRETS TONTINE</th>
-              <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">STATUT</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {Object.entries(agentStocks).length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-medium">Aucune répartition effectuée pour le moment.</td>
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left min-w-[600px]">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">AGENT / DESTINATION</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">LIVRETS ÉPARGNE</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">LIVRETS TONTINE</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">STATUT</th>
               </tr>
-            ) : (
-              Object.entries(agentStocks).map(([agent, s]) => (
-                <tr key={agent} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-black text-[#121c32] uppercase">{agent}</span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`text-sm font-black ${s.epargne <= 2 ? 'text-red-600' : 'text-emerald-600'}`}>{s.epargne}</span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`text-sm font-black ${s.tontine <= 5 ? 'text-red-600' : 'text-amber-600'}`}>{s.tontine}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${s.epargne + s.tontine > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {s.epargne + s.tontine > 0 ? 'En Stock' : 'Rupture'}
-                    </span>
-                  </td>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {Object.entries(agentStocks).filter(([agent]) => {
+                const matchesRole = currentUser.role !== 'agent commercial' || agent.toLowerCase() === currentUser.identifiant.toLowerCase();
+                const matchesSearch = agent.toLowerCase().includes(searchTerm.toLowerCase());
+                return matchesRole && matchesSearch;
+              }).length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-medium">Aucun résultat trouvé.</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                Object.entries(agentStocks)
+                  .filter(([agent]) => {
+                    const matchesRole = currentUser.role !== 'agent commercial' || agent.toLowerCase() === currentUser.identifiant.toLowerCase();
+                    const matchesSearch = agent.toLowerCase().includes(searchTerm.toLowerCase());
+                    return matchesRole && matchesSearch;
+                  })
+                  .map(([agent, s]) => (
+                    <tr key={agent} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-black text-[#121c32] uppercase">{agent}</span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`text-sm font-black ${s.epargne <= 2 ? 'text-red-600' : 'text-emerald-600'}`}>{s.epargne}</span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`text-sm font-black ${s.tontine <= 5 ? 'text-red-600' : 'text-amber-600'}`}>{s.tontine}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${s.epargne + s.tontine > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                          {s.epargne + s.tontine > 0 ? 'En Stock' : 'Rupture'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* History Table */}
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+        <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <History className="text-indigo-600" size={20} />
             <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Historique des Mouvements</h2>
           </div>
-          <button 
-            onClick={handleExportHistory}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
-          >
-            <Download size={14} />
-            Exporter
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Rechercher un agent..."
+                value={historySearchTerm}
+                onChange={(e) => setHistorySearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-xs font-bold text-[#121c32] w-full sm:w-64 focus:border-indigo-300 transition-all"
+              />
+            </div>
+            <button 
+              onClick={handleExportHistory}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
+            >
+              <Download size={14} />
+              Exporter
+            </button>
+          </div>
         </div>
-        <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left min-w-[800px]">
             <thead className="sticky top-0 bg-gray-50 z-10">
               <tr>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DATE</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">TYPE</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DÉTAILS</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">STATUT</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">QUANTITÉ</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">ACTION</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {[...stocks.purchases.map(p => ({ ...p, mType: 'ACHAT' })), ...stocks.distributions.map(d => ({ ...d, mType: 'RÉPARTITION' }))]
+              {[
+                ...stocks.purchases.map(p => ({ ...p, mType: 'ACHAT' })), 
+                ...stocks.distributions.map(d => ({ ...d, mType: 'RÉPARTITION' })),
+                ...(stocks.returns || []).map(r => ({ ...r, mType: 'RETOUR' })),
+                ...salesData.map(s => ({ ...s, mType: 'VENTE', type: s.description.toLowerCase().includes('épargne') ? 'epargne' : 'tontine', quantity: 1 }))
+              ]
+                .filter((m: any) => {
+                  const matchesRole = (() => {
+                    if (currentUser.role !== 'agent commercial') return true;
+                    const myId = currentUser.identifiant.toLowerCase();
+                    if (m.mType === 'ACHAT') return false;
+                    if (m.mType === 'RÉPARTITION') return m.recipient.toLowerCase() === myId || (m.sender && m.sender.toLowerCase() === myId);
+                    if (m.mType === 'RETOUR') return m.from.toLowerCase() === myId || m.to.toLowerCase() === myId;
+                    if (m.mType === 'VENTE') {
+                      const agentName = (m.description.split(/ - Agent /i)[1] || "").trim().toLowerCase();
+                      return agentName === myId;
+                    }
+                    return false;
+                  })();
+
+                  const matchesSearch = (() => {
+                    if (!historySearchTerm) return true;
+                    const search = historySearchTerm.toLowerCase();
+                    if (m.mType === 'ACHAT') return false;
+                    if (m.mType === 'RÉPARTITION') return m.recipient.toLowerCase().includes(search) || (m.sender && m.sender.toLowerCase().includes(search));
+                    if (m.mType === 'RETOUR') return m.from.toLowerCase().includes(search) || m.to.toLowerCase().includes(search);
+                    if (m.mType === 'VENTE') {
+                      const agentName = (m.description.split(/ - Agent /i)[1] || "").trim().toLowerCase();
+                      return agentName.includes(search) || m.memberName.toLowerCase().includes(search);
+                    }
+                    return false;
+                  })();
+
+                  return matchesRole && matchesSearch;
+                })
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map((m: any) => (
-                  <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="text-xs font-bold text-gray-500">{new Date(m.date).toLocaleString()}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${m.mType === 'ACHAT' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {m.mType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-[#121c32]">
-                        {m.mType === 'ACHAT' ? `Approvisionnement Livret ${m.type === 'epargne' ? 'Épargne' : 'Tontine'}` : `Remis à ${m.recipient} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})`}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`text-sm font-black ${m.mType === 'ACHAT' ? 'text-indigo-600' : 'text-emerald-600'}`}>
-                        {m.mType === 'ACHAT' ? '+' : '-'}{m.quantity}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                .map((m: any) => {
+                  const isPositive = (() => {
+                    const myId = currentUser.identifiant.toLowerCase();
+                    if (m.mType === 'ACHAT') return true;
+                    if (m.mType === 'RÉPARTITION') return m.recipient.toLowerCase() === myId || (currentUser.role !== 'agent commercial' && m.sender === 'ADMIN');
+                    if (m.mType === 'RETOUR') return m.to.toLowerCase() === myId || (currentUser.role !== 'agent commercial' && m.to === 'ADMIN');
+                    if (m.mType === 'VENTE') return false;
+                    return false;
+                  })();
+
+                  return (
+                    <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-bold text-gray-500">{new Date(m.date).toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${
+                          m.mType === 'ACHAT' ? 'bg-indigo-100 text-indigo-700' : 
+                          m.mType === 'RÉPARTITION' ? 'bg-emerald-100 text-emerald-700' : 
+                          m.mType === 'VENTE' ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {m.mType}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-[#121c32]">
+                          {m.mType === 'ACHAT' ? `Approvisionnement Livret ${m.type === 'epargne' ? 'Épargne' : 'Tontine'}` : 
+                           m.mType === 'RÉPARTITION' ? `Remis à ${m.recipient} par ${m.sender || 'ADMIN'} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})` :
+                           m.mType === 'VENTE' ? `Vendu à ${m.memberName} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})` :
+                           `Retourné par ${m.from} à ${m.to === 'ADMIN' ? 'Stock Central' : m.to} (${m.type === 'epargne' ? 'Épargne' : 'Tontine'})`}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {m.mType !== 'ACHAT' && m.mType !== 'VENTE' && (
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${
+                            m.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {m.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`text-sm font-black ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {isPositive ? '+' : '-'}{m.quantity}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {m.mType !== 'ACHAT' && m.mType !== 'VENTE' && m.status === 'En attente' && (
+                          (m.mType === 'RÉPARTITION' && m.recipient.toLowerCase() === currentUser.identifiant.toLowerCase()) ||
+                          (m.mType === 'RETOUR' && (
+                            (m.to === 'ADMIN' && (currentUser.role === 'administrateur' || currentUser.role === 'directeur')) ||
+                            (m.to.toLowerCase() === currentUser.identifiant.toLowerCase())
+                          ))
+                        ) && (
+                          <button 
+                            onClick={() => handleConfirm(m.id, m.mType)}
+                            className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                          >
+                            Confirmer
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>

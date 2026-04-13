@@ -42,6 +42,8 @@ const GeographicMap: React.FC = () => {
   const [isRouting, setIsRouting] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [journeys, setJourneys] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState<string>(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     // Load current user
@@ -96,7 +98,14 @@ const GeographicMap: React.FC = () => {
     const savedJourneys = localStorage.getItem('microfox_user_journeys');
     if (savedJourneys) {
       try {
-        setJourneys(JSON.parse(savedJourneys));
+        const parsedJourneys = JSON.parse(savedJourneys);
+        const twoWeeksAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+        const filteredJourneys = parsedJourneys.filter((p: any) => new Date(p.timestamp).getTime() > twoWeeksAgo);
+        
+        if (filteredJourneys.length !== parsedJourneys.length) {
+          localStorage.setItem('microfox_user_journeys', JSON.stringify(filteredJourneys));
+        }
+        setJourneys(filteredJourneys);
       } catch (e) {
         console.error("Error parsing journeys", e);
       }
@@ -155,17 +164,22 @@ const GeographicMap: React.FC = () => {
   );
 
   // Group journeys by user
-  const groupedJourneys = journeys.reduce((acc: any, point: any) => {
-    if (!acc[point.userId]) {
-      acc[point.userId] = {
-        userId: point.userId,
-        userName: point.userName,
-        points: []
-      };
-    }
-    acc[point.userId].points.push(point);
-    return acc;
-  }, {});
+  const groupedJourneys = journeys
+    .filter((point: any) => {
+      const pointDate = point.timestamp.split('T')[0];
+      return pointDate >= startDate && pointDate <= endDate;
+    })
+    .reduce((acc: any, point: any) => {
+      if (!acc[point.userId]) {
+        acc[point.userId] = {
+          userId: point.userId,
+          userName: point.userName,
+          points: []
+        };
+      }
+      acc[point.userId].points.push(point);
+      return acc;
+    }, {});
 
   const journeyList = Object.values(groupedJourneys);
 
@@ -411,14 +425,30 @@ const GeographicMap: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex-1 bg-white rounded-[2rem] border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+        <div className="flex-1 bg-white rounded-[2rem] border-2 border-[#121c32] shadow-2xl overflow-hidden flex flex-col">
+          <div className="p-3 sm:p-8 border-b-2 border-gray-100 bg-[#121c32] flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Rapport de Trajets</h3>
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Suivi quotidien des déplacements</p>
+              <h3 className="text-lg sm:text-2xl font-black text-white uppercase tracking-tight">Rapport de Trajets</h3>
+              <p className="text-[9px] sm:text-xs font-bold text-emerald-400 uppercase tracking-[0.2em] mt-0.5">Suivi des déplacements (14j)</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 bg-[#1a2642] px-3 py-2 rounded-xl border border-gray-700">
+                <Filter size={14} className="text-emerald-400" />
+                <input 
+                  type="date" 
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent text-white text-[10px] font-black uppercase focus:outline-none [color-scheme:dark]"
+                />
+                <span className="text-gray-500 text-[10px]">au</span>
+                <input 
+                  type="date" 
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent text-white text-[10px] font-black uppercase focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+              <div className="hidden lg:block bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
                 <p className="text-[10px] font-black text-[#121c32] uppercase">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
               {journeyList.length > 0 && (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
@@ -432,24 +462,24 @@ const GeographicMap: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8 custom-scrollbar bg-gray-50/30">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-8 custom-scrollbar bg-gray-50/30">
             {journeyList.length > 0 ? (
-              <div className="space-y-8">
+              <div className="space-y-4 sm:space-y-8">
                 {journeyList.map((journey: any) => (
-                  <div key={journey.userId} className="bg-white border border-gray-100 rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-6 border-b border-gray-50 bg-white flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600">
-                          <UserIcon size={24} />
+                  <div key={journey.userId} className="bg-white border-2 border-gray-200 rounded-[1.2rem] sm:rounded-[2.5rem] shadow-lg overflow-hidden flex flex-col">
+                    <div className="p-3 sm:p-6 border-b-2 border-gray-50 bg-gray-50/50 flex items-center justify-between">
+                      <div className="flex items-center gap-2 sm:gap-4">
+                        <div className="w-8 h-8 sm:w-12 h-12 rounded-lg sm:rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600">
+                          <UserIcon size={16} className="sm:w-6 sm:h-6" />
                         </div>
                         <div>
-                          <h4 className="text-base font-black text-[#121c32] uppercase leading-tight">{journey.userName}</h4>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">ID: {journey.userId}</p>
+                          <h4 className="text-xs sm:text-base font-black text-[#121c32] uppercase leading-tight">{journey.userName}</h4>
+                          <p className="text-[8px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {journey.userId}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="inline-block px-4 py-1.5 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-                          {journey.points.length} Points
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <span className="inline-block px-2 sm:px-4 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
+                          {journey.points.length} Pts
                         </span>
                         {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
                           <button 
@@ -464,13 +494,14 @@ const GeographicMap: React.FC = () => {
                     </div>
                     
                     <div className="p-0">
-                      <div className="overflow-x-auto">
+                      {/* Desktop Table */}
+                      <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="bg-gray-50/30 border-b border-gray-100">
-                              <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Heure</th>
-                              <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Coordonnées Géographiques</th>
-                              <th className="px-8 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Localisation</th>
+                            <tr className="bg-gray-100/50 border-b-2 border-gray-100">
+                              <th className="px-8 py-4 text-[11px] font-black text-[#121c32] uppercase tracking-[0.2em]">Heure</th>
+                              <th className="px-8 py-4 text-[11px] font-black text-[#121c32] uppercase tracking-[0.2em]">Coordonnées Géographiques</th>
+                              <th className="px-8 py-4 text-right text-[11px] font-black text-[#121c32] uppercase tracking-[0.2em]">Localisation</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50">
@@ -513,6 +544,49 @@ const GeographicMap: React.FC = () => {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+
+                      {/* Mobile List View */}
+                      <div className="md:hidden divide-y divide-gray-100">
+                        <div className="bg-gray-50/50 px-4 py-2 border-b border-gray-100">
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Détails du trajet</p>
+                        </div>
+                        {journey.points.map((point: any, idx: number) => (
+                          <div key={idx} className="p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                                <span className="text-[10px] font-black text-[#121c32]">
+                                  {new Date(point.timestamp).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a 
+                                  href={`https://www.google.com/maps?q=${point.lat},${point.lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"
+                                >
+                                  <MapPin size={12} />
+                                </a>
+                                {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+                                  <button 
+                                    onClick={() => handleDeletePoint(point.userId, point.timestamp)}
+                                    className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-1.5 rounded-lg flex items-center justify-between">
+                              <span className="text-[9px] font-bold text-gray-400 uppercase">Coords</span>
+                              <span className="text-[10px] font-bold text-gray-700 font-mono">
+                                {point.lat.toFixed(4)}, {point.lng.toFixed(4)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

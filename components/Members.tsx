@@ -100,6 +100,15 @@ const OperationForm: React.FC<{
   isEpargneBlockedByAdmin?: boolean;
 }> = ({ onClose, onSave, clientId, clientName, epargneAccountNumber, tontineAccounts, initialTontineId, creditBalances, partSocialeBalance, garantieBalance, epargneBalance, adhesionPaid, livretPaid, isEpargneBlockedByAdmin }) => {
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
+  const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
+
+  useEffect(() => {
+    const savedPrices = localStorage.getItem('microfox_livret_prices');
+    if (savedPrices) {
+      setPrices(JSON.parse(savedPrices));
+    }
+  }, []);
+
   const [type, setType] = useState<'depot' | 'retrait' | 'remboursement' | 'transfert' | 'deblocage' | 'depot_garantie' | 'retrait_garantie'>('depot');
   const [account, setAccount] = useState<'epargne' | 'garantie' | 'partSociale' | 'credit' | 'tontine'>('epargne');
   const [transferDest, setTransferDest] = useState<'epargne' | 'garantie' | 'partSociale'>('epargne');
@@ -111,7 +120,7 @@ const OperationForm: React.FC<{
   const [description, setSearchDescription] = useState('');
 
   const isEpargneBlocked = (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && 
-                           ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < 300)) ||
+                           ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < prices.epargne)) ||
                            (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && isEpargneBlockedByAdmin);
   
   const selectedTontines = tontineAccounts.filter(a => selectedTontineIds.includes(a.id));
@@ -197,8 +206,8 @@ const OperationForm: React.FC<{
         alert("Opération impossible : Le compte épargne est bloqué.");
         return;
       }
-      if ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < 300) {
-        alert("Opération impossible : Le client doit d'abord s'acquitter du minimum requis (1000 F Part Sociale, 2000 F Adhésion, 300 F Livret) pour utiliser le compte épargne.");
+      if ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < prices.epargne) {
+        alert(`Opération impossible : Le client doit d'abord s'acquitter du minimum requis (1000 F Part Sociale, 2000 F Adhésion, ${prices.epargne} F Livret) pour utiliser le compte épargne.`);
         return;
       }
     }
@@ -650,7 +659,7 @@ const OperationForm: React.FC<{
                     Le client doit d'abord payer :
                     <br />• Min. 1000 F de Part Sociale (Actuel: {partSocialeBalance || 0} F)
                     <br />• Min. 2000 F d'Adhésion (Payé: {adhesionPaid || 0} F)
-                    <br />• Min. 300 F de Frais de Livret (Payé: {livretPaid || 0} F)
+                    <br />• Min. {prices.epargne} F de Frais de Livret (Payé: {livretPaid || 0} F)
                   </p>
                 </div>
               )}
@@ -770,7 +779,18 @@ const RegistrationForm: React.FC<{
     }
   }, [zone, isTontineSelected, isEpargneSelected]);
   const [fraisAdhesion, setFraisAdhesion] = useState(2000);
+  const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
   const [fraisLivret, setFraisLivret] = useState(300);
+
+  useEffect(() => {
+    const savedPrices = localStorage.getItem('microfox_livret_prices');
+    if (savedPrices) {
+      const p = JSON.parse(savedPrices);
+      setPrices(p);
+      setFraisLivret(isEpargneSelected ? p.epargne : p.tontine);
+    }
+  }, [isEpargneSelected]);
+
   const [partSocialePayee, setPartSocialePayee] = useState(5000);
   const [depotInitialEpargne, setDepotInitialEpargne] = useState(0);
   
@@ -900,8 +920,13 @@ const RegistrationForm: React.FC<{
         alert("Les frais d'adhésion minimum sont de 2000 F.");
         return;
       }
-      if (fraisLivret < 300) {
-        alert("Les frais de livret minimum sont de 300 F.");
+      if (fraisLivret < prices.epargne) {
+        alert(`Les frais de livret minimum sont de ${prices.epargne} F.`);
+        return;
+      }
+    } else if (isTontineSelected) {
+      if (fraisLivret < prices.tontine) {
+        alert(`Les frais de livret minimum sont de ${prices.tontine} F.`);
         return;
       }
     }
@@ -1490,7 +1515,7 @@ const EditProfileForm: React.FC<{
               </div>
             </div>
 
-            {currentUser?.role === 'administrateur' && (
+            {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
               <div className="space-y-8 pt-6 border-t border-white/5">
                 <div className="flex items-center gap-3 border-b border-white/5 pb-3">
                   <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400"><ShieldAlert size={18}/></div>
@@ -1677,7 +1702,7 @@ const EditProfileForm: React.FC<{
           </div>
         </div>
 
-        {currentUser?.role !== 'agent commercial' && currentUser?.role !== 'caissier' && (
+        {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
           <div className="pt-6">
             <button onClick={handleUpdate} className="w-full py-6 bg-[#121c32] text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 hover:bg-black">
               <CheckCircle size={24} className="text-emerald-400" /> Mettre à jour le dossier client
@@ -1857,7 +1882,18 @@ const OpenEpargneModal: React.FC<{
 }> = ({ onClose, onSave }) => {
   const [number, setNumber] = useState('');
   const [adhesion, setAdhesion] = useState(2000);
+  const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
   const [livret, setLivret] = useState(300);
+
+  useEffect(() => {
+    const savedPrices = localStorage.getItem('microfox_livret_prices');
+    if (savedPrices) {
+      const p = JSON.parse(savedPrices);
+      setPrices(p);
+      setLivret(p.epargne);
+    }
+  }, []);
+
   const [partSociale, setPartSociale] = useState(5000);
   const [depot, setDepot] = useState(0);
 
@@ -1927,7 +1963,7 @@ const OpenEpargneModal: React.FC<{
 
               if(partSociale < 1000) { alert("Part sociale minimum: 1000 F"); return; }
               if(adhesion < 2000) { alert("Frais d'adhésion minimum: 2000 F"); return; }
-              if(livret < 300) { alert("Frais de livret minimum: 300 F"); return; }
+              if(livret < prices.epargne) { alert(`Frais de livret minimum: ${prices.epargne} F`); return; }
               onSave({ number, adhesion, livret, partSociale, depot }); 
             }}
             className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all mt-4"
@@ -2219,8 +2255,8 @@ const Members: React.FC = () => {
 
   useEffect(() => {
     if (selectedClient && selectedClient.tontineAccounts.length > 0) {
-      const visibleTontines = selectedClient.tontineAccounts.filter(a => !a.isInvisible || currentUser?.role === 'administrateur');
-      const currentIsVisible = selectedClient.tontineAccounts.find(a => a.id === selectedTontineId && (!a.isInvisible || currentUser?.role === 'administrateur'));
+      const visibleTontines = selectedClient.tontineAccounts.filter(a => !a.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur'));
+      const currentIsVisible = selectedClient.tontineAccounts.find(a => a.id === selectedTontineId && (!a.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')));
       
       if (!selectedTontineId || !currentIsVisible) {
         if (visibleTontines.length > 0) {
@@ -2256,17 +2292,17 @@ const Members: React.FC = () => {
       if (!hasRecentOp) return false;
     }
 
-    const isEpargneVisible = !c.isEpargneInvisible || currentUser?.role === 'administrateur';
-    const hasVisibleTontine = c.tontineAccounts.some(acc => !acc.isInvisible || currentUser?.role === 'administrateur');
+    const isEpargneVisible = !c.isEpargneInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur');
+    const hasVisibleTontine = c.tontineAccounts.some(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur'));
     
-    if (!isEpargneVisible && !hasVisibleTontine && currentUser?.role !== 'administrateur') return false;
+    if (!isEpargneVisible && !hasVisibleTontine && !(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')) return false;
 
     const search = searchTerm.toLowerCase();
     return (
       c.name.toLowerCase().includes(search) ||
       c.code.toLowerCase().includes(search) ||
       (c.epargneAccountNumber && isEpargneVisible && c.epargneAccountNumber.toLowerCase().includes(search)) ||
-      c.tontineAccounts.some(acc => (!acc.isInvisible || currentUser?.role === 'administrateur') && acc.number.toLowerCase().includes(search))
+      c.tontineAccounts.some(acc => (!acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')) && acc.number.toLowerCase().includes(search))
     );
   });
 
@@ -2619,7 +2655,7 @@ const Members: React.FC = () => {
   const getClientTotalNetTontine = (client: ClientAccount) => {
     const clientPending = pendingWithdrawals.filter(r => r.clientId === client.id);
     return client.tontineAccounts
-      .filter(acc => !acc.isInvisible || currentUser?.role === 'administrateur')
+      .filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur'))
       .reduce((total, acc) => {
         const isFirstAccount = client.tontineAccounts[0]?.id === acc.id;
         const stats = getTontineStats(acc.balance, acc.dailyMise, client.history, acc.id, clientPending, isFirstAccount, acc.number);
@@ -3388,7 +3424,7 @@ const Members: React.FC = () => {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <p className={`text-sm font-black uppercase truncate ${selectedClientId === client.id ? 'text-white' : 'text-gray-200'}`}>{client.name}</p>
-                      {currentUser?.role === 'administrateur' && (
+                      {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3407,16 +3443,16 @@ const Members: React.FC = () => {
                   </div>
                   
                   <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] font-bold ${selectedClientId === client.id ? 'text-white/80' : 'text-gray-500'}`}>
-                    {client.epargneAccountNumber && (!client.isEpargneInvisible || currentUser?.role === 'administrateur') && (
+                    {client.epargneAccountNumber && (!client.isEpargneInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')) && (
                       <div className="flex items-center gap-1">
                         <div className={`w-1 h-1 rounded-full ${client.isEpargneBlocked ? 'bg-red-500' : 'bg-blue-400'}`} />
                         <span>EP: {client.epargneAccountNumber}</span>
                       </div>
                     )}
-                    {client.tontineAccounts?.filter(a => !a.isInvisible || currentUser?.role === 'administrateur')[0] && (
+                    {client.tontineAccounts?.filter(a => !a.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur'))[0] && (
                       <div className="flex items-center gap-1">
-                        <div className={`w-1 h-1 rounded-full ${client.tontineAccounts.filter(a => !a.isInvisible || currentUser?.role === 'administrateur')[0].isBlocked ? 'bg-red-500' : 'bg-emerald-400'}`} />
-                        <span>TN: {client.tontineAccounts.filter(a => !a.isInvisible || currentUser?.role === 'administrateur')[0].number}</span>
+                        <div className={`w-1 h-1 rounded-full ${client.tontineAccounts.filter(a => !a.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur'))[0].isBlocked ? 'bg-red-500' : 'bg-emerald-400'}`} />
+                        <span>TN: {client.tontineAccounts.filter(a => !a.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur'))[0].number}</span>
                       </div>
                     )}
                   </div>
@@ -3546,7 +3582,7 @@ const Members: React.FC = () => {
                       <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight truncate">{selectedClient.name}</h2>
                       <div className="flex flex-wrap items-center gap-3 mt-1">
                         <span className="text-xs font-bold text-gray-500 uppercase">{selectedClient.code}</span>
-                        {selectedClient.epargneAccountNumber && (!selectedClient.isEpargneInvisible || currentUser?.role === 'administrateur') && (
+                        {selectedClient.epargneAccountNumber && (!selectedClient.isEpargneInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')) && (
                           <span className={`text-[10px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase tracking-tighter shadow-sm flex items-center gap-1 ${selectedClient.isEpargneBlocked ? 'opacity-50' : ''}`}>
                             ÉPARGNE: {selectedClient.epargneAccountNumber}
                             {selectedClient.isEpargneBlocked && <Lock size={10} />}
@@ -3561,7 +3597,7 @@ const Members: React.FC = () => {
                             + Ouvrir Épargne
                           </button>
                         )}
-                        {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || currentUser?.role === 'administrateur').map(acc => (
+                        {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')).map(acc => (
                           <span key={acc.id} className={`text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 uppercase tracking-tighter shadow-sm flex items-center gap-1 ${acc.isBlocked ? 'opacity-50' : ''}`}>
                             TONTINE: {acc.number}
                             {acc.isBlocked && <Lock size={10} />}
@@ -3591,7 +3627,7 @@ const Members: React.FC = () => {
                       </button>
                       {isActionsOpen && (
                         <div className="absolute right-0 mt-2 w-48 bg-[#1e293b] rounded-2xl shadow-xl border border-white/10 z-50 py-2">
-                          {currentUser?.role !== 'agent commercial' && currentUser?.role !== 'caissier' && (
+                          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
                             <button onClick={() => { setActiveTab('profile'); setIsActionsOpen(false); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-300 hover:bg-white/5 uppercase">Modifier Profil</button>
                           )}
                           <button onClick={handlePrintReleve} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-300 hover:bg-white/5 uppercase">Imprimer Relevé</button>
@@ -3699,7 +3735,7 @@ const Members: React.FC = () => {
                   )}
 
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {(!selectedClient.isEpargneInvisible || currentUser?.role === 'administrateur') && (
+                    {(!selectedClient.isEpargneInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')) && (
                       <div className={`bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm relative overflow-hidden group hover:border-blue-500/30 transition-all ${selectedClient.isEpargneBlocked ? 'opacity-50' : ''}`}>
                         <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-110 transition-transform" />
                         <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4 relative z-10">
@@ -3865,7 +3901,7 @@ const Members: React.FC = () => {
                 <div className="space-y-6">
                   {selectedClient.tontineAccounts.length > 0 && (
                     <div className="bg-[#121c32] p-2 rounded-[1.5rem] border border-white/5 flex gap-2 overflow-x-auto scrollbar-hide shadow-sm items-center">
-                      {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || currentUser?.role === 'administrateur').map(acc => (
+                      {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')).map(acc => (
                         <button 
                           key={acc.id} 
                           onClick={() => setSelectedTontineId(acc.id)}

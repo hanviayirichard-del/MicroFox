@@ -18,7 +18,7 @@ const CashGaps: React.FC = () => {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [actionObservation, setActionObservation] = useState('');
-  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: (obs: string) => void } | null>(null);
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
   const [stats, setStats] = useState({
     totalGapsCount: 0,
@@ -110,7 +110,7 @@ const CashGaps: React.FC = () => {
 
     setConfirmModal({
       message: confirmMsg,
-      onConfirm: () => {
+      onConfirm: (obs: string) => {
         const targetCaisse = 'CAISSE PRINCIPALE';
         const balanceKey = `microfox_cash_balance_${targetCaisse}`;
         const currentBal = Number(localStorage.getItem(balanceKey) || 5000000);
@@ -165,7 +165,8 @@ const CashGaps: React.FC = () => {
                 status: newStatus,
                 regDate: new Date().toLocaleDateString('fr-FR'),
                 regMode: newStatus,
-                observation: actionObservation
+                observation: obs || item.observation,
+                validatorId: currentUser.id
               };
             }
             return item;
@@ -181,6 +182,7 @@ const CashGaps: React.FC = () => {
           setAlertMessage(`Opération terminée. La caisse ${targetCaisse} a été mise à jour.`);
         }
         setConfirmModal(null);
+        setActionObservation('');
       }
     });
   };
@@ -618,7 +620,7 @@ const CashGaps: React.FC = () => {
                 Annuler
               </button>
               <button 
-                onClick={confirmModal.onConfirm}
+                onClick={() => confirmModal.onConfirm(actionObservation)}
                 className="flex-1 px-6 py-3 bg-[#121c32] text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#1a2947] transition-all active:scale-95 shadow-lg shadow-[#121c32]/20"
               >
                 Confirmer

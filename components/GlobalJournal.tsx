@@ -97,6 +97,11 @@ const GlobalJournal: React.FC = () => {
         }
 
         const savedVault = localStorage.getItem('microfox_vault_transactions');
+        const internalCaisses = Array.from(new Set([
+          'CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4',
+          ...users.map((u: any) => u.caisse).filter(Boolean)
+        ])).map(c => c.toUpperCase());
+
         if (savedVault) {
           const vaultTxs = JSON.parse(savedVault);
           vaultTxs.forEach((v: any) => {
@@ -116,26 +121,38 @@ const GlobalJournal: React.FC = () => {
               });
             };
 
+            const isRegularization = v.type === 'Régularisation Écart' || v.type === 'Annulation Surplus';
+
             if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isToMyCaisse = v.to && user.caisse && v.to.toUpperCase() === user.caisse.toUpperCase();
               const isFromMyCaisse = v.from && user.caisse && v.from.toUpperCase() === user.caisse.toUpperCase();
               const isMyOp = v.userId === user.id;
               
-              if (isToMyCaisse || (isMyOp && v.to && v.to !== 'Système')) {
+              if (isToMyCaisse || (isMyOp && v.to && v.to !== 'Système' && (!isRegularization || internalCaisses.includes(v.to.toUpperCase())))) {
                 addVaultEntry('depot', v.to, 'to');
               } 
-              if (isFromMyCaisse || (isMyOp && v.from && v.from !== 'Système')) {
+              if (isFromMyCaisse || (isMyOp && v.from && v.from !== 'Système' && (!isRegularization || internalCaisses.includes(v.from.toUpperCase())))) {
                 addVaultEntry('retrait', v.from, 'from');
               }
               return;
             }
 
             // For Admin/Director, record both sides of the movement if they involve internal accounts
-            if (v.from && v.from !== 'Système') {
-              addVaultEntry('retrait', v.from, 'from');
-            }
-            if (v.to && v.to !== 'Système') {
-              addVaultEntry('depot', v.to, 'to');
+            // For regularizations, only show the side affecting a real internal caisse
+            if (isRegularization) {
+              if (v.from && internalCaisses.includes(v.from.toUpperCase())) {
+                addVaultEntry('retrait', v.from, 'from');
+              }
+              if (v.to && internalCaisses.includes(v.to.toUpperCase())) {
+                addVaultEntry('depot', v.to, 'to');
+              }
+            } else {
+              if (v.from && v.from !== 'Système') {
+                addVaultEntry('retrait', v.from, 'from');
+              }
+              if (v.to && v.to !== 'Système') {
+                addVaultEntry('depot', v.to, 'to');
+              }
             }
           });
         }

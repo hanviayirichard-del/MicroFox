@@ -168,7 +168,7 @@ export interface Gap {
   observedAmount: number;
   disbursedAmount?: number;
   gapAmount: number;
-  status: 'En attente' | 'Régularisé' | 'Litige' | 'Annulé' | 'Payé';
+  status: 'En attente' | 'Régularisé' | 'Litige' | 'Annulé' | 'Payé' | 'Remis';
   zone?: string;
   regDate?: string;
   regMode?: string;

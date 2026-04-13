@@ -17,10 +17,22 @@ const VenteLivrets: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [activeTab, setActiveTab] = useState<'vente' | 'suivi'>('vente');
   const [receivedHistory, setReceivedHistory] = useState<any[]>([]);
+  const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
+  const [isEditingPrice, setIsEditingPrice] = useState(false);
+  const [tempPriceEpargne, setTempPriceEpargne] = useState(300);
+  const [tempPriceTontine, setTempPriceTontine] = useState(500);
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
     const membersData = saved ? JSON.parse(saved) : [];
+
+    const savedPrices = localStorage.getItem('microfox_livret_prices');
+    if (savedPrices) {
+      const p = JSON.parse(savedPrices);
+      setPrices(p);
+      setTempPriceEpargne(p.epargne);
+      setTempPriceTontine(p.tontine);
+    }
 
     const savedUser = localStorage.getItem('microfox_current_user');
     if (!savedUser) return;
@@ -61,16 +73,41 @@ const VenteLivrets: React.FC = () => {
       centralEpargne = stocks.central?.epargne || 0;
       centralTontine = stocks.central?.tontine || 0;
       
+      const myId = agentName.trim().toLowerCase();
+
+      // Distributions
       stocks.distributions.forEach((d: any) => {
-        if ((d.recipient || '').trim().toLowerCase() === agentName.trim().toLowerCase()) {
+        const recipient = (d.recipient || '').trim().toLowerCase();
+        const sender = (d.sender || 'ADMIN').trim().toLowerCase();
+
+        if (recipient === myId && d.status === 'Validé') {
           if (d.type === 'epargne') epargne += d.quantity;
           else tontine += d.quantity;
+        }
+        if (sender === myId) {
+          if (d.type === 'epargne') epargne -= d.quantity;
+          else tontine -= d.quantity;
+        }
+      });
+
+      // Returns
+      (stocks.returns || []).forEach((r: any) => {
+        const from = (r.from || '').trim().toLowerCase();
+        const to = (r.to || 'ADMIN').trim().toLowerCase();
+
+        if (from === myId) {
+          if (r.type === 'epargne') epargne -= r.quantity;
+          else tontine -= r.quantity;
+        }
+        if (to === myId && r.status === 'Validé') {
+          if (r.type === 'epargne') epargne += r.quantity;
+          else tontine += r.quantity;
         }
       });
     }
 
     // Subtract sales - look at ALL members to find sales by this agent
-    membersData.forEach((m: any) => {
+    filteredMembersData.forEach((m: any) => {
       (m.history || []).forEach((tx: any) => {
         const desc = (tx.description || '').toLowerCase();
         if (desc.includes(`vente de livret`) && 
@@ -86,7 +123,7 @@ const VenteLivrets: React.FC = () => {
 
     // Pre-calculate agent sales for history balance
     const agentSales: any[] = [];
-    membersData.forEach((m: any) => {
+    filteredMembersData.forEach((m: any) => {
       (m.history || []).forEach((tx: any) => {
         const desc = (tx.description || '').toLowerCase();
         if (desc.includes(`vente de livret`) && 
@@ -129,7 +166,7 @@ const VenteLivrets: React.FC = () => {
 
     // Build Sales Journal - show all sales by the current agent or all sales if admin/caissier
     const allSales: any[] = [];
-    membersData.forEach((m: any) => {
+    filteredMembersData.forEach((m: any) => {
       (m.history || []).forEach((tx: any) => {
         const desc = (tx.description || '').toLowerCase();
         if (desc.includes('vente de livret')) {
@@ -164,13 +201,13 @@ const VenteLivrets: React.FC = () => {
       return;
     }
 
-    const price = selectedType === 'epargne' ? 300 : 500;
+    const price = selectedType === 'epargne' ? prices.epargne : prices.tontine;
     const agentName = currentUser?.identifiant || "Inconnu";
 
     // Check stock
     if (!agentStocks || agentStocks[selectedType] <= 0) {
-      setErrorMessage(`Stock insuffisant pour les livrets ${selectedType === 'epargne' ? 'épargne' : 'tontine'}.`);
-      setTimeout(() => setErrorMessage(null), 4000);
+      setErrorMessage(`Impossible de vendre : Votre stock de livrets ${selectedType === 'epargne' ? 'épargne' : 'tontine'} est épuisé (0 restant).`);
+      setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
     
@@ -226,6 +263,31 @@ const VenteLivrets: React.FC = () => {
     setSearchTerm(''); // Réinitialiser pour fermer la carte de vente et afficher le message clairement
     setTimeout(() => setSuccessMessage(null), 5000);
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleConfirm = (id: string) => {
+    const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+    if (!savedStocks) return;
+    
+    const stocks = JSON.parse(savedStocks);
+    stocks.distributions = stocks.distributions.map((d: any) => 
+      d.id === id ? { ...d, status: 'Validé' } : d
+    );
+    
+    localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+    window.dispatchEvent(new Event('storage'));
+    loadData();
+    setSuccessMessage("Réception confirmée !");
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handleUpdatePrice = () => {
+    const newPrices = { epargne: tempPriceEpargne, tontine: tempPriceTontine };
+    setPrices(newPrices);
+    localStorage.setItem('microfox_livret_prices', JSON.stringify(newPrices));
+    setIsEditingPrice(false);
+    setSuccessMessage("Prix des livrets mis à jour !");
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const filteredMembers = members.filter(m => 
@@ -305,6 +367,15 @@ const VenteLivrets: React.FC = () => {
         </div>
 
         <div className="flex bg-[#121c32] p-1 rounded-2xl border border-gray-800">
+          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+            <button
+              onClick={() => setIsEditingPrice(!isEditingPrice)}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${isEditingPrice ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+            >
+              <Plus size={14} />
+              Prix
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('vente')}
             className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'vente' ? 'bg-amber-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
@@ -337,20 +408,73 @@ const VenteLivrets: React.FC = () => {
           </div>
         )}
         
-        <div className="bg-[#121c32] p-4 rounded-2xl border border-gray-800 flex flex-col items-center min-w-[160px]">
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Votre Stock Disponible</span>
-          <div className="flex gap-6 w-full justify-center">
-            <div className="text-center">
-              <p className="text-[10px] text-emerald-400 font-black uppercase tracking-tighter">Épargne</p>
-              <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.epargne || 0}</p>
+        {!(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+          <div className="bg-[#121c32] p-4 rounded-2xl border border-gray-800 flex flex-col items-center min-w-[160px]">
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Votre Stock Disponible</span>
+            <div className="flex gap-6 w-full justify-center">
+              <div className="text-center">
+                <p className="text-[10px] text-emerald-400 font-black uppercase tracking-tighter">Épargne</p>
+                <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.epargne || 0}</p>
+              </div>
+              <div className="text-center border-l border-gray-800 pl-6">
+                <p className="text-[10px] text-amber-400 font-black uppercase tracking-tighter">Tontine</p>
+                <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.tontine || 0}</p>
+              </div>
             </div>
-            <div className="text-center border-l border-gray-800 pl-6">
-              <p className="text-[10px] text-amber-400 font-black uppercase tracking-tighter">Tontine</p>
-              <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.tontine || 0}</p>
+          </div>
+        )}
+      </div>
+
+      {isEditingPrice && (
+        <div className="bg-[#121c32] p-6 rounded-[2rem] border border-indigo-500/30 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                <Plus size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white uppercase tracking-tight">Configuration des Prix</h3>
+                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Modifier le prix de vente des livrets</p>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-4 bg-black/20 p-2 rounded-2xl border border-gray-800">
+              <div className="px-4 border-r border-gray-800">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Livret Épargne</p>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number"
+                    value={tempPriceEpargne}
+                    onChange={(e) => setTempPriceEpargne(Number(e.target.value))}
+                    className="w-20 bg-[#1a263e] border border-gray-700 rounded-lg px-2 py-1 text-white font-black text-center focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-gray-400 font-black text-[10px]">F</span>
+                </div>
+              </div>
+
+              <div className="px-4">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Livret Tontine</p>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number"
+                    value={tempPriceTontine}
+                    onChange={(e) => setTempPriceTontine(Number(e.target.value))}
+                    className="w-20 bg-[#1a263e] border border-gray-700 rounded-lg px-2 py-1 text-white font-black text-center focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-gray-400 font-black text-[10px]">F</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleUpdatePrice}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg transition-all active:scale-95 ml-auto"
+              >
+                Enregistrer
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {successMessage && (
         <div className="bg-emerald-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg animate-in zoom-in duration-300">
@@ -425,27 +549,28 @@ const VenteLivrets: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Prix à payer</p>
-                  <p className="text-2xl font-black text-amber-600">{selectedType === 'epargne' ? '300 F' : '500 F'}</p>
+                  <p className="text-2xl font-black text-amber-600">{selectedType === 'epargne' ? `${prices.epargne} F` : `${prices.tontine} F`}</p>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  const member = members.find(m => 
-                    m.code === searchTerm || 
-                    m.epargneAccountNumber === searchTerm || 
-                    m.tontineAccounts?.some((t: any) => t.number === searchTerm)
-                  );
-                  if (member) handleVendreLivret(member);
-                }}
-                className={`w-full mt-6 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 ${
-                  (!agentStocks || agentStocks[selectedType] <= 0)
-                  ? 'bg-gray-400 text-white opacity-80' 
-                  : selectedType === 'epargne' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-amber-600 text-white hover:bg-amber-700'
-                }`}
-              >
-                <ShoppingCart size={20} />
-                Vendre le Livret {selectedType === 'epargne' ? 'Épargne' : 'Tontine'}
-              </button>
+                <button
+                  disabled={!agentStocks || agentStocks[selectedType] <= 0}
+                  onClick={() => {
+                    const member = members.find(m => 
+                      m.code === searchTerm || 
+                      m.epargneAccountNumber === searchTerm || 
+                      m.tontineAccounts?.some((t: any) => t.number === searchTerm)
+                    );
+                    if (member) handleVendreLivret(member);
+                  }}
+                  className={`w-full mt-6 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 ${
+                    (!agentStocks || agentStocks[selectedType] <= 0)
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : selectedType === 'epargne' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-amber-600 text-white hover:bg-amber-700'
+                  }`}
+                >
+                  <ShoppingCart size={20} />
+                  {(!agentStocks || agentStocks[selectedType] <= 0) ? 'Stock Épuisé' : `Vendre le Livret ${selectedType === 'epargne' ? 'Épargne' : 'Tontine'}`}
+                </button>
             </div>
           )}
 
@@ -490,13 +615,13 @@ const VenteLivrets: React.FC = () => {
                     disabled={currentUser?.role === 'agent commercial'}
                     className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${selectedType === 'epargne' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'} ${currentUser?.role === 'agent commercial' ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    Épargne (300F)
+                    Épargne ({prices.epargne}F)
                   </button>
                   <button 
                     onClick={() => setSelectedType('tontine')}
                     className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${selectedType === 'tontine' ? 'bg-amber-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
                   >
-                    Tontine (500F)
+                    Tontine ({prices.tontine}F)
                   </button>
                 </div>
               </div>
@@ -683,7 +808,9 @@ const VenteLivrets: React.FC = () => {
                   <tr className="bg-gray-50/50 border-b border-gray-100">
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">DATE</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">TYPE</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">STATUT</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">QUANTITÉ REÇUE</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">ACTION</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -699,14 +826,31 @@ const VenteLivrets: React.FC = () => {
                           {item.type === 'epargne' ? 'Épargne' : 'Tontine'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${
+                          item.status === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {item.status || 'En attente'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <span className="text-sm font-black text-[#121c32]">{item.quantity}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {item.status !== 'Validé' && (
+                          <button 
+                            onClick={() => handleConfirm(item.id)}
+                            className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                          >
+                            Confirmer
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
                   {receivedHistory.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="px-6 py-12 text-center text-gray-400 font-bold uppercase text-xs">
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-bold uppercase text-xs">
                         Aucune réception enregistrée
                       </td>
                     </tr>

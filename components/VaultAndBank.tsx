@@ -107,7 +107,7 @@ const VaultAndBank: React.FC = () => {
     let newBank = savedBank ? Number(savedBank) : 0;
     const cashKey = `microfox_cash_balance_${selectedCaisse}`;
     const savedCash = localStorage.getItem(cashKey);
-    let cashBalance = savedCash !== null ? Number(savedCash) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 5000000 : 0);
+    let cashBalance = savedCash !== null ? Number(savedCash) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0);
     let typeLabel = "";
     let to = "";
     let from = "";
@@ -161,7 +161,7 @@ const VaultAndBank: React.FC = () => {
         }
       } else {
         const mainCaisseKey = 'microfox_cash_balance_CAISSE PRINCIPALE';
-        const mainCaisseBalance = Number(localStorage.getItem(mainCaisseKey) || 5000000);
+        const mainCaisseBalance = Number(localStorage.getItem(mainCaisseKey) || 40000000);
         localStorage.setItem(mainCaisseKey, (mainCaisseBalance + observed).toString());
         to = "CAISSE PRINCIPALE";
       }
@@ -564,7 +564,7 @@ const VaultAndBank: React.FC = () => {
                     >
                       {caisses.filter(c => modalType === 'CtoV' ? c === 'CAISSE PRINCIPALE' : (c === 'CAISSE 1' || c === 'CAISSE 2' || c === 'CAISSE 3' || c === 'CAISSE 4')).map(c => {
                         const saved = localStorage.getItem(`microfox_cash_balance_${c}`);
-                        const bal = saved !== null ? Number(saved) : (c === 'CAISSE PRINCIPALE' ? 5000000 : 0);
+                        const bal = saved !== null ? Number(saved) : (c === 'CAISSE PRINCIPALE' ? 40000000 : 0);
                         return <option key={c} value={c}>{c} ({bal.toLocaleString()} F)</option>;
                       })}
                     </select>
@@ -577,7 +577,7 @@ const VaultAndBank: React.FC = () => {
                     <span className="text-xs font-black text-indigo-600">
                       {(() => {
                         const saved = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-                        return (saved !== null ? Number(saved) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 5000000 : 0)).toLocaleString();
+                        return (saved !== null ? Number(saved) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0)).toLocaleString();
                       })()} F
                     </span>
                   </div>
@@ -593,7 +593,7 @@ const VaultAndBank: React.FC = () => {
                    modalType === 'BtoV' ? bankBalance.toLocaleString() : 
                    (() => {
                      const saved = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-                     return (saved !== null ? Number(saved) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 5000000 : 0)).toLocaleString();
+                     return (saved !== null ? Number(saved) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0)).toLocaleString();
                    })()} F
                 </p>
               </div>

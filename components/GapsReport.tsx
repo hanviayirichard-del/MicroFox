@@ -18,7 +18,7 @@ const GapsReport: React.FC = () => {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [actionObservation, setActionObservation] = useState('');
-  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: (obs: string) => void } | null>(null);
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
   const [stats, setStats] = useState({
     totalGapsCount: 0,
@@ -114,16 +114,18 @@ const GapsReport: React.FC = () => {
     
     const confirmMsg = newStatus === 'Payé' || newStatus === 'Régularisé'
       ? `Confirmer la régularisation de l'écart de ${Math.abs(gap.gapAmount).toLocaleString()} F ?`
-      : newStatus === 'Annulé'
-        ? `Confirmer l'annulation de l'écart ? ${(gap.gapAmount > 0 ? "Le surplus sera retiré de votre caisse." : "")}`
-        : `Confirmer le changement de statut en ${newStatus} ?`;
+      : newStatus === 'Remis'
+        ? `Confirmer la remise du surplus de ${gap.gapAmount.toLocaleString()} F ? L'argent sera retiré de votre caisse.`
+        : newStatus === 'Annulé'
+          ? `Confirmer l'annulation de l'écart ? ${(gap.gapAmount > 0 ? "Le surplus sera retiré de votre caisse." : "")}`
+          : `Confirmer le changement de statut en ${newStatus} ?`;
 
     setConfirmModal({
       message: confirmMsg,
-      onConfirm: () => {
+      onConfirm: (obs: string) => {
         const targetCaisse = currentUser.caisse || 'CAISSE PRINCIPALE';
         const balanceKey = `microfox_cash_balance_${targetCaisse}`;
-        const currentBal = Number(localStorage.getItem(balanceKey) || (targetCaisse === 'CAISSE PRINCIPALE' ? 5000000 : 0));
+        const currentBal = Number(localStorage.getItem(balanceKey) || (targetCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0));
         let newBal = currentBal;
         let amountAffected = 0;
         let txType = '';
@@ -135,6 +137,13 @@ const GapsReport: React.FC = () => {
             newBal = currentBal + amountAffected;
             txType = 'Régularisation Écart';
             txDetails = `Régularisation ${gap.type} du ${new Date(gap.date).toLocaleDateString()} (${gap.sourceName})`;
+          }
+        } else if (newStatus === 'Remis') {
+          if (gap.gapAmount > 0) {
+            amountAffected = gap.gapAmount;
+            newBal = currentBal - amountAffected;
+            txType = 'Remise Surplus';
+            txDetails = `Remise surplus ${gap.type} du ${new Date(gap.date).toLocaleDateString()} (${gap.sourceName})`;
           }
         } else if (newStatus === 'Annulé') {
           if (gap.gapAmount > 0) {
@@ -154,8 +163,8 @@ const GapsReport: React.FC = () => {
           const newTx = {
             id: `gap_tx_${Date.now()}`,
             type: txType,
-            from: newStatus === 'Annulé' ? targetCaisse : gap.sourceName,
-            to: newStatus === 'Annulé' ? 'AJUSTEMENT' : targetCaisse,
+            from: (newStatus === 'Annulé' || newStatus === 'Remis') ? targetCaisse : gap.sourceName,
+            to: newStatus === 'Annulé' ? 'AJUSTEMENT' : (newStatus === 'Remis' ? gap.sourceName : targetCaisse),
             amount: amountAffected,
             date: new Date().toISOString(),
             details: txDetails,
@@ -175,7 +184,8 @@ const GapsReport: React.FC = () => {
                 status: newStatus,
                 regDate: new Date().toLocaleDateString('fr-FR'),
                 regMode: newStatus,
-                observation: actionObservation
+                observation: obs || item.observation,
+                validatorId: currentUser.id
               };
             }
             return item;
@@ -191,6 +201,7 @@ const GapsReport: React.FC = () => {
           setAlertMessage(`Opération terminée. La caisse ${targetCaisse} a été mise à jour.`);
         }
         setConfirmModal(null);
+        setActionObservation('');
       }
     });
   };
@@ -204,7 +215,21 @@ const GapsReport: React.FC = () => {
   const generateHTMLContent = (isForPrint = false) => {
     if (gaps.length === 0) return null;
     const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": ""}');
-    const headers = ["Date", "Type", "Source", "Code", "Déclaré", "Observé", "Décaissé", "Écart", "Statut", "Date Régul.", "Observation"];
+    
+    const headers = [
+      "DATE OPÉ.", 
+      "DATE CONSTAT", 
+      "TYPE", 
+      "SOURCE", 
+      "CODE", 
+      "ACTEURS", 
+      "DÉCLARÉ", 
+      "OBSERVÉ", 
+      "ÉCART", 
+      "STATUT", 
+      "DATE RÉGUL.", 
+      "OBSERVATION"
+    ];
     
     const htmlContent = `
       <!DOCTYPE html>
@@ -213,46 +238,58 @@ const GapsReport: React.FC = () => {
         <meta charset="UTF-8">
         <title>Rapport d'Écarts - ${mfConfig.nom}</title>
         <style>
-          body { font-family: sans-serif; padding: 20px; color: #121c32; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #121c32; padding-bottom: 10px; }
-          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
-          .mf-address { font-size: 12px; font-weight: bold; color: #666; margin: 5px 0; }
-          h2 { color: #dc2626; margin-top: 20px; text-transform: uppercase; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #121c32; color: white; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: uppercase; }
-          td { border-bottom: 1px solid #eee; padding: 10px 8px; font-size: 13px; }
-          tr:nth-child(even) { background-color: #f9fafb; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #121c32; background: #fff; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #121c32; padding-bottom: 10px; }
+          .mf-name { font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0; color: #121c32; }
+          .mf-info { font-size: 11px; font-weight: bold; color: #444; margin: 2px 0; }
+          h2 { color: #dc2626; margin-top: 20px; text-transform: uppercase; font-size: 16px; font-weight: 900; border-bottom: none; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; table-layout: fixed; }
+          th { background-color: #121c32; color: white; text-align: left; padding: 8px 4px; font-size: 9px; text-transform: uppercase; border: 1px solid #121c32; }
+          td { border: 1px solid #eee; padding: 8px 4px; font-size: 10px; vertical-align: top; word-wrap: break-word; }
+          tr:nth-child(even) { background-color: #fcfcfc; }
           .negative { color: #dc2626; font-weight: bold; }
           .positive { color: #059669; font-weight: bold; }
+          .actors-cell { font-size: 8px; line-height: 1.2; }
+          .actors-label { font-weight: bold; color: #666; text-transform: uppercase; }
         </style>
       </head>
       <body>
         <div class="header">
           <h1 class="mf-name">${mfConfig.nom}</h1>
-          <p class="mf-address">${mfConfig.adresse}</p>
-          <p class="mf-address">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
+          <p class="mf-info">${mfConfig.adresse}</p>
+          <p class="mf-info">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
         </div>
-        <h2>Suivi des Écarts de Caisse - Global</h2>
+        <h2>SUIVI DES ÉCARTS DE CAISSE - GLOBAL</h2>
         <table>
           <thead>
             <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
           </thead>
           <tbody>
-            ${gaps.map(g => `
+            ${gaps.map(g => {
+              const agentName = allUsers.find(u => u.id === g.userId)?.identifiant || g.sourceName;
+              const validatorName = allUsers.find(u => u.id === g.validatorId)?.identifiant || '-';
+              
+              return `
               <tr>
-                <td>${new Date(g.date).toLocaleDateString()}</td>
+                <td>${g.opDate ? new Date(g.opDate).toLocaleDateString('fr-FR') : '-'}</td>
+                <td>${new Date(g.date).toLocaleDateString('fr-FR')}</td>
                 <td>${g.type}</td>
                 <td>${g.sourceName}</td>
                 <td>${g.sourceCode || '-'}</td>
+                <td class="actors-cell">
+                  <div><span class="actors-label">Agent:</span> ${agentName}</div>
+                  <div><span class="actors-label">Validé par:</span> ${validatorName}</div>
+                </td>
                 <td>${g.declaredAmount.toLocaleString()} F</td>
                 <td>${g.observedAmount.toLocaleString()} F</td>
-                <td>${g.disbursedAmount ? g.disbursedAmount.toLocaleString() + ' F' : '-'}</td>
-                <td class="${g.gapAmount < 0 ? 'negative' : 'positive'}">${g.gapAmount > 0 ? '+' : ''}${g.gapAmount.toLocaleString()} F</td>
+                <td class="${g.gapAmount < 0 ? 'negative' : 'positive'}">
+                  ${g.gapAmount > 0 ? '+' : ''}${g.gapAmount.toLocaleString()} F
+                </td>
                 <td>${g.status || 'En attente'}</td>
                 <td>${g.regDate || '-'}</td>
                 <td>${g.observation || '-'}</td>
               </tr>
-            `).join('')}
+            `}).join('')}
           </tbody>
         </table>
         ${isForPrint ? `
@@ -476,9 +513,10 @@ const GapsReport: React.FC = () => {
                                 'bg-gray-100 text-gray-500'
                               }`}>{item.type}</span>
                             </div>
-                            {item.type === 'TONTINE' && (
+                            {(item.type === 'TONTINE' || item.type === 'CAISSIER') && (
                               <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">
-                                Agent: {allUsers.find(u => u.id === item.userId)?.identifiant || 'Inconnu'}
+                                {item.type === 'TONTINE' ? 'Agent: ' : 'Caissier: '}
+                                {allUsers.find(u => u.id === item.userId)?.identifiant || 'Inconnu'}
                               </p>
                             )}
                             {item.observation && (
@@ -508,11 +546,12 @@ const GapsReport: React.FC = () => {
                     <td className="px-6 py-5 text-center">
                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border ${
                          item.status === 'Régularisé' || item.status === 'Payé' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                         item.status === 'Remis' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                          item.status === 'Litige' ? 'bg-red-50 text-red-600 border-red-100' :
                          item.status === 'Annulé' ? 'bg-gray-100 text-gray-600 border-gray-200' :
                          'bg-amber-50 text-amber-600 border-amber-100'
                        }`}>
-                         {item.status === 'Régularisé' || item.status === 'Payé' ? '🟢' : item.status === 'Litige' ? '🔴' : item.status === 'Annulé' ? '⚫' : '🟡'}
+                         {item.status === 'Régularisé' || item.status === 'Payé' ? '🟢' : item.status === 'Remis' ? '🔵' : item.status === 'Litige' ? '🔴' : item.status === 'Annulé' ? '⚫' : '🟡'}
                          {item.status || 'En attente'}
                        </span>
                     </td>
@@ -546,6 +585,7 @@ const GapsReport: React.FC = () => {
                              <option value="En attente">En attente</option>
                              <option value="Régularisé">Régularisé</option>
                              <option value="Payé" disabled={item.gapAmount >= 0}>Payé</option>
+                             <option value="Remis" disabled={item.gapAmount <= 0}>Remis</option>
                              <option value="Litige">Litige</option>
                              <option value="Annulé">Annulé</option>
                           </select>
@@ -601,7 +641,7 @@ const GapsReport: React.FC = () => {
                 Annuler
               </button>
               <button 
-                onClick={confirmModal.onConfirm}
+                onClick={() => confirmModal.onConfirm(actionObservation)}
                 className="flex-1 px-6 py-3 bg-[#121c32] text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#1a2947] transition-all active:scale-95 shadow-lg shadow-[#121c32]/20"
               >
                 Confirmer
