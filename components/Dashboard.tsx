@@ -84,7 +84,7 @@ const Dashboard: React.FC = () => {
 
       for (const tx of accountHistory) {
         const txDate = new Date(tx.date);
-        let remainingAmount = tx.amount;
+        let remainingAmount = Number(tx.amount);
 
         while (remainingAmount > 0) {
           if (currentCycleFirstDepositDate === null) {
@@ -98,7 +98,7 @@ const Dashboard: React.FC = () => {
           });
 
           if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
-            const comm = currentCycleAmount > 0 ? dailyMise : 0;
+            const comm = currentCycleAmount > 0 ? Number(dailyMise) : 0;
             const netCycleAmount = Math.max(0, currentCycleAmount - comm);
             totalComm += comm;
             
@@ -127,17 +127,15 @@ const Dashboard: React.FC = () => {
             continue;
           }
 
-          let casesToAdd = Math.floor(remainingAmount / dailyMise);
-          let space = 31 - currentCycleCases;
-          if (space <= 0) space = 31;
+          const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+          const oldCases = currentCycleCases;
 
-          if (casesToAdd >= space) {
-            const amountUsed = space * dailyMise;
-            currentCycleAmount += amountUsed;
-            currentCycleCases += space;
-            remainingAmount -= amountUsed;
+          if (remainingAmount >= amountToCompleteCycle) {
+            currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;
+            currentCycleCases = 31;
+            remainingAmount -= amountToCompleteCycle;
             
-            const comm = currentCycleAmount > 0 ? dailyMise : 0;
+            const comm = currentCycleAmount > 0 ? Number(dailyMise) : 0;
             const netCycleAmount = Math.max(0, currentCycleAmount - comm);
             totalComm += comm;
             
@@ -164,8 +162,8 @@ const Dashboard: React.FC = () => {
             currentCycleAmount = 0;
             cycleIdx++;
           } else {
-            currentCycleAmount += remainingAmount;
-            currentCycleCases += casesToAdd;
+            currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
+            currentCycleCases = Math.floor(currentCycleAmount / Number(dailyMise));
             remainingAmount = 0;
           }
         }

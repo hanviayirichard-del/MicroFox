@@ -119,7 +119,7 @@ const TontineWithdrawal: React.FC = () => {
 
     for (const tx of accountHistory) {
       const txDate = new Date(tx.date);
-      let remainingAmount = tx.amount;
+      let remainingAmount = Number(tx.amount);
 
       while (remainingAmount > 0) {
         if (currentCycleFirstDepositDate === null) {
@@ -170,26 +170,27 @@ const TontineWithdrawal: React.FC = () => {
           }
           currentCycleFirstDepositDate = txDate;
         }
-        // On traite d'abord l'ajout du montant au cycle en cours
-        const oldCases = currentCycleCases;
-        let casesToAdd = Math.floor(remainingAmount / dailyMise);
-        let space = 31 - currentCycleCases;
-        if (space <= 0) space = 31;
 
-        if (casesToAdd >= space) {
-          const amountUsed = space * dailyMise;
-          currentCycleAmount += amountUsed;
-          for (let m = 0; m < space; m++) {
-            currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
-          }
+        const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+        const oldCases = currentCycleCases;
+
+        // On traite d'abord l'ajout du montant au cycle en cours
+        if (remainingAmount >= amountToCompleteCycle) {
+          currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;
           currentCycleCases = 31;
-          remainingAmount -= amountUsed;
-        } else {
-          currentCycleAmount += remainingAmount;
-          for (let m = 0; m < casesToAdd; m++) {
+          const casesAdded = 31 - oldCases;
+          for (let m = 0; m < casesAdded; m++) {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
           }
-          currentCycleCases += casesToAdd;
+          remainingAmount -= amountToCompleteCycle;
+        } else {
+          currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
+          const newCases = Math.floor(currentCycleAmount / Number(dailyMise));
+          const casesAdded = newCases - oldCases;
+          for (let m = 0; m < casesAdded; m++) {
+            currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
+          }
+          currentCycleCases = newCases;
           remainingAmount = 0;
         }
 

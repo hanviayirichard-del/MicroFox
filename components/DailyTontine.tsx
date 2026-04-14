@@ -166,7 +166,7 @@ const DailyTontine: React.FC = () => {
 
                 for (const tx of accountHistory) {
                   const txDate = new Date(tx.date);
-                  let remainingAmount = tx.amount;
+                  let remainingAmount = Number(tx.amount);
 
                   while (remainingAmount > 0) {
                     if (currentCycleFirstDepositDate === null) {
@@ -188,17 +188,16 @@ const DailyTontine: React.FC = () => {
                       currentCycleFirstDepositDate = txDate;
                     }
                     // On traite d'abord l'ajout du montant au cycle en cours
-                    const amountToCompleteCycle = (31 * dailyMise) - currentCycleAmount;
-                    const casesToAddFromTx = Math.floor(remainingAmount / dailyMise);
-                    const space = 31 - currentCycleCases;
+                    const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+                    const oldCases = currentCycleCases;
 
-                    if (casesToAddFromTx >= space || remainingAmount >= amountToCompleteCycle) {
-                      currentCycleAmount += amountToCompleteCycle;
+                    if (remainingAmount >= amountToCompleteCycle) {
+                      currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;
                       currentCycleCases = 31;
                       remainingAmount -= amountToCompleteCycle;
                     } else {
-                      currentCycleAmount += remainingAmount;
-                      const newCases = Math.floor(currentCycleAmount / dailyMise);
+                      currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
+                      const newCases = Math.floor(currentCycleAmount / Number(dailyMise));
                       currentCycleCases = newCases;
                       remainingAmount = 0;
                     }

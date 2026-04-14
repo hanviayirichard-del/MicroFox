@@ -2413,7 +2413,7 @@ const Members: React.FC = () => {
 
     for (const tx of accountHistory) {
       const txDate = new Date(tx.date);
-      let remainingAmount = tx.amount;
+      let remainingAmount = Number(tx.amount);
 
       while (remainingAmount > 0) {
         if (currentCycleFirstDepositDate === null) {
@@ -2466,14 +2466,12 @@ const Members: React.FC = () => {
           currentCycleFirstDepositDate = txDate;
         }
 
-        const amountToCompleteCycle = (31 * dailyMise) - currentCycleAmount;
-        const casesToAddFromTx = Math.floor(remainingAmount / dailyMise);
-        const space = 31 - currentCycleCases;
+        const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+        const oldCases = currentCycleCases;
 
         // On traite d'abord l'ajout du montant au cycle en cours
-        const oldCases = currentCycleCases;
-        if (casesToAddFromTx >= space || remainingAmount >= amountToCompleteCycle) {
-          currentCycleAmount += amountToCompleteCycle;
+        if (remainingAmount >= amountToCompleteCycle) {
+          currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;
           currentCycleCases = 31;
           const casesAdded = 31 - oldCases;
           for (let m = 0; m < casesAdded; m++) {
@@ -2481,8 +2479,8 @@ const Members: React.FC = () => {
           }
           remainingAmount -= amountToCompleteCycle;
         } else {
-          currentCycleAmount += remainingAmount;
-          const newCases = Math.floor(currentCycleAmount / dailyMise);
+          currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
+          const newCases = Math.floor(currentCycleAmount / Number(dailyMise));
           const casesAdded = newCases - oldCases;
           for (let m = 0; m < casesAdded; m++) {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));

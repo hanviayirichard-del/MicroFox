@@ -60,6 +60,7 @@ const Commissions: React.FC = () => {
 
           let currentCycleFirstDepositDate: Date | null = null;
           let currentCycleCases = 0;
+          let currentCycleAmount = 0;
           let cycleIdx = 1;
 
           const recordCommissionIfInRange = (triggerDate: Date, idx: number, agentName: string) => {
@@ -88,7 +89,7 @@ const Commissions: React.FC = () => {
 
           for (const tx of tontineTxs) {
             const txDate = new Date(tx.date);
-            let remainingAmount = tx.amount;
+            let remainingAmount = Number(tx.amount);
             
             const agentParts = tx.description.split(' - Agent ');
             const currentAgent = agentParts.length > 1 ? `Agent ${agentParts[1]}` : 'Agent J04';
@@ -117,22 +118,21 @@ const Commissions: React.FC = () => {
                 continue;
               }
 
-              let casesToAdd = Math.floor(remainingAmount / dailyMise);
-              let space = 31 - currentCycleCases;
-              if (space <= 0) space = 31;
+              const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
 
               // La transaction complète un cycle de 31 cases
-              if (casesToAdd >= space) {
-                const amountUsed = space * dailyMise;
-                remainingAmount -= amountUsed;
+              if (remainingAmount >= amountToCompleteCycle) {
+                remainingAmount -= amountToCompleteCycle;
                 currentCycleCases = 0;
+                currentCycleAmount = 0;
                 cycleIdx++;
                 // Si il reste de l'argent, cela déclenche un nouveau cycle immédiat
                 currentCycleFirstDepositDate = remainingAmount > 0 ? txDate : null;
                 if (remainingAmount > 0) recordCommissionIfInRange(txDate, cycleIdx, currentAgent);
               } else {
                 // Reste d'argent ne complétant pas un cycle
-                currentCycleCases += casesToAdd;
+                currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
+                currentCycleCases = Math.floor(currentCycleAmount / Number(dailyMise));
                 remainingAmount = 0;
               }
             }
