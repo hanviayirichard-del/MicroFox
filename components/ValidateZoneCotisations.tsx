@@ -13,6 +13,7 @@ interface ZoneCotisation {
 const ValidateZoneCotisations: React.FC = () => {
   const [zones, setZones] = useState<string[]>([]);
   const [zoneStatuses, setZoneStatuses] = useState<Record<string, 'pending' | 'validated' | 'none'>>({});
+  const [pendingCotisations, setPendingCotisations] = useState<any[]>([]);
   const [selectedZone, setSelectedZone] = useState<string>('');
   const [zoneData, setZoneData] = useState<ZoneCotisation | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,39 +54,56 @@ const ValidateZoneCotisations: React.FC = () => {
       setZones(uniqueZones.sort());
 
       const statuses: Record<string, 'pending' | 'validated' | 'none'> = {};
+      const allPending: any[] = [];
+
       uniqueZones.forEach(zone => {
         const zoneMembers = members.filter((m: any) => m.zone === zone);
-        let hasTransactions = false;
-        let hasPending = false;
+        let hasTransactionsToday = false;
+        let hasPendingToday = false;
+        let hasAnyPending = false;
 
         zoneMembers.forEach((m: any) => {
           const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
           const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
           
           history.forEach((tx: any) => {
-            const txDate = new Date(tx.date);
-            const txDay = txDate.toISOString().split('T')[0];
-            if (txDay === today && tx.type === 'cotisation' && tx.account === 'tontine') {
-              hasTransactions = true;
+            if (tx.type === 'cotisation' && tx.account === 'tontine') {
+              const txDate = new Date(tx.date);
+              const txDay = txDate.toISOString().split('T')[0];
               const validationKey = `${txDay}_${zone}`;
               const zoneValidation = validatedZones[validationKey];
               const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+
+              if (txDay === today) {
+                hasTransactionsToday = true;
+                if (!isTxValidated) {
+                  hasPendingToday = true;
+                }
+              }
+
               if (!isTxValidated) {
-                hasPending = true;
+                hasAnyPending = true;
+                allPending.push({
+                  ...tx,
+                  zone,
+                  memberName: m.name,
+                  memberCode: m.code
+                });
               }
             }
           });
         });
 
-        if (!hasTransactions) {
-          statuses[zone] = 'none';
-        } else if (hasPending) {
+        if (!hasTransactionsToday) {
+          statuses[zone] = hasAnyPending ? 'pending' : 'none';
+        } else if (hasPendingToday || hasAnyPending) {
           statuses[zone] = 'pending';
         } else {
           statuses[zone] = 'validated';
         }
       });
       setZoneStatuses(statuses);
+      setPendingCotisations(allPending);
     }
   };
 
@@ -97,8 +115,6 @@ const ValidateZoneCotisations: React.FC = () => {
       const validatedZones = savedValidated ? JSON.parse(savedValidated) : {};
       
       const today = new Date().toISOString().split('T')[0];
-      const validationKey = `${today}_${zoneName}`;
-      const zoneValidation = validatedZones[validationKey];
 
       if (savedMembers) {
         const members = JSON.parse(savedMembers);
@@ -113,36 +129,41 @@ const ValidateZoneCotisations: React.FC = () => {
           const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
           
           history.forEach((tx: any) => {
-            const txDate = new Date(tx.date).toISOString().split('T')[0];
-            if (txDate === today && tx.type === 'cotisation' && tx.account === 'tontine') {
-              total += tx.amount;
-              count++;
-              transactions.push({
-                ...tx,
-                memberName: m.name,
-                memberCode: m.code,
-                epargneAccountNumber: m.epargneAccountNumber || 'N/A',
-                tontineAccountNumber: tx.tontineAccountNumber || (m.tontineAccounts && m.tontineAccounts[0]?.number) || 'N/A',
-                hasActiveCredit: (m.balances?.credit || 0) > 0
-              });
+            if (tx.type === 'cotisation' && tx.account === 'tontine') {
+              const txDate = new Date(tx.date);
+              const txDay = txDate.toISOString().split('T')[0];
+              const validationKey = `${txDay}_${zoneName}`;
+              const zoneValidation = validatedZones[validationKey];
+              const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+
+              if (txDay === today || !isTxValidated) {
+                total += tx.amount;
+                count++;
+                transactions.push({
+                  ...tx,
+                  memberName: m.name,
+                  memberCode: m.code,
+                  dailyMise: tx.dailyMise || (m.tontineAccounts?.find((acc: any) => acc.number === (tx.tontineAccountNumber || (m.tontineAccounts && m.tontineAccounts[0]?.number)))?.dailyMise) || (m.tontineAccounts && m.tontineAccounts[0]?.dailyMise) || 0,
+                  epargneAccountNumber: m.epargneAccountNumber || 'N/A',
+                  tontineAccountNumber: tx.tontineAccountNumber || (m.tontineAccounts && m.tontineAccounts[0]?.number) || 'N/A',
+                  hasActiveCredit: (m.balances?.credit || 0) > 0,
+                  isValidated: isTxValidated
+                });
+              }
             }
           });
         });
 
         const sortedTransactions = transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
-        // A zone is considered fully validated only if all its transactions for today 
-        // are before the validation timestamp
-        const allTransactionsValidated = transactions.length > 0 && transactions.every(tx => 
-          zoneValidation && new Date(tx.date) <= new Date(zoneValidation.validatedAt)
-        );
+        const allTransactionsValidated = transactions.length > 0 && transactions.every(tx => tx.isValidated);
 
         setZoneData({
           zone: zoneName,
           totalAmount: total,
           count: count,
           transactions: sortedTransactions,
-          isValidated: !!zoneValidation && allTransactionsValidated
+          isValidated: allTransactionsValidated
         });
       }
     } catch (error) {
@@ -157,31 +178,51 @@ const ValidateZoneCotisations: React.FC = () => {
     if (!zoneData || zoneData.isValidated) return;
 
     if (zoneData.transactions.length === 0) {
-      setErrorMessage("Aucune cotisation à valider pour cette zone aujourd'hui.");
+      setErrorMessage("Aucune cotisation à valider pour cette zone.");
       setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const validationKey = `${today}_${zoneData.zone}`;
-      
       const savedValidated = localStorage.getItem('microfox_validated_zone_cotisations');
       const validatedZones = savedValidated ? JSON.parse(savedValidated) : {};
+      const now = new Date().toISOString();
+      const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}').identifiant;
+
+      // Group pending transactions by day to create validation entries for each day
+      const pendingByDay: Record<string, { total: number, count: number }> = {};
       
-      validatedZones[validationKey] = {
-        validatedAt: new Date().toISOString(),
-        validatedBy: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').identifiant,
-        totalAmount: zoneData.totalAmount,
-        count: zoneData.count
-      };
+      zoneData.transactions.forEach(tx => {
+        if (!tx.isValidated) {
+          const day = new Date(tx.date).toISOString().split('T')[0];
+          if (!pendingByDay[day]) {
+            pendingByDay[day] = { total: 0, count: 0 };
+          }
+          pendingByDay[day].total += tx.amount;
+          pendingByDay[day].count += 1;
+        }
+      });
+
+      Object.keys(pendingByDay).forEach(day => {
+        const validationKey = `${day}_${zoneData.zone}`;
+        validatedZones[validationKey] = {
+          validatedAt: now,
+          validatedBy: currentUser,
+          totalAmount: pendingByDay[day].total,
+          count: pendingByDay[day].count
+        };
+      });
 
       localStorage.setItem('microfox_validated_zone_cotisations', JSON.stringify(validatedZones));
       
-      recordAuditLog('MODIFICATION', 'TONTINE', `Validation des cotisations de la zone ${zoneData.zone} - Total: ${zoneData.totalAmount} F (${zoneData.count} cotisations)`);
+      recordAuditLog('MODIFICATION', 'TONTINE', `Validation des cotisations de la zone ${zoneData.zone} - Total validé: ${zoneData.totalAmount} F (${zoneData.count} cotisations)`);
 
       setSuccessMessage(`Zone ${zoneData.zone} validée avec succès !`);
-      setZoneData({ ...zoneData, isValidated: true });
+      setZoneData({ 
+        ...zoneData, 
+        isValidated: true,
+        transactions: zoneData.transactions.map(tx => ({ ...tx, isValidated: true }))
+      });
       loadZones();
       setTimeout(() => setSuccessMessage(null), 4000);
       
@@ -249,17 +290,24 @@ const ValidateZoneCotisations: React.FC = () => {
         <table>
           <thead>
             <tr>
-              <th>Heure</th>
+              <th>Date / Heure</th>
               <th>Client</th>
               <th>Tontine / Épargne</th>
               <th>Agent</th>
+              <th>Mise</th>
               <th class="text-right">Montant</th>
             </tr>
           </thead>
           <tbody>
-            ${zoneData.transactions.map(tx => `
+            ${zoneData.transactions.map(tx => {
+              const txDate = new Date(tx.date);
+              const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              return `
               <tr>
-                <td>${new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                <td>
+                  ${!isToday ? `<div style="font-size: 8px; color: #3b82f6; font-weight: bold;">${txDate.toLocaleDateString()}</div>` : ''}
+                  ${txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </td>
                 <td>
                   <strong>${tx.memberName.toUpperCase()}</strong>
                   ${tx.hasActiveCredit ? '<br/><span class="credit-mention">CRÉDIT EN COURS</span>' : ''}
@@ -269,9 +317,10 @@ const ValidateZoneCotisations: React.FC = () => {
                   É: ${tx.epargneAccountNumber}
                 </td>
                 <td>${(tx.cashierName || 'N/A').toUpperCase()}</td>
+                <td><strong>${(tx.dailyMise || 0).toLocaleString()} F</strong></td>
                 <td class="text-right"><strong>${tx.amount.toLocaleString()} F</strong></td>
               </tr>
-            `).join('')}
+            `}).join('')}
           </tbody>
         </table>
         
@@ -352,17 +401,24 @@ const ValidateZoneCotisations: React.FC = () => {
         <table>
           <thead>
             <tr>
-              <th>Heure</th>
+              <th>Date / Heure</th>
               <th>Client</th>
               <th>Tontine / Épargne</th>
               <th>Agent</th>
+              <th>Mise</th>
               <th class="text-right">Montant</th>
             </tr>
           </thead>
           <tbody>
-            ${zoneData.transactions.map(tx => `
+            ${zoneData.transactions.map(tx => {
+              const txDate = new Date(tx.date);
+              const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              return `
               <tr>
-                <td>${new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                <td>
+                  ${!isToday ? `<div style="font-size: 8px; color: #3b82f6; font-weight: bold;">${txDate.toLocaleDateString()}</div>` : ''}
+                  ${txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </td>
                 <td>
                   <strong>${tx.memberName.toUpperCase()}</strong>
                   ${tx.hasActiveCredit ? '<br/><span class="credit-mention">CRÉDIT EN COURS</span>' : ''}
@@ -372,9 +428,10 @@ const ValidateZoneCotisations: React.FC = () => {
                   É: ${tx.epargneAccountNumber}
                 </td>
                 <td>${(tx.cashierName || 'N/A').toUpperCase()}</td>
+                <td><strong>${(tx.dailyMise || 0).toLocaleString()} F</strong></td>
                 <td class="text-right"><strong>${tx.amount.toLocaleString()} F</strong></td>
               </tr>
-            `).join('')}
+            `}).join('')}
           </tbody>
         </table>
         
@@ -435,6 +492,58 @@ const ValidateZoneCotisations: React.FC = () => {
           <span className="font-black uppercase tracking-tight text-sm text-center">{errorMessage}</span>
         </div>
       )}
+
+      {/* Récapitulatif des Zones en attente */}
+      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
+            <AlertCircle size={18} className="text-red-500" />
+            Cotisations en attente de validation
+          </h2>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+              {pendingCotisations.length} Cotisation(s)
+            </div>
+            <div className="px-3 py-1 bg-gray-50 text-gray-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-gray-100">
+              {Object.values(zoneStatuses).filter(s => s === 'pending').length} Zone(s)
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {zones.map(zone => {
+            const status = zoneStatuses[zone];
+            if (status !== 'pending') return null;
+            
+            const zonePending = pendingCotisations.filter(p => p.zone === zone);
+            const pendingAmount = zonePending.reduce((sum, p) => sum + p.amount, 0);
+            
+            return (
+              <button
+                key={zone}
+                onClick={() => setSelectedZone(zone)}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-red-200 hover:bg-red-50/30 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-red-500 shadow-sm border border-red-50 border-dashed">
+                    <MapPin size={20} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-black text-[#121c32] uppercase">{zone}</p>
+                    <p className="text-[10px] font-bold text-red-500">{pendingAmount.toLocaleString()} F • {zonePending.length} cotis.</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-gray-300 group-hover:text-red-400 group-hover:translate-x-1 transition-all" />
+              </button>
+            );
+          })}
+          {pendingCotisations.length === 0 && (
+            <div className="col-span-full py-6 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+              <p className="text-xs font-bold text-gray-400 italic">Aucune cotisation en attente de validation pour le moment.</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
@@ -537,10 +646,11 @@ const ValidateZoneCotisations: React.FC = () => {
               <table className="w-full text-left min-w-[500px]">
                 <thead>
                   <tr className="bg-gray-100/50 border-b border-gray-200">
-                    <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest">Heure</th>
+                    <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest">Date / Heure</th>
                     <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest">Client</th>
                     <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest">Tontine / Épargne</th>
                     <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest">Agent</th>
+                    <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest">Mise</th>
                     <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Montant</th>
                   </tr>
                 </thead>
@@ -548,18 +658,18 @@ const ValidateZoneCotisations: React.FC = () => {
                   {zoneData.transactions.length > 0 ? (
                     zoneData.transactions.map((tx, idx) => {
                       const txDate = new Date(tx.date);
-                      const savedValidated = localStorage.getItem('microfox_validated_zone_cotisations');
-                      const validatedZones = savedValidated ? JSON.parse(savedValidated) : {};
-                      const dayKey = txDate.toISOString().split('T')[0];
-                      const zoneName = zoneData.zone;
-                      const validationKey = `${dayKey}_${zoneName}`;
-                      const zoneValidation = validatedZones[validationKey];
-                      const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+                      const isTxValidated = tx.isValidated;
+                      const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
                       return (
                         <tr key={tx.id || idx} className={`hover:bg-white transition-colors ${isTxValidated ? 'bg-emerald-50/30' : ''}`}>
-                          <td className="px-6 py-3 text-xs font-bold text-gray-500">
-                            {txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <td className="px-6 py-3">
+                            <div className="flex flex-col">
+                              {!isToday && <span className="text-[10px] font-black text-blue-600">{txDate.toLocaleDateString()}</span>}
+                              <span className="text-xs font-bold text-gray-500">
+                                {txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-6 py-3">
                             <div className="flex flex-col">
@@ -577,6 +687,9 @@ const ValidateZoneCotisations: React.FC = () => {
                           </td>
                           <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">
                             {tx.cashierName || 'N/A'}
+                          </td>
+                          <td className="px-6 py-3 text-xs font-black text-blue-600">
+                            {(tx.dailyMise || 0).toLocaleString()} F
                           </td>
                           <td className="px-6 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -634,27 +747,36 @@ const ValidateZoneCotisations: React.FC = () => {
               <th className="py-2 text-xs font-bold uppercase">Client</th>
               <th className="py-2 text-xs font-bold uppercase">Tontine / Épargne</th>
               <th className="py-2 text-xs font-bold uppercase">Agent</th>
+              <th className="py-2 text-xs font-bold uppercase">Mise</th>
               <th className="py-2 text-xs font-bold uppercase text-right">Montant</th>
             </tr>
           </thead>
           <tbody>
-            {zoneData?.transactions.map((tx, idx) => (
-              <tr key={idx} className="border-b border-gray-200">
-                <td className="py-2 text-xs">{new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                <td className="py-2 text-xs">
-                  <div className="font-bold uppercase">{tx.memberName}</div>
-                  {tx.hasActiveCredit && (
-                    <div className="text-[8px] text-red-600 font-bold">CRÉDIT EN COURS</div>
-                  )}
-                </td>
-                <td className="py-2 text-xs">
-                  T: {tx.tontineAccountNumber}<br/>
-                  É: {tx.epargneAccountNumber}
-                </td>
-                <td className="py-2 text-xs uppercase">{tx.cashierName || 'N/A'}</td>
-                <td className="py-2 text-xs font-bold text-right">{tx.amount.toLocaleString()} F</td>
-              </tr>
-            ))}
+            {zoneData?.transactions.map((tx, idx) => {
+              const txDate = new Date(tx.date);
+              const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              return (
+                <tr key={idx} className="border-b border-gray-200">
+                  <td className="py-2 text-xs">
+                    {!isToday && <div className="text-[8px] text-blue-600 font-bold">{txDate.toLocaleDateString()}</div>}
+                    {txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="py-2 text-xs">
+                    <div className="font-bold uppercase">{tx.memberName}</div>
+                    {tx.hasActiveCredit && (
+                      <div className="text-[8px] text-red-600 font-bold">CRÉDIT EN COURS</div>
+                    )}
+                  </td>
+                  <td className="py-2 text-xs">
+                    T: {tx.tontineAccountNumber}<br/>
+                    É: {tx.epargneAccountNumber}
+                  </td>
+                  <td className="py-2 text-xs uppercase">{tx.cashierName || 'N/A'}</td>
+                  <td className="py-2 text-xs font-bold">{(tx.dailyMise || 0).toLocaleString()} F</td>
+                  <td className="py-2 text-xs font-bold text-right">{tx.amount.toLocaleString()} F</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
