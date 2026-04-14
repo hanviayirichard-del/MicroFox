@@ -16,7 +16,9 @@ import {
   ArrowUpRight,
   Check,
   Square,
-  CheckSquare
+  CheckSquare,
+  Printer,
+  Download
 } from 'lucide-react';
 
 const TontineVerification: React.FC = () => {
@@ -32,6 +34,7 @@ const TontineVerification: React.FC = () => {
   const [errorModal, setErrorModal] = useState<string | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedZone, setSelectedZone] = useState('all');
 
   const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
     if (dailyMise <= 0) dailyMise = 500;
@@ -500,6 +503,17 @@ const TontineVerification: React.FC = () => {
     }
 
     const tontineNumber = request.tontineAccountNumber || activeTontineAccount?.number || request.clientCode;
+    let clientZone = request.clientZone || client?.zoneCollecte || client?.zone;
+
+    if (tontineNumber) {
+      const cleanNum = tontineNumber.replace('TN-', '');
+      if (cleanNum.length >= 3 && /[A-Z]/i.test(cleanNum[2])) {
+        clientZone = cleanNum.substring(0, 3);
+      } else if (cleanNum.length >= 2) {
+        clientZone = cleanNum.substring(0, 2);
+      }
+    }
+
     const gap = observed ? (referenceAmount - Number(observed)) : (disburse ? (referenceAmount - Number(disburse)) : 0);
 
     if (gap !== 0 && !report.trim()) {
@@ -518,7 +532,8 @@ const TontineVerification: React.FC = () => {
       observedBalance: livretAmount,
       disponibleAtValidation: disponible,
       gap: gap,
-      report: report
+      report: report,
+      zone: clientZone
     };
 
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
@@ -533,7 +548,18 @@ const TontineVerification: React.FC = () => {
       const allGaps = savedGaps ? JSON.parse(savedGaps) : [];
       
       // Find the agent currently assigned to this zone
-      const clientZone = request.clientZone || client?.zoneCollecte || client?.zone;
+      const tontineNumber = request.tontineAccountNumber || activeTontineAccount?.number || request.clientCode;
+      let clientZone = request.clientZone || client?.zoneCollecte || client?.zone;
+      
+      if (tontineNumber) {
+        const cleanNum = tontineNumber.replace('TN-', '');
+        if (cleanNum.length >= 3 && /[A-Z]/i.test(cleanNum[2])) {
+          clientZone = cleanNum.substring(0, 3);
+        } else if (cleanNum.length >= 2) {
+          clientZone = cleanNum.substring(0, 2);
+        }
+      }
+
       const savedUsers = localStorage.getItem('microfox_users');
       const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
       const zoneAgent = allUsers.find((u: any) => {
@@ -604,6 +630,151 @@ const TontineVerification: React.FC = () => {
     setSelectedTxIds(prev => 
       prev.includes(txId) ? prev.filter(id => id !== txId) : [...prev, txId]
     );
+  };
+
+  const generateHistoryHTML = () => {
+    const filtered = validatedHistory
+      .filter(item => {
+        const itemDate = new Date(item.validationDate).toISOString().split('T')[0];
+        if (startDate && itemDate < startDate) return false;
+        if (endDate && itemDate > endDate) return false;
+        
+        if (selectedZone !== 'all') {
+          let itemZone = item.zone;
+          if (!itemZone) {
+            const tontineNumber = item.tontineAccountNumber || item.clientCode;
+            if (tontineNumber) {
+              const cleanNum = tontineNumber.replace('TN-', '');
+              if (cleanNum.length >= 3 && /[A-Z]/i.test(cleanNum[2])) {
+                itemZone = cleanNum.substring(0, 3);
+              } else if (cleanNum.length >= 2) {
+                itemZone = cleanNum.substring(0, 2);
+              }
+            }
+          }
+          if (itemZone !== selectedZone) return false;
+        }
+        return true;
+      });
+
+    const totalDisbursed = filtered.reduce((sum, item) => sum + item.amount, 0);
+    const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{}');
+
+    return `
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="UTF-8">
+        <title>Historique des Vérifications</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #121c32; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #121c32; padding-bottom: 20px; }
+          .mf-name { font-size: 24px; font-weight: 900; text-transform: uppercase; margin: 0; }
+          h2 { text-transform: uppercase; font-size: 18px; margin-top: 10px; color: #666; }
+          .meta { font-size: 12px; color: #888; margin-top: 5px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background-color: #121c32; color: white; text-align: left; padding: 12px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+          td { border-bottom: 1px solid #eee; padding: 12px 8px; font-size: 11px; font-weight: 500; }
+          .gap-neg { color: #dc2626; font-weight: 900; }
+          .gap-pos { color: #059669; font-weight: 900; }
+          .footer { margin-top: 40px; font-size: 10px; text-align: center; color: #aaa; }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="mf-name">${mfConfig.nom || 'MicroFox'}</div>
+          <h2>Historique des Vérifications de Retrait Tontine</h2>
+          <div class="meta">
+            Période: ${startDate || 'Début'} au ${endDate || 'Fin'} | 
+            Zone: ${selectedZone === 'all' ? 'Toutes les zones' : selectedZone} |
+            Généré le: ${new Date().toLocaleString()}
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Client</th>
+              <th>Compte</th>
+              <th>Intervalle</th>
+              <th>Demandé</th>
+              <th>Livret</th>
+              <th>Validé</th>
+              <th>Écart</th>
+              <th>Raison</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(item => `
+              <tr>
+                <td>${new Date(item.validationDate).toLocaleDateString()}</td>
+                <td>${item.clientName}</td>
+                <td>${item.tontineAccountNumber || item.clientCode}</td>
+                <td>${item.reason || ''}</td>
+                <td>${(item.originalAmount || item.amount).toLocaleString()} F</td>
+                <td>${(item.observedBalance || 0).toLocaleString()} F</td>
+                <td>${item.amount.toLocaleString()} F</td>
+                <td class="${(item.gap || 0) < 0 ? 'gap-neg' : 'gap-pos'}">
+                  ${item.gap ? (item.gap > 0 ? '+' : '') + item.gap.toLocaleString() + ' F' : '0 F'}
+                </td>
+                <td>${item.report || ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background-color: #f8fafc; font-weight: 900;">
+              <td colspan="6" style="text-align: right; padding: 12px 8px; border-top: 2px solid #121c32;">TOTAL DÉCAISSÉ:</td>
+              <td style="padding: 12px 8px; border-top: 2px solid #121c32; font-size: 12px;">${totalDisbursed.toLocaleString()} F</td>
+              <td colspan="2" style="border-top: 2px solid #121c32;"></td>
+            </tr>
+          </tfoot>
+        </table>
+        
+        <div style="margin-top: 60px; display: flex; justify-content: space-between; padding: 0 40px;">
+          <div style="text-align: center;">
+            <p style="font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 60px;">Signature de l'Auditeur</p>
+            <div style="border-top: 1px solid #121c32; width: 200px;"></div>
+          </div>
+          <div style="text-align: center;">
+            <p style="font-weight: 900; text-transform: uppercase; font-size: 12px; margin-bottom: 60px;">Signature de l'Agent Commercial</p>
+            <div style="border-top: 1px solid #121c32; width: 200px;"></div>
+          </div>
+        </div>
+
+        <div class="footer">
+          Document généré par MicroFox - Système de Gestion de Microfinance
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  const handlePrintHistory = () => {
+    const html = generateHistoryHTML();
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+    }
+  };
+
+  const handleExportHistory = () => {
+    const html = generateHistoryHTML();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `historique_verifications_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const filteredRequests = pendingRequests.filter(r => 
@@ -1033,11 +1204,31 @@ const TontineVerification: React.FC = () => {
       {validatedHistory.length > 0 && (
         <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden mx-4 lg:mx-0">
           <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <h3 className="text-xs font-black text-[#121c32] uppercase tracking-widest flex items-center gap-2">
-              <History size={16} /> Historique des vérifications
-            </h3>
+            <div className="flex items-center justify-between w-full lg:w-auto">
+              <h3 className="text-xs font-black text-[#121c32] uppercase tracking-widest flex items-center gap-2">
+                <History size={16} /> Historique des vérifications
+              </h3>
+              <div className="flex lg:hidden items-center gap-2">
+                <button onClick={handlePrintHistory} className="p-2 text-gray-400 hover:text-[#121c32] transition-colors" title="Imprimer">
+                  <Printer size={18} />
+                </button>
+                <button onClick={handleExportHistory} className="p-2 text-gray-400 hover:text-[#121c32] transition-colors" title="Exporter">
+                  <Download size={18} />
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
+                <select
+                  value={selectedZone}
+                  onChange={(e) => setSelectedZone(e.target.value)}
+                  className="text-[10px] font-black uppercase border border-gray-200 rounded-md px-2 py-1 outline-none focus:border-blue-500 bg-white text-[#121c32]"
+                >
+                  <option value="all">Toutes les zones</option>
+                  {['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'].map(zone => (
+                    <option key={zone} value={zone}>{zone}</option>
+                  ))}
+                </select>
                 <input 
                   type="date" 
                   value={startDate}
@@ -1052,7 +1243,62 @@ const TontineVerification: React.FC = () => {
                   className="text-[10px] font-black uppercase border border-gray-200 rounded-md px-2 py-1 outline-none focus:border-blue-500 bg-white text-[#121c32]"
                 />
               </div>
+              <div className="hidden lg:flex items-center gap-1 border-l border-gray-200 pl-3">
+                <button onClick={handlePrintHistory} className="p-2 text-gray-400 hover:text-[#121c32] transition-colors" title="Imprimer">
+                  <Printer size={18} />
+                </button>
+                <button onClick={handleExportHistory} className="p-2 text-gray-400 hover:text-[#121c32] transition-colors" title="Exporter">
+                  <Download size={18} />
+                </button>
+              </div>
               <div className="flex items-center gap-2">
+                {validatedHistory.filter(item => {
+                  const itemDate = new Date(item.validationDate).toISOString().split('T')[0];
+                  if (startDate && itemDate < startDate) return false;
+                  if (endDate && itemDate > endDate) return false;
+                  
+                  if (selectedZone !== 'all') {
+                    let itemZone = item.zone;
+                    if (!itemZone) {
+                      const tontineNumber = item.tontineAccountNumber || item.clientCode;
+                      if (tontineNumber) {
+                        const cleanNum = tontineNumber.replace('TN-', '');
+                        if (cleanNum.length >= 3 && /[A-Z]/i.test(cleanNum[2])) {
+                          itemZone = cleanNum.substring(0, 3);
+                        } else if (cleanNum.length >= 2) {
+                          itemZone = cleanNum.substring(0, 2);
+                        }
+                      }
+                    }
+                    if (itemZone !== selectedZone) return false;
+                  }
+                  return true;
+                }).reduce((sum, item) => sum + item.amount, 0) > 0 && (
+                  <span className="bg-blue-600 text-white px-2 py-0.5 rounded-md text-[10px] font-black uppercase">
+                    Total: {validatedHistory.filter(item => {
+                      const itemDate = new Date(item.validationDate).toISOString().split('T')[0];
+                      if (startDate && itemDate < startDate) return false;
+                      if (endDate && itemDate > endDate) return false;
+                      
+                      if (selectedZone !== 'all') {
+                        let itemZone = item.zone;
+                        if (!itemZone) {
+                          const tontineNumber = item.tontineAccountNumber || item.clientCode;
+                          if (tontineNumber) {
+                            const cleanNum = tontineNumber.replace('TN-', '');
+                            if (cleanNum.length >= 3 && /[A-Z]/i.test(cleanNum[2])) {
+                              itemZone = cleanNum.substring(0, 3);
+                            } else if (cleanNum.length >= 2) {
+                              itemZone = cleanNum.substring(0, 2);
+                            }
+                          }
+                        }
+                        if (itemZone !== selectedZone) return false;
+                      }
+                      return true;
+                    }).reduce((sum, item) => sum + item.amount, 0).toLocaleString()} F
+                  </span>
+                )}
                 {validatedHistory.filter(item => item.gap && item.gap > 0).length > 0 && (
                   <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-md text-[10px] font-black flex items-center gap-1">
                     <ArrowUpRight size={10} />
@@ -1066,10 +1312,25 @@ const TontineVerification: React.FC = () => {
           <div className="divide-y divide-gray-50 max-h-[300px] lg:max-h-[400px] overflow-y-auto custom-scrollbar">
             {validatedHistory
               .filter(item => {
-                if (!startDate && !endDate) return true;
                 const itemDate = new Date(item.validationDate).toISOString().split('T')[0];
                 if (startDate && itemDate < startDate) return false;
                 if (endDate && itemDate > endDate) return false;
+                
+                if (selectedZone !== 'all') {
+                  let itemZone = item.zone;
+                  if (!itemZone) {
+                    const tontineNumber = item.tontineAccountNumber || item.clientCode;
+                    if (tontineNumber) {
+                      const cleanNum = tontineNumber.replace('TN-', '');
+                      if (cleanNum.length >= 3 && /[A-Z]/i.test(cleanNum[2])) {
+                        itemZone = cleanNum.substring(0, 3);
+                      } else if (cleanNum.length >= 2) {
+                        itemZone = cleanNum.substring(0, 2);
+                      }
+                    }
+                  }
+                  if (itemZone !== selectedZone) return false;
+                }
                 return true;
               })
               .map(item => (
@@ -1083,7 +1344,7 @@ const TontineVerification: React.FC = () => {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] font-bold text-gray-600 uppercase">
-                          {new Date(item.validationDate).toLocaleDateString()} • {item.tontineAccountNumber || item.clientCode} • Demandé: {item.originalAmount?.toLocaleString() || item.amount.toLocaleString()} F • Validé: {item.amount.toLocaleString()} F • {item.reason}
+                          {new Date(item.validationDate).toLocaleDateString()} • {item.tontineAccountNumber || item.clientCode} • Demandé: {item.originalAmount?.toLocaleString() || item.amount.toLocaleString()} F • Livret: {item.observedBalance?.toLocaleString() || 0} F • Validé: {item.amount.toLocaleString()} F • {item.reason}
                         </p>
                         {item.gap !== undefined && (
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${item.gap < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'} uppercase`}>
