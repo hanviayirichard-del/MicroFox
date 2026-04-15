@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Shield, Building2, Lock, User as UserIcon, Trash2, Search, Ban, CheckCircle } from 'lucide-react';
+import { UserPlus, Shield, Building2, Lock, User as UserIcon, Trash2, Search, Ban, CheckCircle, Fingerprint, ShieldCheck } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { recordAuditLog } from '../utils/audit';
 
@@ -16,8 +16,34 @@ const UserManagement: React.FC = () => {
     motDePasse: '',
     zoneCollecte: '',
     zonesCollecte: [] as string[],
-    caisse: ''
+    caisse: '',
+    fingerprintCredential: undefined as { id: string; publicKey: string } | undefined
   });
+
+  const [isRegisteringFingerprint, setIsRegisteringFingerprint] = useState(false);
+
+  const handleRegisterFingerprint = async () => {
+    if (!formData.identifiant.trim()) {
+      alert("Veuillez saisir un identifiant avant d'enregistrer l'empreinte.");
+      return;
+    }
+    setIsRegisteringFingerprint(true);
+    try {
+      const { registerFingerprint } = await import('../utils/webauthn');
+      const credential = await registerFingerprint(formData.identifiant);
+      setFormData(prev => ({ ...prev, fingerprintCredential: credential }));
+      alert("Empreinte digitale enregistrée avec succès !");
+    } catch (error: any) {
+      console.error("Fingerprint error:", error);
+      let msg = error.message || "Erreur lors de l'enregistrement de l'empreinte.";
+      if (msg.includes("feature is not enabled") || msg.includes("Permissions Policy")) {
+        msg = "L'accès biométrique est bloqué dans cet aperçu. Veuillez ouvrir l'application dans un nouvel onglet pour enregistrer votre empreinte.";
+      }
+      alert(msg);
+    } finally {
+      setIsRegisteringFingerprint(false);
+    }
+  };
 
   const zones = ['01', '01A', '02', '02A', '03', '03A', '04', '04A', '05', '05A', '06', '06A', '07', '07A', '08', '08A', '09', '09A'];
   const caisses = ['CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'];
@@ -58,7 +84,8 @@ const UserManagement: React.FC = () => {
       zoneCollecte: formData.zonesCollecte.length > 0 ? formData.zonesCollecte[0] : '',
       zonesCollecte: formData.zonesCollecte,
       caisse: formData.caisse,
-      isBlocked: false
+      isBlocked: false,
+      fingerprintCredential: formData.fingerprintCredential
     };
     
     const updatedUsers = [...users, newUser];
@@ -74,7 +101,8 @@ const UserManagement: React.FC = () => {
       motDePasse: '',
       zoneCollecte: '',
       zonesCollecte: [],
-      caisse: ''
+      caisse: '',
+      fingerprintCredential: undefined
     });
   };
 
@@ -103,6 +131,20 @@ const UserManagement: React.FC = () => {
     setUsers(updatedUsers);
     localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
     recordAuditLog('MODIFICATION', 'UTILISATEURS', `${action} de l'utilisateur ${user.identifiant}`);
+  };
+
+  const handleDeleteFingerprint = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    if (confirm(`Voulez-vous vraiment supprimer l'empreinte digitale de ${user.identifiant} ?`)) {
+      const updatedUsers = users.map(u => 
+        u.id === userId ? { ...u, fingerprintCredential: undefined } : u
+      );
+      setUsers(updatedUsers);
+      localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+      recordAuditLog('MODIFICATION', 'UTILISATEURS', `Suppression de l'empreinte digitale de l'utilisateur ${user.identifiant}`);
+      alert("Empreinte digitale supprimée.");
+    }
   };
 
   const filteredUsers = users.filter(u => 
@@ -218,6 +260,15 @@ const UserManagement: React.FC = () => {
                       >
                         {user.isBlocked ? <CheckCircle size={16} /> : <Ban size={16} />}
                       </button>
+                      {user.fingerprintCredential && (
+                        <button 
+                          onClick={() => handleDeleteFingerprint(user.id)}
+                          className="p-2 text-indigo-500 bg-indigo-50 rounded-lg transition-all active:scale-90"
+                          title="Supprimer l'empreinte digitale"
+                        >
+                          <Fingerprint size={16} />
+                        </button>
+                      )}
                       <button 
                         onClick={() => handleDeleteUser(user.id)}
                         className="p-2 text-red-500 bg-red-50 rounded-lg transition-all active:scale-90"
@@ -346,6 +397,46 @@ const UserManagement: React.FC = () => {
                   onChange={e => setFormData({...formData, motDePasse: e.target.value})}
                   className="w-full p-4 bg-gray-50 border border-transparent focus:border-indigo-200 rounded-2xl outline-none text-sm font-bold text-[#121c32] transition-all"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Sécurité Biométrique</label>
+                {formData.fingerprintCredential ? (
+                  <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                      <ShieldCheck size={16} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-black text-emerald-600 uppercase">Empreinte enregistrée</p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, fingerprintCredential: undefined }))}
+                      className="text-[10px] font-black text-red-500 uppercase hover:underline"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={handleRegisterFingerprint}
+                    disabled={isRegisteringFingerprint}
+                    className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isRegisteringFingerprint ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
+                        Enregistrement...
+                      </>
+                    ) : (
+                      <>
+                        <Fingerprint size={16} />
+                        Enregistrer l'empreinte
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
 
               <div className="flex gap-4 pt-4">

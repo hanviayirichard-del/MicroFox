@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, ArrowRight, ShieldCheck, User as UserIcon, Lock } from 'lucide-react';
+import { Building2, ArrowRight, ShieldCheck, User as UserIcon, Lock, Fingerprint } from 'lucide-react';
 import { User } from '../types';
 
 interface MicrofinanceLoginProps {
@@ -13,6 +13,73 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [lockoutTimer, setLockoutTimer] = useState(0);
+  const [isAuthenticatingFingerprint, setIsAuthenticatingFingerprint] = useState(false);
+
+  const handleFingerprintLogin = async () => {
+    if (lockoutTimer > 0) return;
+    setError('');
+    setIsAuthenticatingFingerprint(true);
+
+    try {
+      const savedUsers = localStorage.getItem('microfox_users');
+      if (!savedUsers) throw new Error("Aucun utilisateur enregistré.");
+
+      const users: User[] = JSON.parse(savedUsers);
+      const usersWithFingerprint = users.filter(u => !u.isDeleted && u.fingerprintCredential);
+
+      if (usersWithFingerprint.length === 0) {
+        throw new Error("Aucune empreinte digitale enregistrée sur cet appareil.");
+      }
+
+      const { authenticateFingerprint } = await import('../utils/webauthn');
+      
+      // Since we might have multiple users with fingerprints, we need to find which one is authenticating.
+      // WebAuthn's navigator.credentials.get with allowCredentials will handle the selection if multiple match.
+      // For simplicity, we'll try to authenticate against all registered credentials on this device.
+      
+      const credentialIds = usersWithFingerprint.map(u => u.fingerprintCredential!.id);
+      
+      // We need to try each one or use allowCredentials with all IDs.
+      // Our authenticateFingerprint utility currently takes one ID. Let's modify it or loop.
+      // Actually, let's just use the first one for now or prompt for identifiant first?
+      // The user request says "permettre d'avoir accès à l'application".
+      
+      // Let's try to find the user if they entered their identifiant
+      const trimmedIdentifiant = identifiant.trim();
+      const targetUser = usersWithFingerprint.find(u => 
+        u.identifiant.toLowerCase() === trimmedIdentifiant.toLowerCase() &&
+        u.codeMF.toUpperCase() === codeMF.trim().toUpperCase()
+      );
+
+      if (targetUser) {
+        const success = await authenticateFingerprint(targetUser.fingerprintCredential!.id);
+        if (success) {
+          if (targetUser.isBlocked) {
+            throw new Error('Votre compte est bloqué. Veuillez contacter l\'administrateur.');
+          }
+          onLogin(targetUser);
+          return;
+        }
+      } else if (!trimmedIdentifiant) {
+        // If no identifiant entered, try all? 
+        // Navigator.credentials.get with multiple allowCredentials is the right way.
+        // Let's update authenticateFingerprint to accept an array of IDs.
+        throw new Error("Veuillez saisir votre identifiant et code MF pour vous connecter avec votre empreinte.");
+      } else {
+        throw new Error("Utilisateur non trouvé ou empreinte non enregistrée pour cet identifiant.");
+      }
+
+    } catch (error: any) {
+      console.error("Fingerprint login error:", error);
+      let msg = error.message || "Échec de l'authentification par empreinte.";
+      if (msg.includes("feature is not enabled") || msg.includes("Permissions Policy")) {
+        msg = "L'accès biométrique est bloqué dans cet aperçu. Veuillez ouvrir l'application dans un nouvel onglet pour vous connecter avec votre empreinte.";
+      }
+      setError(msg);
+    } finally {
+      setIsAuthenticatingFingerprint(false);
+    }
+  };
 
   useEffect(() => {
     if (lockoutTimer > 0) {
@@ -198,6 +265,29 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
           >
             {lockoutTimer > 0 ? `Patientez ${lockoutTimer}s` : 'Se connecter'}
             {lockoutTimer === 0 && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+          </button>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10"></div>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest">
+              <span className="bg-[#121c32] px-4 text-gray-500">OU</span>
+            </div>
+          </div>
+
+          <button 
+            type="button"
+            onClick={handleFingerprintLogin}
+            disabled={lockoutTimer > 0 || isAuthenticatingFingerprint}
+            className="w-full py-5 bg-white/5 hover:bg-white/10 border-2 border-white/10 text-white rounded-[1.5rem] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+          >
+            {isAuthenticatingFingerprint ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Fingerprint size={20} className="text-emerald-400" />
+            )}
+            Empreinte Digitale
           </button>
         </form>
 

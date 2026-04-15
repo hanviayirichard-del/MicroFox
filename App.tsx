@@ -584,7 +584,10 @@ const App: React.FC = () => {
     }
 
     if (activeSection === 'Tableau de Bord') {
-      return <Dashboard />;
+      if (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') {
+        return <Dashboard />;
+      }
+      return <GuidePratique />;
     }
 
     if (activeSection === 'Notification') {

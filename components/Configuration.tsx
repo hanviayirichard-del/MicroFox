@@ -316,6 +316,63 @@ const Configuration: React.FC = () => {
     }
   };
 
+  const [isRegisteringFingerprint, setIsRegisteringFingerprint] = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
+
+  const handleRegisterFingerprint = async () => {
+    if (!currentUser) return;
+    setIsRegisteringFingerprint(true);
+    try {
+      const { registerFingerprint } = await import('../utils/webauthn');
+      const credential = await registerFingerprint(currentUser.identifiant);
+      
+      const savedUsers = localStorage.getItem('microfox_users');
+      if (savedUsers) {
+        const users = JSON.parse(savedUsers);
+        const updatedUsers = users.map((u: any) => 
+          u.id === currentUser.id ? { ...u, fingerprintCredential: credential } : u
+        );
+        localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+        
+        // Update current user session
+        const updatedCurrentUser = { ...currentUser, fingerprintCredential: credential };
+        localStorage.setItem('microfox_current_user', JSON.stringify(updatedCurrentUser));
+        
+        alert("Empreinte digitale enregistrée avec succès !");
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (error: any) {
+      console.error("Fingerprint error:", error);
+      let msg = error.message || "Erreur lors de l'enregistrement de l'empreinte.";
+      if (msg.includes("feature is not enabled") || msg.includes("Permissions Policy")) {
+        msg = "L'accès biométrique est bloqué dans cet aperçu. Veuillez ouvrir l'application dans un nouvel onglet pour enregistrer votre empreinte.";
+      }
+      alert(msg);
+    } finally {
+      setIsRegisteringFingerprint(false);
+    }
+  };
+
+  const handleDeleteFingerprint = () => {
+    if (!currentUser) return;
+    if (confirm("Voulez-vous vraiment supprimer votre empreinte digitale enregistrée ?")) {
+      const savedUsers = localStorage.getItem('microfox_users');
+      if (savedUsers) {
+        const users = JSON.parse(savedUsers);
+        const updatedUsers = users.map((u: any) => 
+          u.id === currentUser.id ? { ...u, fingerprintCredential: undefined } : u
+        );
+        localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+        
+        const updatedCurrentUser = { ...currentUser, fingerprintCredential: undefined };
+        localStorage.setItem('microfox_current_user', JSON.stringify(updatedCurrentUser));
+        
+        alert("Empreinte digitale supprimée.");
+        window.dispatchEvent(new Event('storage'));
+      }
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -780,6 +837,63 @@ const Configuration: React.FC = () => {
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-red-600">Remise à zéro complète</span>
             </button>
+          </div>
+        </div>
+
+        {/* Section Biométrie */}
+        <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Sécurité Biométrique</h3>
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">Empreinte Digitale</p>
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-700 leading-relaxed">
+            Enregistrez votre empreinte digitale pour accéder rapidement et en toute sécurité à votre compte MicroFoX.
+          </p>
+
+          <div className="pt-2">
+            {currentUser?.fingerprintCredential ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-black text-emerald-600 uppercase">Empreinte enregistrée</p>
+                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-tight">Prête pour la connexion</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleDeleteFingerprint}
+                  className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-100 transition-all"
+                >
+                  Supprimer l'empreinte
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={handleRegisterFingerprint}
+                disabled={isRegisteringFingerprint}
+                className="w-full py-6 bg-indigo-600 text-white rounded-3xl font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isRegisteringFingerprint ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={20} />
+                    Enregistrer mon empreinte
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

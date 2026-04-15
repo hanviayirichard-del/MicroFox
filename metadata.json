@@ -3,6 +3,8 @@
   "description": "Application de gestion de microfinance avec suivi des agents, membres, tontines et comptabilité.",
   "requestFramePermissions": [
     "geolocation",
-    "camera"
+    "camera",
+    "publickey-credentials-get",
+    "publickey-credentials-create"
   ]
 }

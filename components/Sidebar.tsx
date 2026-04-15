@@ -269,6 +269,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
               }
 
               if (item.id === 'Guide Pratique') return true;
+              if (item.id === 'Tableau de Bord') {
+                return userRole === 'administrateur' || userRole === 'directeur';
+              }
               if (userRole === 'administrateur') return true;
 
               // Restrictions pour l'agent commercial

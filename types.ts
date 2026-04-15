@@ -35,6 +35,10 @@ export interface User {
   latitude?: number | null;
   longitude?: number | null;
   lastUpdate?: string;
+  fingerprintCredential?: {
+    id: string;
+    publicKey: string;
+  };
 }
 
 export interface TontineAccount {
