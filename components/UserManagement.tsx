@@ -35,9 +35,18 @@ const UserManagement: React.FC = () => {
       alert("Empreinte digitale enregistrée avec succès !");
     } catch (error: any) {
       console.error("Fingerprint error:", error);
-      let msg = error.message || "Erreur lors de l'enregistrement de l'empreinte.";
-      if (msg.includes("feature is not enabled") || msg.includes("Permissions Policy")) {
-        msg = "L'accès biométrique est bloqué dans cet aperçu. Veuillez ouvrir l'application dans un nouvel onglet pour enregistrer votre empreinte.";
+      const errorString = error?.message || String(error);
+      let msg = errorString;
+      
+      if (
+        errorString.includes("feature is not enabled") || 
+        errorString.includes("Permissions Policy") ||
+        errorString.includes("NotAllowedError") ||
+        errorString.includes("SecurityError")
+      ) {
+        msg = "L'accès biométrique est bloqué dans cet aperçu (iframe). Pour enregistrer votre empreinte, veuillez ouvrir l'application dans un nouvel onglet en cliquant sur l'icône 'Ouvrir dans un nouvel onglet' en haut à droite.";
+      } else {
+        msg = "Erreur lors de l'enregistrement de l'empreinte. Assurez-vous que votre appareil supporte la biométrie.";
       }
       alert(msg);
     } finally {

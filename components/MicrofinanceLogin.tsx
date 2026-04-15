@@ -88,9 +88,20 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
 
     } catch (error: any) {
       console.error("Fingerprint login error:", error);
-      let msg = error.message || "Échec de l'authentification par empreinte.";
-      if (msg.includes("feature is not enabled") || msg.includes("Permissions Policy")) {
-        msg = "L'accès biométrique est bloqué dans cet aperçu. Veuillez ouvrir l'application dans un nouvel onglet pour vous connecter avec votre empreinte.";
+      const errorString = error?.message || String(error);
+      let msg = errorString;
+      
+      if (
+        errorString.includes("feature is not enabled") || 
+        errorString.includes("Permissions Policy") ||
+        errorString.includes("NotAllowedError") ||
+        errorString.includes("SecurityError")
+      ) {
+        msg = "L'accès biométrique est bloqué dans cet aperçu (iframe). Pour utiliser votre empreinte, veuillez ouvrir l'application dans un nouvel onglet en cliquant sur l'icône 'Ouvrir dans un nouvel onglet' en haut à droite.";
+      } else if (errorString.includes("no credentials") || errorString.includes("not found")) {
+        msg = "Aucune empreinte correspondante n'a été trouvée sur cet appareil.";
+      } else {
+        msg = "Échec de l'authentification par empreinte. Assurez-vous d'avoir enregistré votre empreinte sur cet appareil.";
       }
       setError(msg);
     } finally {
