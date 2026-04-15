@@ -21,10 +21,16 @@ export const registerFingerprint = async (username: string): Promise<{ id: strin
       name: username,
       displayName: username,
     },
-    pubKeyCredParams: [{ alg: -7, type: "public-key" }], // ES256
+    pubKeyCredParams: [
+      { alg: -7, type: "public-key" }, // ES256
+      { alg: -257, type: "public-key" }, // RS256
+      { alg: -8, type: "public-key" } // EdDSA
+    ],
     authenticatorSelection: {
       authenticatorAttachment: "platform",
       userVerification: "required",
+      residentKey: "required",
+      requireResidentKey: true,
     },
     timeout: 60000,
     attestation: "none",
@@ -46,7 +52,7 @@ export const registerFingerprint = async (username: string): Promise<{ id: strin
   };
 };
 
-export const authenticateFingerprint = async (credentialId: string): Promise<boolean> => {
+export const authenticateFingerprint = async (credentialIds: string | string[]): Promise<string | null> => {
   if (!window.PublicKeyCredential) {
     throw new Error("WebAuthn n'est pas supporté par ce navigateur.");
   }
@@ -54,17 +60,16 @@ export const authenticateFingerprint = async (credentialId: string): Promise<boo
   const challenge = new Uint8Array(32);
   window.crypto.getRandomValues(challenge);
 
-  const idBuffer = Uint8Array.from(atob(credentialId), c => c.charCodeAt(0));
+  const ids = Array.isArray(credentialIds) ? credentialIds : [credentialIds];
+  const allowCredentials = ids.map(id => ({
+    id: Uint8Array.from(atob(id), c => c.charCodeAt(0)),
+    type: "public-key" as const,
+    transports: ["internal"] as AuthenticatorTransport[],
+  }));
 
   const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
     challenge,
-    allowCredentials: [
-      {
-        id: idBuffer,
-        type: "public-key",
-        transports: ["internal"],
-      },
-    ],
+    allowCredentials,
     userVerification: "required",
     timeout: 60000,
   };
@@ -73,5 +78,7 @@ export const authenticateFingerprint = async (credentialId: string): Promise<boo
     publicKey: publicKeyCredentialRequestOptions,
   })) as PublicKeyCredential;
 
-  return !!assertion;
+  if (!assertion) return null;
+
+  return btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
 };

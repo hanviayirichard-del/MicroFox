@@ -44,29 +44,46 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
       // Actually, let's just use the first one for now or prompt for identifiant first?
       // The user request says "permettre d'avoir accès à l'application".
       
-      // Let's try to find the user if they entered their identifiant
       const trimmedIdentifiant = identifiant.trim();
-      const targetUser = usersWithFingerprint.find(u => 
-        u.identifiant.toLowerCase() === trimmedIdentifiant.toLowerCase() &&
-        u.codeMF.toUpperCase() === codeMF.trim().toUpperCase()
-      );
+      const trimmedCodeMF = codeMF.trim().toUpperCase();
 
-      if (targetUser) {
-        const success = await authenticateFingerprint(targetUser.fingerprintCredential!.id);
-        if (success) {
+      if (trimmedIdentifiant && trimmedCodeMF) {
+        // Specific user login
+        const targetUser = usersWithFingerprint.find(u => 
+          u.identifiant.toLowerCase() === trimmedIdentifiant.toLowerCase() &&
+          u.codeMF.toUpperCase() === trimmedCodeMF
+        );
+
+        if (!targetUser) {
+          throw new Error("Utilisateur non trouvé ou empreinte non enregistrée pour cet identifiant.");
+        }
+
+        const authenticatedId = await authenticateFingerprint(targetUser.fingerprintCredential!.id);
+        if (authenticatedId) {
           if (targetUser.isBlocked) {
             throw new Error('Votre compte est bloqué. Veuillez contacter l\'administrateur.');
           }
           onLogin(targetUser);
           return;
         }
-      } else if (!trimmedIdentifiant) {
-        // If no identifiant entered, try all? 
-        // Navigator.credentials.get with multiple allowCredentials is the right way.
-        // Let's update authenticateFingerprint to accept an array of IDs.
-        throw new Error("Veuillez saisir votre identifiant et code MF pour vous connecter avec votre empreinte.");
       } else {
-        throw new Error("Utilisateur non trouvé ou empreinte non enregistrée pour cet identifiant.");
+        // Try all fingerprints
+        const credentialIds = usersWithFingerprint.map(u => u.fingerprintCredential!.id);
+        if (credentialIds.length === 0) {
+          throw new Error("Aucune empreinte digitale enregistrée dans le système.");
+        }
+
+        const authenticatedId = await authenticateFingerprint(credentialIds);
+        if (authenticatedId) {
+          const targetUser = usersWithFingerprint.find(u => u.fingerprintCredential!.id === authenticatedId);
+          if (targetUser) {
+            if (targetUser.isBlocked) {
+              throw new Error('Votre compte est bloqué. Veuillez contacter l\'administrateur.');
+            }
+            onLogin(targetUser);
+            return;
+          }
+        }
       }
 
     } catch (error: any) {
