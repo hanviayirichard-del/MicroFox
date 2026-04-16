@@ -6,6 +6,7 @@ const AgentPayments: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [totalCotisations, setTotalCotisations] = useState(0);
   const [totalLivrets, setTotalLivrets] = useState(0);
+  const [totalNbLivrets, setTotalNbLivrets] = useState(0);
   const [agentBalance, setAgentBalance] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -71,6 +72,7 @@ const AgentPayments: React.FC = () => {
       const savedMembers = localStorage.getItem('microfox_members_data');
       let cotisations = 0;
       let livrets = 0;
+      let nbLivrets = 0;
 
       if (savedMembers) {
         const allMembers = JSON.parse(savedMembers);
@@ -90,6 +92,7 @@ const AgentPayments: React.FC = () => {
               if (tx.type === 'cotisation' || tx.type === 'depot') {
                 if (desc.includes('livret')) {
                   livrets += Number(tx.amount || 0);
+                  nbLivrets += 1;
                 } else {
                   cotisations += Number(tx.amount || 0);
                 }
@@ -101,6 +104,7 @@ const AgentPayments: React.FC = () => {
       const savedPayments = localStorage.getItem('microfox_agent_payments');
       let paidCotisations = 0;
       let paidLivrets = 0;
+      let paidNbLivrets = 0;
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
@@ -109,6 +113,7 @@ const AgentPayments: React.FC = () => {
           if (String(p.agentId) === String(user.id) && p.status !== 'Annulé' && p.status !== 'Rejeté') {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
+            paidNbLivrets += Number(p.nbLivrets || 0);
           }
         });
       }
@@ -116,17 +121,25 @@ const AgentPayments: React.FC = () => {
       // Le montant à verser doit correspondre au solde réel de l'agent
       const calculatedCotisations = Math.max(0, cotisations - paidCotisations);
       const calculatedLivrets = Math.max(0, livrets - paidLivrets);
+      const calculatedNbLivrets = Math.max(0, nbLivrets - paidNbLivrets);
       
       // Le montant à verser doit être strictement plafonné par le solde réel de l'agent (currentAgentBalance)
       // pour éviter que des montants déjà versés ne réapparaissent à cause d'écarts de calcul avec l'historique.
       if (currentAgentBalance <= 0) {
         setTotalCotisations(0);
         setTotalLivrets(0);
+        setTotalNbLivrets(0);
       } else {
         // On répartit le solde réel en priorité sur les livrets, puis le reste en cotisations
         const cappedLivrets = Math.min(calculatedLivrets, currentAgentBalance);
         setTotalLivrets(cappedLivrets);
         setTotalCotisations(currentAgentBalance - cappedLivrets);
+        // Pour les livrets, le nombre est calculé strictement en divisant le montant par le prix unitaire
+        const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{}');
+        const prixLivret = mfConfig.prixLivretTontine || 500;
+        const estimatedNb = cappedLivrets > 0 ? Math.floor(cappedLivrets / prixLivret) : 0;
+        
+        setTotalNbLivrets(estimatedNb);
       }
     };
 
@@ -204,6 +217,7 @@ const AgentPayments: React.FC = () => {
         cashierName: currentUser?.identifiant,
         amountCotisations: totalCotisations,
         amountLivrets: totalLivrets,
+        nbLivrets: totalNbLivrets,
         totalAmount: totalAmount,
         theoreticalAmount: theoreticalTotal,
         physicalBalance: physicalBalance,
@@ -315,7 +329,7 @@ const AgentPayments: React.FC = () => {
                 <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
                   <BookOpen size={20} />
                 </div>
-                <span className="text-xs font-black text-amber-900 uppercase">Vente Livrets</span>
+                <span className="text-xs font-black text-amber-900 uppercase">Vente Livrets ({totalNbLivrets})</span>
               </div>
               <span className="text-lg font-black text-amber-600">{totalLivrets.toLocaleString()} F</span>
             </div>

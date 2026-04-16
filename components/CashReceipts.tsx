@@ -69,7 +69,10 @@ const CashReceipts: React.FC = () => {
               memberCode: p.agentId || 'AGENT',
               account: 'caisse',
               category: 'AGENT',
-              zone: p.zone
+              zone: p.zone,
+              amountCotisations: p.amountCotisations,
+              amountLivrets: p.amountLivrets,
+              nbLivrets: p.nbLivrets
             });
           }
         });
@@ -252,6 +255,23 @@ const CashReceipts: React.FC = () => {
                   <span class="info-label">Caissier</span>
                   <span class="info-value">${tx.cashierName || 'Système'}</span>
                 </div>
+                ${(tx.amountCotisations !== undefined || tx.amountLivrets !== undefined) ? `
+                <div style="margin-top: 10px; border: 1px solid #f0f0f0; border-radius: 8px; padding: 8px; background: #fafafa;">
+                  <p style="font-size: 9px; font-weight: 900; text-transform: uppercase; color: #121c32; margin: 0 0 8px 0; border-bottom: 1px solid #eee; padding-bottom: 4px;">Détails du Versement</p>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="font-size: 10px; font-weight: 800; color: #666; text-transform: uppercase;">Montant Cotisation:</span>
+                    <span style="font-size: 10px; font-weight: 900; color: #121c32;">${(tx.amountCotisations || 0).toLocaleString()} F</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="font-size: 10px; font-weight: 800; color: #666; text-transform: uppercase;">Montant Livrets:</span>
+                    <span style="font-size: 10px; font-weight: 900; color: #121c32;">${(tx.amountLivrets || 0).toLocaleString()} F</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="font-size: 10px; font-weight: 800; color: #666; text-transform: uppercase;">Nombre Livrets:</span>
+                    <span style="font-size: 10px; font-weight: 900; color: #121c32;">${tx.nbLivrets || 0}</span>
+                  </div>
+                </div>
+                ` : ''}
                 ${isCredit && tx.zone ? `
                 <div class="info-row">
                   <span class="info-label">Zone</span>
