@@ -89,6 +89,8 @@ export interface ClientAccount {
   history: Transaction[];
   gender?: string;
   birthDate?: string;
+  phoneNumber?: string;
+  address?: string;
   birthPlace?: string;
   profession?: string;
   idType?: string;

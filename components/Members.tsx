@@ -750,6 +750,8 @@ const RegistrationForm: React.FC<{
   const [birthDate, setBirthDate] = useState('');
   const [birthPlace, setBirthPlace] = useState('');
   const [profession, setProfession] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [address, setAddress] = useState('');
   const [idType, setIdType] = useState('CNI');
   const [idNumber, setIdNumber] = useState('');
   const [nationality, setNationality] = useState('Togolaise');
@@ -1013,6 +1015,8 @@ const RegistrationForm: React.FC<{
       history: history,
       gender,
       birthDate,
+      phoneNumber,
+      address,
       birthPlace,
       profession,
       idType,
@@ -1053,6 +1057,28 @@ const RegistrationForm: React.FC<{
                 placeholder="NOM Prénoms" 
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
+                className="w-full p-4 bg-white/5 border-2 border-gray-800 focus:border-emerald-500 rounded-2xl text-base sm:text-lg font-medium outline-none placeholder:text-gray-600 text-white transition-all" 
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">NUMÉRO DE TÉLÉPHONE</label>
+              <input 
+                type="tel" 
+                placeholder="Ex: 90 00 00 00" 
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="w-full p-4 bg-white/5 border-2 border-gray-800 focus:border-emerald-500 rounded-2xl text-base sm:text-lg font-medium outline-none placeholder:text-gray-600 text-white transition-all" 
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">ADRESSE</label>
+              <input 
+                type="text" 
+                placeholder="Ex: Quartier, Rue, Maison" 
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
                 className="w-full p-4 bg-white/5 border-2 border-gray-800 focus:border-emerald-500 rounded-2xl text-base sm:text-lg font-medium outline-none placeholder:text-gray-600 text-white transition-all" 
               />
             </div>
@@ -1418,6 +1444,16 @@ const EditProfileForm: React.FC<{
             <div className="space-y-2">
               <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest ml-1">Nom Complet *</label>
               <input type="text" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full p-4 bg-white/5 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-white outline-none transition-all" />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest ml-1">Numéro de téléphone</label>
+              <input type="tel" value={formData.phoneNumber || ''} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} className="w-full p-4 bg-white/5 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-white outline-none transition-all" />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest ml-1">Adresse</label>
+              <input type="text" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full p-4 bg-white/5 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-white outline-none transition-all" />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -1995,6 +2031,8 @@ const Members: React.FC = () => {
           creditStatus: 'Sain',
           tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 0 }],
           history: [],
+          phoneNumber: '90 12 34 56',
+          address: 'Lomé, Rue 123, Maison 45',
           gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
           dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '3 Mois'
         },
