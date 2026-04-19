@@ -16,7 +16,8 @@ const Configuration: React.FC = () => {
       autoDeactivationDays: config.autoDeactivationDays ?? [],
       autoDeactivationStartTime: config.autoDeactivationStartTime ?? '00:00',
       autoDeactivationEndTime: config.autoDeactivationEndTime ?? '23:59',
-      autoDeactivationRules: config.autoDeactivationRules ?? []
+      autoDeactivationRules: config.autoDeactivationRules ?? [],
+      gpsTrackingEnabled: config.gpsTrackingEnabled ?? true
     };
   });
 
@@ -613,6 +614,20 @@ const Configuration: React.FC = () => {
                   className={`w-16 h-8 rounded-full relative transition-colors ${mfConfig.autoDeactivationEnabled ? 'bg-[#00c896]' : 'bg-gray-600'}`}
                 >
                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${mfConfig.autoDeactivationEnabled ? 'right-1' : 'left-1'}`}></div>
+                </button>
+              </div>
+
+              {/* Suivi GPS Tracking */}
+              <div className="bg-[#1e293b] p-8 rounded-[2rem] flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-black text-white">Suivi GPS</h3>
+                  <p className="text-gray-400 text-sm font-medium mt-1">Activer le suivi des déplacements</p>
+                </div>
+                <button 
+                  onClick={() => setMfConfig({...mfConfig, gpsTrackingEnabled: !mfConfig.gpsTrackingEnabled})}
+                  className={`w-16 h-8 rounded-full relative transition-colors ${mfConfig.gpsTrackingEnabled ? 'bg-[#00c896]' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${mfConfig.gpsTrackingEnabled ? 'right-1' : 'left-1'}`}></div>
                 </button>
               </div>
 

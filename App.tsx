@@ -568,6 +568,11 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser || currentUser.role === 'administrateur') return;
 
+    // Check if GPS tracking is enabled in config
+    const savedConfig = localStorage.getItem('microfox_mf_config');
+    const config = savedConfig ? JSON.parse(savedConfig) : {};
+    if (config.gpsTrackingEnabled === false) return;
+
     const trackLocation = () => {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(

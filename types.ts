@@ -210,4 +210,5 @@ export interface Microfinance {
   autoDeactivationStartTime?: string;
   autoDeactivationEndTime?: string;
   autoDeactivationRules?: AutoDeactivationRule[];
+  gpsTrackingEnabled?: boolean;
 }
