@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -184,6 +184,64 @@ const App: React.FC = () => {
   });
   const [isBlockedBySchedule, setIsBlockedBySchedule] = useState(false);
   const currentMF = currentUser?.microfinance || null;
+
+  // Storage cleanup to reduce database consumption
+  const cleanupStorage = useCallback(() => {
+    // 1. Audit Logs Cleanup
+    const logs = nativeGetItem('microfox_audit_logs');
+    if (logs) {
+      try {
+        const parsed = JSON.parse(logs);
+        if (Array.isArray(parsed) && parsed.length > 1000) {
+          nativeSetItem('microfox_audit_logs', JSON.stringify(parsed.slice(0, 1000)));
+          nativeSetItem('microfox_pending_sync', 'true');
+        }
+      } catch (e) {}
+    }
+
+    // 2. User Journeys Cleanup
+    const journeys = nativeGetItem('microfox_user_journeys');
+    if (journeys) {
+      try {
+        const parsed = JSON.parse(journeys);
+        if (Array.isArray(parsed) && parsed.length > 500) {
+          nativeSetItem('microfox_user_journeys', JSON.stringify(parsed.slice(-500)));
+          nativeSetItem('microfox_pending_sync', 'true');
+        }
+      } catch (e) {}
+    }
+
+    // 3. Notifications Cleanup
+    const notifications = nativeGetItem('microfox_notifications');
+    if (notifications) {
+      try {
+        const parsed = JSON.parse(notifications);
+        if (Array.isArray(parsed) && parsed.length > 100) {
+          nativeSetItem('microfox_notifications', JSON.stringify(parsed.slice(0, 100)));
+          nativeSetItem('microfox_pending_sync', 'true');
+        }
+      } catch (e) {}
+    }
+
+    // 4. Validated Withdrawals Cleanup (Remove deleted items)
+    const withdrawals = nativeGetItem('microfox_validated_withdrawals');
+    if (withdrawals) {
+      try {
+        const parsed = JSON.parse(withdrawals);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((w: any) => !w.isDeleted && (!w.date || (Date.now() - new Date(w.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
+          if (filtered.length !== parsed.length || filtered.length > 500) {
+            nativeSetItem('microfox_validated_withdrawals', JSON.stringify(filtered.slice(-500)));
+            nativeSetItem('microfox_pending_sync', 'true');
+          }
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    cleanupStorage();
+  }, [cleanupStorage]);
 
   const checkScheduleBlocking = () => {
     if (!currentUser || currentUser.role === 'administrateur') {
@@ -552,11 +610,11 @@ const App: React.FC = () => {
               timestamp
             };
 
-            // Keep journey history (limit to 2000 points to avoid storage bloat)
+            // Keep journey history (limit to 500 points to avoid database consumption)
             const updatedJourneys = [
               ...journeys,
               newPoint
-            ].slice(-2000);
+            ].slice(-500);
 
             localStorage.setItem('microfox_user_journeys', JSON.stringify(updatedJourneys));
           },

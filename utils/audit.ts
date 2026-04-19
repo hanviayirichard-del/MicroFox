@@ -25,8 +25,8 @@ export const recordAuditLog = (
   const savedLogs = localStorage.getItem('microfox_audit_logs');
   const logs: AuditLog[] = savedLogs ? JSON.parse(savedLogs) : [];
   
-  // Keep only the last 5000 logs to avoid localStorage overflow
-  const updatedLogs = [newLog, ...logs].slice(0, 5000);
+  // Keep only the last 1000 logs to avoid storage bloat and save database space
+  const updatedLogs = [newLog, ...logs].slice(0, 1000);
   localStorage.setItem('microfox_audit_logs', JSON.stringify(updatedLogs));
   
   // Also mark for sync if needed
