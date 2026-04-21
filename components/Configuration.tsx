@@ -13,7 +13,7 @@ const Configuration: React.FC = () => {
     return {
       ...config,
       autoDeactivationEnabled: config.autoDeactivationEnabled ?? false,
-      autoDeactivationDays: config.autoDeactivationDays ?? [],
+      autoDeactivationDays: Array.isArray(config.autoDeactivationDays) ? config.autoDeactivationDays : [],
       autoDeactivationStartTime: config.autoDeactivationStartTime ?? '00:00',
       autoDeactivationEndTime: config.autoDeactivationEndTime ?? '23:59',
       autoDeactivationRules: config.autoDeactivationRules ?? [],
@@ -73,7 +73,7 @@ const Configuration: React.FC = () => {
   };
 
   const toggleDay = (day: string) => {
-    const currentDays = mfConfig.autoDeactivationDays || [];
+    const currentDays = Array.isArray(mfConfig.autoDeactivationDays) ? mfConfig.autoDeactivationDays : [];
     const newDays = currentDays.includes(day)
       ? currentDays.filter(d => d !== day)
       : [...currentDays, day];
@@ -81,7 +81,7 @@ const Configuration: React.FC = () => {
   };
 
   const toggleNewRuleDay = (day: string) => {
-    const currentDays = newRule.days || [];
+    const currentDays = Array.isArray(newRule.days) ? newRule.days : [];
     const newDays = currentDays.includes(day)
       ? currentDays.filter(d => d !== day)
       : [...currentDays, day];
@@ -640,7 +640,7 @@ const Configuration: React.FC = () => {
                       key={day}
                       onClick={() => toggleDay(day)}
                       className={`w-12 h-12 rounded-xl font-black text-lg transition-all ${
-                        (mfConfig.autoDeactivationDays || []).includes(day)
+                        (Array.isArray(mfConfig.autoDeactivationDays) ? mfConfig.autoDeactivationDays : []).includes(day)
                           ? 'bg-[#00c896] text-white'
                           : 'bg-[#0f172a] text-gray-500'
                       }`}
@@ -724,7 +724,7 @@ const Configuration: React.FC = () => {
                           key={day}
                           onClick={() => toggleNewRuleDay(day)}
                           className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                            (newRule.days || []).includes(day)
+                            (Array.isArray(newRule.days) ? newRule.days : []).includes(day)
                               ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
                               : 'bg-[#0f172a] text-gray-500 hover:text-gray-300'
                           }`}
@@ -783,7 +783,7 @@ const Configuration: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div className="flex gap-1">
                           {['D', 'L', 'M', 'Me', 'J', 'V', 'S'].map(day => (
-                            <span key={day} className={`text-[10px] font-black ${rule.days.includes(day) ? 'text-white' : 'text-gray-600'}`}>
+                            <span key={day} className={`text-[10px] font-black ${(Array.isArray(rule.days) ? rule.days : []).includes(day) ? 'text-white' : 'text-gray-600'}`}>
                               {day}
                             </span>
                           ))}

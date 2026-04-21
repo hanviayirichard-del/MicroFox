@@ -24,6 +24,7 @@ const CreditRequest: React.FC = () => {
   const [guarantorPhone, setGuarantorPhone] = useState('');
   const [duration, setDuration] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [unlockDate, setUnlockDate] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
@@ -65,11 +66,35 @@ const CreditRequest: React.FC = () => {
     const loadData = () => {
       const saved = localStorage.getItem('microfox_members_data');
       if (saved) {
-        setMembers(JSON.parse(saved));
+        let membersData = JSON.parse(saved);
+        
+        // Auto-cleanup for credit requests older than 2 months
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        
+        let changed = false;
+        const updatedMembersData = membersData.map((m: any) => {
+          if (m.lastCreditRequest && m.lastCreditRequest.requestDate) {
+            const requestDate = new Date(m.lastCreditRequest.requestDate);
+            if (requestDate < twoMonthsAgo) {
+              changed = true;
+              const { lastCreditRequest, ...memberWithoutRequest } = m;
+              return memberWithoutRequest;
+            }
+          }
+          return m;
+        });
+
+        if (changed) {
+          localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembersData));
+          setMembers(updatedMembersData);
+        } else {
+          setMembers(membersData);
+        }
       } else {
         setMembers([
-          { id: '1', name: 'KOFFI Ama Gertrude', code: 'CLT-001254', epargneAccountNumber: 'EP-44201', tontineAccounts: [{ number: 'TN-8829-01' }] },
-          { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', epargneAccountNumber: 'EP-99102', tontineAccounts: [] }
+          { id: '1', name: 'KOFFI Ama Gertrude', code: '4111001254', epargneAccountNumber: 'EP-44201', tontineAccounts: [{ number: 'TN-8829-01' }] },
+          { id: '2', name: 'MENSAH Yao Jean', code: '4111001289', epargneAccountNumber: 'EP-99102', tontineAccounts: [] }
         ]);
       }
     };
@@ -186,6 +211,12 @@ const CreditRequest: React.FC = () => {
       showAlert("Erreur", msg, "error");
       return;
     }
+    if (!unlockDate) {
+      const msg = "La demande de crédit n'a pas été enregistrée. Raison : La date de déblocage est manquante.";
+      setStatusMessage({ text: msg, type: 'error' });
+      showAlert("Erreur", msg, "error");
+      return;
+    }
 
     const saved = localStorage.getItem('microfox_members_data');
     let clients = saved ? JSON.parse(saved) : members;
@@ -223,7 +254,7 @@ const CreditRequest: React.FC = () => {
 
         const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
         const newTx = {
-          id: Date.now().toString(),
+          id: `${Date.now()}_req_${Math.random().toString(36).substr(2, 5)}`,
           type: 'deblocage',
           account: 'credit',
           amount: Number(amount),
@@ -250,6 +281,7 @@ const CreditRequest: React.FC = () => {
             guarantorPhone: guarantorPhone,
             duration: duration,
             dueDate: dueDate,
+            unlockDate: unlockDate,
             status: 'En attente',
             requestedBy: currentUser.identifiant || 'Inconnu',
             requestDate: new Date().toISOString()
@@ -280,6 +312,7 @@ const CreditRequest: React.FC = () => {
     setGuarantorPhone('');
     setDuration('');
     setDueDate('');
+    setUnlockDate('');
     setSearchTerm('');
   };
 
@@ -421,14 +454,24 @@ const CreditRequest: React.FC = () => {
             </div>
           </div>
 
+          <div className="space-y-2">
+            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Durée du crédit</label>
+            <input 
+              type="text" 
+              value={duration} 
+              onChange={(e) => setDuration(e.target.value)}
+              placeholder="Ex: 3 mois"
+              className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl outline-none focus:border-[#00c896] font-bold text-white"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Durée du crédit</label>
+              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Date de Déblocage</label>
               <input 
-                type="text" 
-                value={duration} 
-                onChange={(e) => setDuration(e.target.value)}
-                placeholder="Ex: 3 mois"
+                type="date" 
+                value={unlockDate} 
+                onChange={(e) => setUnlockDate(e.target.value)}
                 className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl outline-none focus:border-[#00c896] font-bold text-white"
               />
             </div>
@@ -536,6 +579,7 @@ const CreditRequest: React.FC = () => {
                           <p className="text-[10px] font-bold text-blue-400 uppercase tracking-tight">Tél Client: {m.lastCreditRequest.clientPhone || '---'}</p>
                           <p className="text-[10px] font-bold text-purple-400 uppercase tracking-tight">Caution: {m.lastCreditRequest.guarantorName || '---'} ({m.lastCreditRequest.guarantorPhone || '---'})</p>
                           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">Durée: {m.lastCreditRequest.duration || '---'}</p>
+                          <p className="text-[10px] font-bold text-purple-600 uppercase tracking-tight">Déblocage: {m.lastCreditRequest.unlockDate ? new Date(m.lastCreditRequest.unlockDate).toLocaleDateString() : '---'}</p>
                         </div>
                       </div>
                     </td>

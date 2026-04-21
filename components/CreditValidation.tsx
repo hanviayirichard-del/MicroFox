@@ -201,28 +201,43 @@ const CreditValidation: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-black text-[#121c32] uppercase">{m.name}</h3>
                     <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{m.code}</p>
-                    <div className="mt-1 space-y-0.5">
+                    <div className="mt-2 space-y-1">
                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">Épargne: {m.epargneAccountNumber || '---'}</p>
+                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-tight">
+                        Tontine: {m.tontineAccounts?.length > 0 ? m.tontineAccounts.map((t: any) => t.number).join(', ') : '---'}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 flex-1 lg:px-12">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 flex-1 lg:px-8 border-l border-gray-100 lg:ml-6">
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Capital</p>
-                    <p className="text-lg font-black text-[#121c32]">{m.lastCreditRequest.capital.toLocaleString()} F</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Capital</p>
+                    <p className="text-sm font-black text-[#121c32]">{m.lastCreditRequest.capital.toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Type</p>
-                    <p className="text-sm font-black text-emerald-600 uppercase">{m.lastCreditRequest.creditType || '---'}</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Intérêt</p>
+                    <p className="text-sm font-black text-emerald-600">{(m.lastCreditRequest.interest || 0).toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Demandé par</p>
-                    <p className="text-sm font-black text-blue-600 uppercase">{m.lastCreditRequest.requestedBy || '---'}</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Type</p>
+                    <p className="text-[11px] font-black text-emerald-600 uppercase leading-none">{m.lastCreditRequest.creditType || '---'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Échéance</p>
-                    <p className="text-lg font-black text-gray-700">{new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Demandé par</p>
+                    <p className="text-[11px] font-black text-blue-600 uppercase leading-none">{m.lastCreditRequest.requestedBy || '---'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Déblocage</p>
+                    <p className="text-sm font-black text-purple-600">{m.lastCreditRequest.unlockDate ? new Date(m.lastCreditRequest.unlockDate).toLocaleDateString() : '---'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Échéance</p>
+                    <p className="text-sm font-black text-rose-600">{new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Durée</p>
+                    <p className="text-[11px] font-black text-gray-700 uppercase leading-none">{m.lastCreditRequest.duration || '---'}</p>
                   </div>
                 </div>
 

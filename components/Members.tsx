@@ -46,10 +46,24 @@ import * as XLSX from 'xlsx';
 import { ClientAccount, TontineAccount, Transaction } from '../types';
 import ConfirmModal from './ConfirmModal';
 
-const suggestNextAccountNumber = (type: 'epargne' | 'tontine', currentMembers: ClientAccount[], zone?: string): string => {
+const suggestNextAccountNumber = (type: 'epargne' | 'tontine' | 'client', currentMembers: ClientAccount[], zone?: string): string => {
   const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": "00001"}');
   const instCode = (mfConfig.code || '00001').padStart(5, '0').substring(0, 5);
   const agencyCode = '00001'; // Default agency code
+
+  if (type === 'client') {
+    const collectiveAccount = '4111'; // Compte collectif Clients (SFD/BCEAO)
+    const codes = currentMembers
+      .map(m => m.code)
+      .filter(c => c && c.startsWith(collectiveAccount))
+      .map(c => {
+        const suffix = c.substring(collectiveAccount.length);
+        return /^\d+$/.test(suffix) ? parseInt(suffix, 10) : 0;
+      });
+    const max = codes.length > 0 ? Math.max(...codes) : 0;
+    const nextNum = (max + 1).toString().padStart(6, '0');
+    return `${collectiveAccount}${nextNum}`;
+  }
 
   if (type === 'epargne') {
     const numbers = currentMembers
@@ -91,7 +105,7 @@ const OperationForm: React.FC<{
   epargneAccountNumber?: string;
   tontineAccounts: TontineAccount[];
   initialTontineId?: string;
-  creditBalances?: { capital: number; interest: number; penalty: number; total: number };
+  creditBalances?: { capital: number; interest: number; penalty: number; rebate: number; total: number };
   partSocialeBalance?: number;
   garantieBalance?: number;
   epargneBalance?: number;
@@ -101,6 +115,7 @@ const OperationForm: React.FC<{
 }> = ({ onClose, onSave, clientId, clientName, epargneAccountNumber, tontineAccounts, initialTontineId, creditBalances, partSocialeBalance, garantieBalance, epargneBalance, adhesionPaid, livretPaid, isEpargneBlockedByAdmin }) => {
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
   const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
 
   useEffect(() => {
     const savedPrices = localStorage.getItem('microfox_livret_prices');
@@ -115,6 +130,7 @@ const OperationForm: React.FC<{
   const [rembCapital, setRembCapital] = useState<string>('');
   const [rembInterest, setRembInterest] = useState<string>('');
   const [rembPenalty, setRembPenalty] = useState<string>('');
+  const [rembRebate, setRembRebate] = useState<string>('');
   const [selectedTontineIds, setSelectedTontineIds] = useState<string[]>(initialTontineId ? [initialTontineId] : (tontineAccounts[0] ? [tontineAccounts[0].id] : []));
   const [amount, setAmount] = useState<string>('');
   const [description, setSearchDescription] = useState('');
@@ -201,44 +217,82 @@ const OperationForm: React.FC<{
     const isEpargneOp = (type !== 'transfert' && account === 'epargne') || 
                         (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'));
 
+    setStatusMessage(null);
+
     if (isEpargneOp) {
       if (isEpargneBlockedByAdmin) {
-        alert("Opération impossible : Le compte épargne est bloqué.");
+        setStatusMessage({ text: "Opération impossible : Le compte épargne est bloqué.", type: 'error' });
         return;
       }
       if ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < prices.epargne) {
-        alert(`Opération impossible : Le client doit d'abord s'acquitter du minimum requis (1000 F Part Sociale, 2000 F Adhésion, ${prices.epargne} F Livret) pour utiliser le compte épargne.`);
+        setStatusMessage({ text: `Opération impossible : Le client doit d'abord s'acquitter du minimum requis (1000 F Part Sociale, 2000 F Adhésion, ${prices.epargne} F Livret) pour utiliser le compte épargne.`, type: 'error' });
         return;
       }
     }
 
     if (type === 'deblocage' && !epargneAccountNumber) {
-      alert("Opération impossible : Le client ne peut pas bénéficier d'un déblocage de crédit car il n'a pas de compte épargne. Un compte épargne est obligatoire.");
+      setStatusMessage({ text: "Opération impossible : Le client ne peut pas bénéficier d'un déblocage de crédit car il n'a pas de compte épargne. Un compte épargne est obligatoire.", type: 'error' });
       return;
     }
 
     if ((account === 'tontine' || (type === 'transfert' && account === 'tontine')) && isTontineBlocked && selectedValidatedIds.length === 0) {
-      alert("Opération impossible : Le compte tontine est bloqué.");
+      setStatusMessage({ text: "Opération impossible : Le compte tontine est bloqué.", type: 'error' });
       return;
     }
 
     if (type === 'depot' && account === 'tontine' && currentUser?.role === 'caissier') {
-      alert("Opération impossible : Le caissier n'est pas autorisé à effectuer des dépôts tontine.");
+      setStatusMessage({ text: "Opération impossible : Le caissier n'est pas autorisé à effectuer des dépôts tontine.", type: 'error' });
       return;
     }
 
     if ((type === 'retrait' || type === 'retrait_garantie') && account === 'tontine' && selectedValidatedIds.length === 0) {
-      alert(`Opération impossible : Aucun retrait ${account} n'est possible sans vérification préalable. Veuillez sélectionner une ou plusieurs demandes validées.`);
+      setStatusMessage({ text: `Opération impossible : Aucun retrait ${account} n'est possible sans vérification préalable. Veuillez sélectionner une ou plusieurs demandes validées.`, type: 'error' });
       return;
     }
 
     let numAmount = Number(amount);
     if (type === 'remboursement') {
-      numAmount = (Number(rembCapital) || 0) + (Number(rembInterest) || 0) + (Number(rembPenalty) || 0);
-    }
+      const capInput = Number(rembCapital) || 0;
+      const intInput = Number(rembInterest) || 0;
+      const penInput = Number(rembPenalty) || 0;
+      const rebateInput = Number(rembRebate) || 0;
 
-    if (!numAmount || numAmount <= 0) {
-      alert("Opération impossible : Veuillez saisir un montant valide supérieur à 0.");
+      if (capInput === 0 && intInput === 0 && penInput === 0 && rebateInput === 0) {
+        setStatusMessage({ text: "Opération impossible : Veuillez saisir au moins un montant à rembourser (Capital, Intérêt, Pénalité ou Ristourne).", type: 'error' });
+        return;
+      }
+
+      if (creditBalances) {
+        if (capInput > Math.round(creditBalances.capital)) {
+          setStatusMessage({ text: `Montant invalide : Le remboursement du capital (${capInput} F) ne peut pas dépasser le capital restant (${Math.round(creditBalances.capital)} F).`, type: 'error' });
+          return;
+        }
+        if (intInput > Math.round(creditBalances.interest)) {
+          setStatusMessage({ text: `Montant invalide : Le remboursement des intérêts (${intInput} F) ne peut pas dépasser les intérêts restants (${Math.round(creditBalances.interest)} F).`, type: 'error' });
+          return;
+        }
+        // Autoriser le paiement de pénalités même si le solde capital/intérêt est à 0 (pénalités de retard après échéance)
+        if (penInput > Math.round(creditBalances.penalty) && Math.round(creditBalances.capital + creditBalances.interest) > 0) {
+          setStatusMessage({ text: `Montant invalide : Le remboursement des pénalités (${penInput} F) ne peut pas dépasser les pénalités restantes (${Math.round(creditBalances.penalty)} F).`, type: 'error' });
+          return;
+        }
+      } else if (capInput > 0 || intInput > 0 || (penInput > 0 && !clientId)) {
+        setStatusMessage({ text: "Opération impossible : Ce client n'a aucun crédit actif à rembourser. Seule une ristourne ou des pénalités (si crédit passé) peuvent être appliquées sur un compte soldé.", type: 'error' });
+        return;
+      }
+
+      const totalRequested = capInput + intInput + penInput;
+      numAmount = Math.max(0, totalRequested - rebateInput);
+      
+      const isRebateOnly = rebateInput > 0 && totalRequested === 0;
+      const isFullyCoveredByRebate = totalRequested > 0 && rebateInput >= totalRequested;
+
+      if (!isRebateOnly && !isFullyCoveredByRebate && numAmount <= 0) {
+        setStatusMessage({ text: "Opération impossible : Le montant net à payer doit être supérieur à 0.", type: 'error' });
+        return;
+      }
+    } else if (!numAmount || numAmount <= 0) {
+      setStatusMessage({ text: "Opération impossible : Veuillez saisir un montant valide supérieur à 0.", type: 'error' });
       return;
     }
 
@@ -262,6 +316,7 @@ const OperationForm: React.FC<{
       if (Number(rembCapital) > 0) details.push(`Cap: ${rembCapital}`);
       if (Number(rembInterest) > 0) details.push(`Int: ${rembInterest}`);
       if (Number(rembPenalty) > 0) details.push(`Pen: ${rembPenalty}`);
+      if (Number(rembRebate) > 0) details.push(`Rist: ${rembRebate}`);
       finalDescription = description || `Remboursement Crédit (${details.join(', ')})`;
     } else if (type === 'deblocage') {
       finalDescription = description || `Déblocage de crédit`;
@@ -284,7 +339,8 @@ const OperationForm: React.FC<{
       destinationAccount: type === 'transfert' ? transferDest : undefined,
       rembCapital: type === 'remboursement' ? Number(rembCapital) || 0 : undefined,
       rembInterest: type === 'remboursement' ? Number(rembInterest) || 0 : undefined,
-      rembPenalty: type === 'remboursement' ? Number(rembPenalty) || 0 : undefined
+      rembPenalty: type === 'remboursement' ? Number(rembPenalty) || 0 : undefined,
+      rembRebate: type === 'remboursement' ? Number(rembRebate) || 0 : undefined
     }, selectedValidatedIds.length > 0 ? selectedValidatedIds : undefined);
   };
 
@@ -436,7 +492,7 @@ const OperationForm: React.FC<{
             </div>
           ) : type === 'remboursement' ? (
             <div className="space-y-4">
-              {creditBalances && creditBalances.total > 0 && (
+              {creditBalances && (
                 <div className="grid grid-cols-3 gap-2 p-4 bg-purple-500/10 rounded-2xl border border-purple-500/20">
                   <div className="text-center">
                     <p className="text-[8px] font-black text-purple-400 uppercase">Solde Cap.</p>
@@ -500,6 +556,23 @@ const OperationForm: React.FC<{
                     type="number" 
                     value={rembPenalty}
                     onChange={(e) => setRembPenalty(e.target.value)}
+                    placeholder="0"
+                    className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Ristourne</label>
+                    {creditBalances && (
+                      <span className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter">
+                        Appliqué: {Math.round(creditBalances.rebate).toLocaleString()} F
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="number" 
+                    value={rembRebate}
+                    onChange={(e) => setRembRebate(e.target.value)}
                     placeholder="0"
                     className="w-full p-4 bg-white/5 border border-gray-800 rounded-2xl text-lg font-black outline-none focus:border-purple-600 transition-all text-white"
                   />
@@ -717,6 +790,15 @@ const OperationForm: React.FC<{
               </div>
             </div>
           </div>
+
+          {statusMessage && (
+            <div className={`p-4 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${
+              statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+            }`}>
+              {statusMessage.type === 'success' ? <CheckCircle size={18} /> : <ShieldAlert size={18} />}
+              {statusMessage.text}
+            </div>
+          )}
         </div>
 
         <button 
@@ -765,7 +847,7 @@ const RegistrationForm: React.FC<{
   const [tontineNumber, setTontineNumber] = useState('');
   const [tontineMise, setTontineMise] = useState(500);
   
-  const [isTontineSelected, setIsTontineSelected] = useState(true);
+  const [isTontineSelected, setIsTontineSelected] = useState(false);
   const [isEpargneSelected, setIsEpargneSelected] = useState(false);
   const [epargneNumber, setEpargneNumber] = useState('');
 
@@ -933,7 +1015,7 @@ const RegistrationForm: React.FC<{
       }
     }
 
-    const clientId = Date.now().toString();
+    const clientId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const newTontineAccounts: TontineAccount[] = isTontineSelected ? [{
       id: `${clientId}_tn_0`,
       number: tontineNumber,
@@ -1001,7 +1083,7 @@ const RegistrationForm: React.FC<{
     const newClient: ClientAccount = {
       id: clientId,
       name: clientName,
-      code: `CLT-${Math.floor(100000 + Math.random() * 900000)}`,
+      code: suggestNextAccountNumber('client', members),
       epargneAccountNumber: isEpargneSelected ? epargneNumber : undefined,
       status: 'Actif',
       balances: {
@@ -2024,7 +2106,7 @@ const Members: React.FC = () => {
         {
           id: '1',
           name: 'KOFFI Ama Gertrude',
-          code: 'CLT-001254',
+          code: '4111001254',
           epargneAccountNumber: 'EP-44201',
           status: 'Actif',
           balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
@@ -2036,7 +2118,7 @@ const Members: React.FC = () => {
           gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
           dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '3 Mois'
         },
-        { id: '2', name: 'MENSAH Yao Jean', code: 'CLT-001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
+        { id: '2', name: 'MENSAH Yao Jean', code: '4111001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
       ];
     }
 
@@ -3111,10 +3193,16 @@ const Members: React.FC = () => {
             if (accIdx !== -1 && newTontineAccounts[accIdx].balance >= op.amount) {
               newTontineAccounts[accIdx].balance -= op.amount;
               newBalances.tontine -= op.amount;
-            } else { console.error("Opération impossible : Solde tontine insuffisant."); return c; }
+            } else { 
+              alert(`Opération impossible : Solde tontine insuffisant sur le compte ${newTontineAccounts[accIdx]?.number || ''}.`); 
+              return c; 
+            }
           } else if (newBalances[from as keyof typeof newBalances] >= op.amount) {
             (newBalances as any)[from] -= op.amount;
-          } else { console.error(`Opération impossible : Solde ${from} insuffisant.`); return c; }
+          } else { 
+            alert(`Opération impossible : Solde insuffisant sur le compte ${from} (${newBalances[from as keyof typeof newBalances]} F disponibles).`); 
+            return c; 
+          }
           
           if (to) (newBalances as any)[to] += op.amount;
         } else if (op.type === 'depot') {
@@ -3142,10 +3230,37 @@ const Members: React.FC = () => {
             return c;
           }
         } else if (op.type === 'remboursement') {
-          if (newBalances.credit >= op.amount) {
-            newBalances.credit -= op.amount;
+          const rembPenalty = op.rembPenalty || 0;
+          const totalReduction = (op.amount || 0) + (op.rembRebate || 0);
+          
+          if (newBalances.credit >= totalReduction) {
+            newBalances.credit -= totalReduction;
           } else {
+            // S'il y a un surplus (ristourne importante ou trop payé), on le calcule
+            // Les pénalités ne sont JAMAIS reversées sur l'épargne (ce sont des commissions pour l'institution)
+            const surplusPotential = totalReduction - rembPenalty;
+            const surplus = Math.max(0, surplusPotential - newBalances.credit);
+            
             newBalances.credit = 0;
+            
+            // Verser le surplus sur l'épargne si le crédit était déjà soldé ou si la ristourne dépasse la dette
+            if (surplus > 0 && c.epargneAccountNumber) {
+              newBalances.epargne += surplus;
+              const epargneTx: Transaction = {
+                id: `${Date.now()}_surplus_${Math.random().toString(36).substr(2, 5)}`,
+                type: 'depot',
+                account: 'epargne',
+                amount: surplus,
+                date: new Date().toISOString(),
+                description: `Surplus de ristourne crédit versé sur épargne (Crédit déjà soldé)`,
+                userId: currentUser?.id,
+                cashierName: currentUser?.identifiant,
+                caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
+                balance: newBalances.epargne,
+                balanceBefore: newBalances.epargne - surplus
+              };
+              c.history = [epargneTx, ...c.history];
+            }
           }
           
           // Mettre à jour les détails du crédit pour refléter le remboursement
@@ -3153,10 +3268,12 @@ const Members: React.FC = () => {
             c.lastCreditDetails.capital = Math.max(0, (c.lastCreditDetails.capital || 0) - (op.rembCapital || 0));
             c.lastCreditDetails.interest = Math.max(0, (c.lastCreditDetails.interest || 0) - (op.rembInterest || 0));
             c.lastCreditDetails.penalty = Math.max(0, (c.lastCreditDetails.penalty || 0) - (op.rembPenalty || 0));
+            c.lastCreditDetails.rebate = (c.lastCreditDetails.rebate || 0) + (op.rembRebate || 0);
           } else if (c.lastCreditRequest) {
             c.lastCreditRequest.capital = Math.max(0, (c.lastCreditRequest.capital || 0) - (op.rembCapital || 0));
             c.lastCreditRequest.interest = Math.max(0, (c.lastCreditRequest.interest || 0) - (op.rembInterest || 0));
             c.lastCreditRequest.penalty = Math.max(0, (c.lastCreditRequest.penalty || 0) - (op.rembPenalty || 0));
+            c.lastCreditRequest.rebate = (c.lastCreditRequest.rebate || 0) + (op.rembRebate || 0);
           }
         } else if (op.type === 'deblocage') {
           newBalances.credit += op.amount;
@@ -3173,7 +3290,7 @@ const Members: React.FC = () => {
         const newTransaction: Transaction = {
           ...op,
           amount: op.amount + (totalGap > 0 ? totalGap : 0), // Montant réel impactant la caisse (décaissé + écart positif éventuel)
-          id: Date.now().toString(),
+          id: `${Date.now()}_main_${Math.random().toString(36).substr(2, 5)}`,
           date: new Date().toISOString(),
           userId: currentUser?.id,
           cashierName: (op.account === 'tontine' && (op.type === 'depot' || op.type === 'cotisation')) ? agentName : currentUser?.identifiant,
@@ -3631,26 +3748,17 @@ const Members: React.FC = () => {
             livretPaid={selectedClient?.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('livret')).reduce((sum, tx) => sum + tx.amount, 0)}
             creditBalances={selectedClient ? (() => {
               const total = selectedClient.balances.credit;
-              const initialCap = (selectedClient as any).lastCreditDetails?.capital || (selectedClient as any).lastCreditRequest?.capital || (total * 0.9);
-              const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest || (total * 0.1);
-              const initialTot = Number(initialCap) + Number(initialInt);
+              const lastDetails = (selectedClient as any).lastCreditDetails;
+              const lastRequest = (selectedClient as any).lastCreditRequest;
+              const initialCap = lastDetails?.capital ?? lastRequest?.capital ?? (total * 0.9);
+              const initialInt = lastDetails?.interest ?? lastRequest?.interest ?? (total * 0.1);
               
-              if (Math.abs(total - initialTot) < 1) {
-                return {
-                  total,
-                  capital: Number(initialCap),
-                  interest: Number(initialInt),
-                  penalty: (selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0
-                };
-              }
-
-              const capRatio = initialTot > 0 ? Number(initialCap) / initialTot : 0.9;
-              const intRatio = initialTot > 0 ? Number(initialInt) / initialTot : 0.1;
               return {
                 total,
-                capital: Math.floor(total * capRatio),
-                interest: Math.floor(total * intRatio),
-                penalty: (selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0
+                capital: Number(initialCap),
+                interest: Number(initialInt),
+                penalty: lastDetails?.penalty ?? lastRequest?.penalty ?? 0,
+                rebate: lastDetails?.rebate ?? lastRequest?.rebate ?? 0
               };
             })() : undefined}
           />
@@ -4277,15 +4385,10 @@ const Members: React.FC = () => {
                       <p className="text-xl font-black text-white mt-1">
                         {(() => {
                           const total = selectedClient.balances.credit;
-                          const initialCap = (selectedClient as any).lastCreditDetails?.capital || (selectedClient as any).lastCreditRequest?.capital;
-                          const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest;
-                          const initialPen = (selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0;
-                          
-                          if (initialCap !== undefined) return Number(initialCap).toLocaleString();
-                          
-                          // Fallback if no details
-                          const initialTot = Number(total);
-                          return Math.floor(initialTot * 0.9).toLocaleString();
+                          const lastDetails = (selectedClient as any).lastCreditDetails;
+                          const lastRequest = (selectedClient as any).lastCreditRequest;
+                          const initialCap = lastDetails?.capital ?? lastRequest?.capital ?? (total * 0.9);
+                          return Number(initialCap).toLocaleString();
                         })()} F
                       </p>
                     </div>
@@ -4294,23 +4397,20 @@ const Members: React.FC = () => {
                       <p className="text-xl font-black text-blue-400 mt-1">
                         {(() => {
                           const total = selectedClient.balances.credit;
-                          const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest;
-                          
-                          if (initialInt !== undefined) return Number(initialInt).toLocaleString();
-                          
-                          // Fallback if no details
-                          const initialTot = Number(total);
-                          return Math.floor(initialTot * 0.1).toLocaleString();
+                          const lastDetails = (selectedClient as any).lastCreditDetails;
+                          const lastRequest = (selectedClient as any).lastCreditRequest;
+                          const initialInt = lastDetails?.interest ?? lastRequest?.interest ?? (total * 0.1);
+                          return Number(initialInt).toLocaleString();
                         })()} F
                       </p>
                     </div>
                     <div className="bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pénalités (Retard)</p>
-                      <p className="text-xl font-black text-red-400 mt-1">{((selectedClient as any).lastCreditRequest?.penalty || 0).toLocaleString()} F</p>
+                      <p className="text-xl font-black text-red-400 mt-1">{((selectedClient as any).lastCreditDetails?.penalty || (selectedClient as any).lastCreditRequest?.penalty || 0).toLocaleString()} F</p>
                     </div>
                     <div className="bg-[#121c32] p-6 rounded-[2rem] border border-white/5 shadow-sm">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Ristournes</p>
-                      <p className="text-xl font-black text-emerald-400 mt-1">{((selectedClient as any).lastCreditRequest?.rebate || 0).toLocaleString()} F</p>
+                      <p className="text-xl font-black text-emerald-400 mt-1">{((selectedClient as any).lastCreditDetails?.rebate || (selectedClient as any).lastCreditRequest?.rebate || 0).toLocaleString()} F</p>
                     </div>
                   </div>
 
@@ -4337,9 +4437,14 @@ const Members: React.FC = () => {
                                 </p>
                               </div>
                             </div>
-                            <p className={`text-base font-black shrink-0 ml-4 ${tx.type === 'remboursement' ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {tx.type === 'remboursement' ? '-' : '+'}{tx.amount.toLocaleString()} F
-                            </p>
+                            <div className="flex flex-col items-end gap-0.5 shrink-0 ml-4">
+                              <p className={`text-sm font-black ${tx.type === 'remboursement' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {tx.type === 'remboursement' ? '-' : '+'}{tx.amount.toLocaleString()} F
+                              </p>
+                              {tx.balance !== undefined && (
+                                <p className="text-[9px] font-black text-blue-400 uppercase">Solde: {tx.balance.toLocaleString()} F</p>
+                              )}
+                            </div>
                           </div>
                         ))
                       ) : (
@@ -4546,15 +4651,10 @@ const Members: React.FC = () => {
                           <p className="text-lg font-black text-white">
                             {(() => {
                               const total = selectedClient.balances.credit;
-                              const initialCap = (selectedClient as any).lastCreditDetails?.capital || (selectedClient as any).lastCreditRequest?.capital || (total * 0.9);
-                              const initialInt = (selectedClient as any).lastCreditDetails?.interest || (selectedClient as any).lastCreditRequest?.interest || (total * 0.1);
-                              const initialTot = Number(initialCap) + Number(initialInt);
-                              
-                              // Si le solde total est égal au montant initial (capital + intérêt), on affiche le capital initial
-                              if (Math.abs(total - initialTot) < 1) return Number(initialCap).toLocaleString();
-                              
-                              const capRatio = initialTot > 0 ? Number(initialCap) / initialTot : 0.9;
-                              return Math.floor(total * capRatio).toLocaleString();
+                              const lastDetails = (selectedClient as any).lastCreditDetails;
+                              const lastRequest = (selectedClient as any).lastCreditRequest;
+                              const initialCap = lastDetails?.capital ?? lastRequest?.capital ?? (total * 0.9);
+                              return Number(initialCap).toLocaleString();
                             })()} F
                           </p>
                         </div>
@@ -4622,14 +4722,10 @@ const Members: React.FC = () => {
                           <p className="text-lg font-black text-blue-400">
                             {(() => {
                               const total = selectedClient.balances.credit;
-                              const initialCap = selectedClient.lastCreditDetails?.capital || selectedClient.lastCreditRequest?.capital || (total * 0.9);
-                              const initialInt = selectedClient.lastCreditDetails?.interest || selectedClient.lastCreditRequest?.interest || (total * 0.1);
-                              const initialTot = Number(initialCap) + Number(initialInt);
-                              
-                              if (Math.abs(total - initialTot) < 1) return Number(initialInt).toLocaleString();
-                              
-                              const intRatio = initialTot > 0 ? Number(initialInt) / initialTot : 0.1;
-                              return Math.floor(total * intRatio).toLocaleString();
+                              const lastDetails = (selectedClient as any).lastCreditDetails;
+                              const lastRequest = (selectedClient as any).lastCreditRequest;
+                              const initialInt = lastDetails?.interest ?? lastRequest?.interest ?? (total * 0.1);
+                              return Number(initialInt).toLocaleString();
                             })()} F
                           </p>
                         </div>

@@ -434,7 +434,7 @@ const TontineVerification: React.FC = () => {
         {
           id: '1',
           name: 'KOFFI Ama Gertrude',
-          code: 'CLT-001254',
+          code: '4111001254',
           balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
           tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 0 }],
           history: []

@@ -70,6 +70,7 @@ export interface Transaction {
   rembCapital?: number;
   rembInterest?: number;
   rembPenalty?: number;
+  rembRebate?: number;
 }
 
 export interface ClientAccount {
@@ -117,6 +118,7 @@ export interface ClientAccount {
     interest: number;
     fees: number;
     penalty: number;
+    rebate?: number;
     dueDate: string;
     duration: string;
   };
@@ -125,6 +127,7 @@ export interface ClientAccount {
     interest: number;
     fees: number;
     penalty: number;
+    rebate?: number;
     dueDate: string;
     duration: string;
   };

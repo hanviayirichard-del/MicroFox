@@ -241,6 +241,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     cleanupStorage();
+    const interval = setInterval(cleanupStorage, 3600000); // Nettoyage périodique toutes les heures
+    return () => clearInterval(interval);
   }, [cleanupStorage]);
 
   const checkScheduleBlocking = () => {
@@ -267,7 +269,8 @@ const App: React.FC = () => {
       let blocked = false;
 
       // Check global rules
-      if (config.autoDeactivationDays?.includes(currentDay)) {
+      const deactivationDays = config.autoDeactivationDays;
+      if (Array.isArray(deactivationDays) && deactivationDays.includes(currentDay)) {
         const start = config.autoDeactivationStartTime || '00:00';
         const end = config.autoDeactivationEndTime || '23:59';
         if (currentTime >= start && currentTime <= end) {
@@ -276,9 +279,12 @@ const App: React.FC = () => {
       }
 
       // Check specific rules (higher priority or additive)
-      if (!blocked && config.autoDeactivationRules) {
-        for (const rule of config.autoDeactivationRules) {
-          if (rule.enabled && rule.roles.includes(currentUser.role) && rule.days.includes(currentDay)) {
+      const rules = config.autoDeactivationRules;
+      if (!blocked && Array.isArray(rules)) {
+        for (const rule of rules) {
+          if (rule.enabled && 
+              Array.isArray(rule.roles) && rule.roles.includes(currentUser.role) && 
+              Array.isArray(rule.days) && rule.days.includes(currentDay)) {
             if (currentTime >= rule.startTime && currentTime <= rule.endTime) {
               blocked = true;
               break;

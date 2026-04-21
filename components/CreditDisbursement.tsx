@@ -200,8 +200,8 @@ const CreditDisbursement: React.FC = () => {
       return;
     }
 
-    if (!['administrateur', 'directeur', 'caissier'].includes(currentUser.role)) {
-      showAlert("Accès refusé", "Seul l'administrateur, le directeur ou le caissier peut annuler un décaissement.", "error");
+    if (!['administrateur', 'directeur'].includes(currentUser.role)) {
+      showAlert("Accès refusé", "Seul l'administrateur ou le directeur peut annuler un décaissement.", "error");
       return;
     }
 
@@ -362,22 +362,26 @@ const CreditDisbursement: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 flex-1 lg:px-12">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 flex-1 lg:px-8 border-l border-white/5 lg:ml-6">
                   <div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Capital</p>
-                    <p className="text-lg font-black text-white">{m.lastCreditRequest.capital.toLocaleString()} F</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Capital</p>
+                    <p className="text-sm font-black text-white">{m.lastCreditRequest.capital.toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Intérêts</p>
-                    <p className="text-lg font-black text-blue-400">{m.lastCreditRequest.interest.toLocaleString()} F</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Intérêts</p>
+                    <p className="text-sm font-black text-blue-400">{m.lastCreditRequest.interest.toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Frais/Pén.</p>
-                    <p className="text-lg font-black text-amber-400">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Frais/Pén.</p>
+                    <p className="text-sm font-black text-amber-400">{((m.lastCreditRequest.fees || 0) + (m.lastCreditRequest.penalty || 0)).toLocaleString()} F</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Échéance</p>
-                    <p className="text-lg font-black text-gray-400">{new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Déblocage</p>
+                    <p className="text-sm font-black text-purple-400">{m.lastCreditRequest.unlockDate ? new Date(m.lastCreditRequest.unlockDate).toLocaleDateString() : '---'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Échéance</p>
+                    <p className="text-sm font-black text-rose-400">{new Date(m.lastCreditRequest.dueDate).toLocaleDateString()}</p>
                   </div>
                 </div>
 
@@ -432,8 +436,20 @@ const CreditDisbursement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {members.filter(m => m.lastCreditRequest && m.lastCreditRequest.status === 'Débloqué').length > 0 ? (
-                members.filter(m => m.lastCreditRequest && m.lastCreditRequest.status === 'Débloqué').map((m) => (
+              {members.filter(m => {
+                if (!m.lastCreditRequest || m.lastCreditRequest.status !== 'Débloqué') return false;
+                const disbursementDate = new Date(m.lastCreditRequest.disbursementDate);
+                const now = new Date();
+                const diffInHours = (now.getTime() - disbursementDate.getTime()) / (1000 * 60 * 60);
+                return diffInHours <= 48;
+              }).length > 0 ? (
+                members.filter(m => {
+                  if (!m.lastCreditRequest || m.lastCreditRequest.status !== 'Débloqué') return false;
+                  const disbursementDate = new Date(m.lastCreditRequest.disbursementDate);
+                  const now = new Date();
+                  const diffInHours = (now.getTime() - disbursementDate.getTime()) / (1000 * 60 * 60);
+                  return diffInHours <= 48;
+                }).map((m) => (
                   <tr key={m.id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <p className="text-sm font-black text-white uppercase">{m.name}</p>

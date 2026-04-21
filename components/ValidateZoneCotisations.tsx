@@ -186,7 +186,14 @@ const ValidateZoneCotisations: React.FC = () => {
     try {
       const savedValidated = localStorage.getItem('microfox_validated_zone_cotisations');
       const validatedZones = savedValidated ? JSON.parse(savedValidated) : {};
+      
+      // Find the most recent transaction date to ensure validation covers everything in view
+      const maxTxDate = zoneData.transactions.reduce((max, tx) => {
+        return tx.date > max ? tx.date : max;
+      }, "");
       const now = new Date().toISOString();
+      const validationTimestamp = maxTxDate > now ? maxTxDate : now;
+      
       const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}').identifiant;
 
       // Group pending transactions by day to create validation entries for each day
@@ -205,11 +212,14 @@ const ValidateZoneCotisations: React.FC = () => {
 
       Object.keys(pendingByDay).forEach(day => {
         const validationKey = `${day}_${zoneData.zone}`;
+        const prevTotal = validatedZones[validationKey]?.totalAmount || 0;
+        const prevCount = validatedZones[validationKey]?.count || 0;
+
         validatedZones[validationKey] = {
-          validatedAt: now,
+          validatedAt: validationTimestamp,
           validatedBy: currentUser,
-          totalAmount: pendingByDay[day].total,
-          count: pendingByDay[day].count
+          totalAmount: prevTotal + pendingByDay[day].total,
+          count: prevCount + pendingByDay[day].count
         };
       });
 

@@ -82,10 +82,15 @@ const OtherCreditOperations: React.FC = () => {
         const newTotal = currentCredit + amount;
         
         const lastRequest = m.lastCreditRequest || {};
-        
         const updatedRequest = {
           ...lastRequest,
           penalty: (lastRequest.penalty || 0) + amount
+        };
+
+        const lastDetails = m.lastCreditDetails || {};
+        const updatedDetails = {
+          ...lastDetails,
+          penalty: (lastDetails.penalty || 0) + amount
         };
 
         const newTx = {
@@ -94,9 +99,10 @@ const OtherCreditOperations: React.FC = () => {
           account: 'credit',
           amount: amount,
           date: new Date().toISOString(),
-          description: `Application de pénalité de retard`,
+          description: `Application de pénalité de retard (PEN: ${amount})`,
           author: currentUser.identifiant,
-          cashierName: currentUser.identifiant
+          cashierName: currentUser.identifiant,
+          balance: newTotal
         };
 
         const newHistory = [newTx, ...(m.history || [])];
@@ -106,6 +112,7 @@ const OtherCreditOperations: React.FC = () => {
           ...m,
           balances: { ...m.balances, credit: newTotal },
           lastCreditRequest: updatedRequest,
+          lastCreditDetails: updatedDetails,
           history: newHistory
         };
       }
@@ -136,32 +143,80 @@ const OtherCreditOperations: React.FC = () => {
       if (m.id === selectedMemberId) {
         const currentCredit = m.balances.credit || 0;
         // La ristourne diminue l'encours
-        const newTotal = Math.max(0, currentCredit - amount);
+        const rebateForCredit = Math.min(currentCredit, amount);
+        const surplusForEpargne = amount - rebateForCredit;
+        const newTotal = currentCredit - rebateForCredit;
         
         const lastRequest = m.lastCreditRequest || {};
-        const updatedRequest = {
-          ...lastRequest,
-          rebate: (lastRequest.rebate || 0) + amount
+        const lastDetails = m.lastCreditDetails || {};
+
+        // Déduire d'abord des intérêts, puis du capital
+        let remainingRebate = rebateForCredit;
+        
+        const updatedRequest = { ...lastRequest, rebate: (lastRequest.rebate || 0) + amount };
+        const updatedDetails = { ...lastDetails, rebate: (lastDetails.rebate || 0) + amount };
+
+        const deductFromParams = (params: any) => {
+          let rem = remainingRebate;
+          const int = params.interest || 0;
+          const cap = params.capital || 0;
+          
+          if (rem <= int) {
+            params.interest = int - rem;
+            rem = 0;
+          } else {
+            params.interest = 0;
+            rem -= int;
+            params.capital = Math.max(0, cap - rem);
+          }
         };
 
-        const newTx = {
-          id: Date.now().toString(),
-          type: 'remboursement', // On utilise remboursement pour diminuer l'encours
-          account: 'credit',
-          amount: amount,
+        deductFromParams(updatedRequest);
+        deductFromParams(updatedDetails);
+
+        const newHistory = [...(m.history || [])];
+        
+        const creditTx = {
+          id: `${Date.now()}_rebate_${Math.random().toString(36).substr(2, 5)}`,
+          type: 'remboursement' as const,
+          account: 'credit' as const,
+          amount: rebateForCredit,
           date: new Date().toISOString(),
-          description: `Application de ristourne pour remboursement anticipé`,
+          description: `APPLICATION DE RISTOURNE POUR REMBOURSEMENT ANTICIPÉ (RIST: ${rebateForCredit})`,
           author: currentUser.identifiant,
-          cashierName: currentUser.identifiant
+          cashierName: currentUser.identifiant,
+          balance: newTotal
         };
+        newHistory.unshift(creditTx);
 
-        const newHistory = [newTx, ...(m.history || [])];
+        let finalEpargneBalance = m.balances.epargne || 0;
+        if (surplusForEpargne > 0 && m.epargneAccountNumber) {
+          finalEpargneBalance += surplusForEpargne;
+          const epargneTx = {
+            id: `${Date.now()}_rebate_alt_${Math.random().toString(36).substr(2, 5)}`,
+            type: 'depot' as const,
+            account: 'epargne' as const,
+            amount: surplusForEpargne,
+            date: new Date().toISOString(),
+            description: `Ristourne crédit versée sur compte épargne`,
+            author: currentUser.identifiant,
+            cashierName: currentUser.identifiant,
+            balance: finalEpargneBalance
+          };
+          newHistory.unshift(epargneTx);
+        }
+
         localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
 
         return {
           ...m,
-          balances: { ...m.balances, credit: newTotal },
+          balances: { 
+            ...m.balances, 
+            credit: newTotal,
+            epargne: finalEpargneBalance
+          },
           lastCreditRequest: updatedRequest,
+          lastCreditDetails: updatedDetails,
           history: newHistory
         };
       }
@@ -199,14 +254,30 @@ const OtherCreditOperations: React.FC = () => {
 
         const amount = tx.amount;
         let newTotal = m.balances.credit || 0;
+        let newEpargneTotal = m.balances.epargne || 0;
         const updatedRequest = { ...(m.lastCreditRequest || {}) };
+        const updatedDetails = { ...(m.lastCreditDetails || {}) };
 
         if (tx.description.includes('pénalité')) {
           newTotal = Math.max(0, newTotal - amount);
           updatedRequest.penalty = Math.max(0, (updatedRequest.penalty || 0) - amount);
+          updatedDetails.penalty = Math.max(0, (updatedDetails.penalty || 0) - amount);
         } else if (tx.description.includes('ristourne')) {
-          newTotal = newTotal + amount;
-          updatedRequest.rebate = Math.max(0, (updatedRequest.rebate || 0) - amount);
+          // Si c'était une ristourne crédit, on rajoute à l'encours
+          if (tx.account === 'credit') {
+            newTotal = newTotal + amount;
+            updatedRequest.rebate = Math.max(0, (updatedRequest.rebate || 0) - amount);
+            updatedDetails.rebate = Math.max(0, (updatedDetails.rebate || 0) - amount);
+            
+            // On restaure le capital/intérêt (simplifié: on rajoute au capital d'abord si on peut pas être précis)
+            // Mais on peut essayer d'être cohérent avec la déduction
+            updatedRequest.capital = (updatedRequest.capital || 0) + amount;
+            updatedDetails.capital = (updatedDetails.capital || 0) + amount;
+          } else if (tx.account === 'epargne') {
+            newEpargneTotal = Math.max(0, newEpargneTotal - amount);
+            updatedRequest.rebate = Math.max(0, (updatedRequest.rebate || 0) - amount);
+            updatedDetails.rebate = Math.max(0, (updatedDetails.rebate || 0) - amount);
+          }
         }
 
         const updatedTx = { 
@@ -224,8 +295,13 @@ const OtherCreditOperations: React.FC = () => {
 
         return {
           ...m,
-          balances: { ...m.balances, credit: newTotal },
+          balances: { 
+            ...m.balances, 
+            credit: newTotal,
+            epargne: newEpargneTotal
+          },
           lastCreditRequest: updatedRequest,
+          lastCreditDetails: updatedDetails,
           history: newHistory
         };
       }
@@ -318,6 +394,9 @@ const OtherCreditOperations: React.FC = () => {
                               <div className="text-left">
                                 <p className="text-xs font-black text-[#121c32] uppercase">{m.name}</p>
                                 <p className="text-[9px] font-bold text-gray-500 uppercase">{m.code}</p>
+                                <p className="text-[8px] font-bold text-blue-500 uppercase mt-0.5">
+                                  EP: {m.epargneAccountNumber || '---'} | TN: {m.tontineAccounts?.[0]?.number || '---'}
+                                </p>
                               </div>
                             </button>
                           ))
