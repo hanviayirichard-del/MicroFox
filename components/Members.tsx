@@ -52,17 +52,37 @@ const suggestNextAccountNumber = (type: 'epargne' | 'tontine' | 'client', curren
   const agencyCode = '00001'; // Default agency code
 
   if (type === 'client') {
-    const collectiveAccount = '4111'; // Compte collectif Clients (SFD/BCEAO)
+    const collectiveAccount = '41110'; // Compte collectif Clients (BCEAO)
     const codes = currentMembers
       .map(m => m.code)
-      .filter(c => c && c.startsWith(collectiveAccount))
+      .filter(c => c && c.startsWith(collectiveAccount) && c.length === 12)
       .map(c => {
-        const suffix = c.substring(collectiveAccount.length);
-        return /^\d+$/.test(suffix) ? parseInt(suffix, 10) : 0;
+        const letter = c.charAt(5);
+        const numPart = c.substring(6);
+        const num = parseInt(numPart, 10);
+        return { letter, num, original: c };
       });
-    const max = codes.length > 0 ? Math.max(...codes) : 0;
-    const nextNum = (max + 1).toString().padStart(6, '0');
-    return `${collectiveAccount}${nextNum}`;
+    
+    if (codes.length === 0) {
+      return `${collectiveAccount}A000001`;
+    }
+
+    // Sort by letter then by number to find the highest
+    codes.sort((a, b) => {
+      if (a.letter !== b.letter) return a.letter.localeCompare(b.letter);
+      return a.num - b.num;
+    });
+
+    const last = codes[codes.length - 1];
+    let nextLetter = last.letter;
+    let nextNum = last.num + 1;
+
+    if (nextNum > 999999) {
+      nextNum = 1;
+      nextLetter = String.fromCharCode(last.letter.charCodeAt(0) + 1);
+    }
+
+    return `${collectiveAccount}${nextLetter}${nextNum.toString().padStart(6, '0')}`;
   }
 
   if (type === 'epargne') {
@@ -2106,7 +2126,7 @@ const Members: React.FC = () => {
         {
           id: '1',
           name: 'KOFFI Ama Gertrude',
-          code: '4111001254',
+          code: '41110A001254',
           epargneAccountNumber: 'EP-44201',
           status: 'Actif',
           balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
@@ -2118,7 +2138,7 @@ const Members: React.FC = () => {
           gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
           dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '3 Mois'
         },
-        { id: '2', name: 'MENSAH Yao Jean', code: '4111001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
+        { id: '2', name: 'MENSAH Yao Jean', code: '41110A001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
       ];
     }
 

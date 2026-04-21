@@ -438,7 +438,7 @@ const TontineWithdrawal: React.FC = () => {
         {
           id: '1',
           name: 'KOFFI Ama Gertrude',
-          code: '4111001254',
+          code: '41110A001254',
           epargneAccountNumber: 'EP-8829-01',
           balances: { epargne: 450000, tontine: 16500, credit: 1200000, garantie: 300000, partSociale: 10000 },
           tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 16500 }],

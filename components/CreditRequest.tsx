@@ -93,8 +93,8 @@ const CreditRequest: React.FC = () => {
         }
       } else {
         setMembers([
-          { id: '1', name: 'KOFFI Ama Gertrude', code: '4111001254', epargneAccountNumber: 'EP-44201', tontineAccounts: [{ number: 'TN-8829-01' }] },
-          { id: '2', name: 'MENSAH Yao Jean', code: '4111001289', epargneAccountNumber: 'EP-99102', tontineAccounts: [] }
+          { id: '1', name: 'KOFFI Ama Gertrude', code: '41110A001254', epargneAccountNumber: 'EP-44201', tontineAccounts: [{ number: 'TN-8829-01' }] },
+          { id: '2', name: 'MENSAH Yao Jean', code: '41110A001289', epargneAccountNumber: 'EP-99102', tontineAccounts: [] }
         ]);
       }
     };

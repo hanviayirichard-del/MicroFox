@@ -46,10 +46,10 @@ export default function CreditManagement() {
         {
           id: '1',
           name: 'KOFFI Ama Gertrude',
-          code: '4111001254',
+          code: '41110A001254',
           balances: { credit: 1200000 }
         },
-        { id: '2', name: 'MENSAH Yao Jean', code: '4111001289', balances: { credit: 0 } }
+        { id: '2', name: 'MENSAH Yao Jean', code: '41110A001289', balances: { credit: 0 } }
       ];
     }
 
