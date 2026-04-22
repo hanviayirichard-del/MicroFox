@@ -67,12 +67,17 @@ const ValidateZoneCotisations: React.FC = () => {
           const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
           
           history.forEach((tx: any) => {
+            // Ignore deleted or cancelled transactions
+            if (tx.isDeleted || tx.type === 'annulation') return;
+            
             if (tx.type === 'cotisation' && tx.account === 'tontine') {
               const txDate = new Date(tx.date);
               const txDay = txDate.toISOString().split('T')[0];
               const validationKey = `${txDay}_${zone}`;
               const zoneValidation = validatedZones[validationKey];
-              const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+              
+              // Robust time comparison using getTime() to avoid string precision issues
+              const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
 
               if (txDay === today) {
                 hasTransactionsToday = true;
@@ -129,12 +134,17 @@ const ValidateZoneCotisations: React.FC = () => {
           const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
           
           history.forEach((tx: any) => {
+            // Ignore deleted or cancelled transactions
+            if (tx.isDeleted || tx.type === 'annulation') return;
+            
             if (tx.type === 'cotisation' && tx.account === 'tontine') {
               const txDate = new Date(tx.date);
               const txDay = txDate.toISOString().split('T')[0];
               const validationKey = `${txDay}_${zoneName}`;
               const zoneValidation = validatedZones[validationKey];
-              const isTxValidated = zoneValidation && txDate <= new Date(zoneValidation.validatedAt);
+              
+              // Robust time comparison
+              const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
 
               if (txDay === today || !isTxValidated) {
                 total += tx.amount;
@@ -191,8 +201,10 @@ const ValidateZoneCotisations: React.FC = () => {
       const maxTxDate = zoneData.transactions.reduce((max, tx) => {
         return tx.date > max ? tx.date : max;
       }, "");
+      
+      // Use the actual current time but ensure it is at least equal to the max transaction date
       const now = new Date().toISOString();
-      const validationTimestamp = maxTxDate > now ? maxTxDate : now;
+      const validationTimestamp = (maxTxDate && maxTxDate > now) ? maxTxDate : now;
       
       const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}').identifiant;
 

@@ -47,6 +47,12 @@ const mergeObjects = (obj1: any, obj2: any): any => {
     return result;
   }
 
+  // If obj1 and obj2 are ISO date strings, prefer the more recent one
+  const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  if (typeof obj1 === 'string' && typeof obj2 === 'string' && isoDateRegex.test(obj1) && isoDateRegex.test(obj2)) {
+    return obj1 > obj2 ? obj1 : obj2;
+  }
+
   // If obj1 is a status that is "more final" than obj2, prefer obj1
   const finalStatuses = ['En attente', 'Validé', 'Approuvé', 'Débloqué', 'Régularisé', 'Litige', 'Payé', 'Terminé', 'Annulé', 'Rejeté'];
   if (typeof obj1 === 'string' && typeof obj2 === 'string') {
