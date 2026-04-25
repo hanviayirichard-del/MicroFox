@@ -264,7 +264,7 @@ const PiecesAImprimer: React.FC = () => {
 
         const savedExpenses = localStorage.getItem('microfox_admin_expenses');
         if (savedExpenses) {
-          JSON.parse(savedExpenses).forEach((e: any) => {
+          JSON.parse(savedExpenses).filter((e: any) => !e.isDeleted).forEach((e: any) => {
             if (e.date.startsWith(today)) {
               const eUser = savedUsers.find((u: any) => u.identifiant === e.recordedBy);
               const eCaisse = eUser?.caisse || (eUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : 'N/A');

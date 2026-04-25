@@ -8,6 +8,9 @@ interface Expense {
   description: string;
   amount: number;
   recordedBy: string;
+  isValidated?: boolean;
+  validatedBy?: string;
+  isDeleted?: boolean;
   personnelId?: string;
   personnelName?: string;
   salaryType?: 'Avance' | 'Reste' | 'Total';
@@ -18,6 +21,7 @@ const AdministrativeExpenses: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Filter state
   const [startDate, setStartDate] = useState(() => {
@@ -52,6 +56,10 @@ const AdministrativeExpenses: React.FC = () => {
   ];
 
   const loadExpenses = () => {
+    const userStr = localStorage.getItem('microfox_current_user');
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
     const saved = localStorage.getItem('microfox_admin_expenses');
     if (saved) {
       setExpenses(JSON.parse(saved));
@@ -87,8 +95,8 @@ const AdministrativeExpenses: React.FC = () => {
     }
 
     try {
-      const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
-      const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
+      const user = currentUser || JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+      const targetCaisse = user?.role === 'agent commercial' ? null : (user?.caisse || (user?.role === 'administrateur' || user?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
       
       if (targetCaisse) {
         const cashKey = `microfox_cash_balance_${targetCaisse}`;
@@ -103,13 +111,15 @@ const AdministrativeExpenses: React.FC = () => {
       
       const selectedPersonnel = personnelList.find(p => p.id === personnelId);
 
-      const newExpense: any = {
-        id: Date.now().toString(),
+      const newExpense: Expense = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         date,
         category,
         description,
         amount: Number(amount),
-        recordedBy: currentUser.identifiant || 'Admin',
+        recordedBy: user.identifiant || 'Admin',
+        isValidated: false,
+        isDeleted: false,
         personnelId: category === 'Salaires' ? personnelId : undefined,
         personnelName: category === 'Salaires' ? selectedPersonnel?.name : undefined,
         salaryType: category === 'Salaires' ? salaryType : undefined,
@@ -135,16 +145,52 @@ const AdministrativeExpenses: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (!window.confirm("Voulez-vous vraiment supprimer cette dépense ?")) return;
+    if (currentUser?.role === 'caissier') {
+      alert("Accès refusé : Le caissier n'a pas le droit de supprimer les dépenses.");
+      return;
+    }
     
-    const updatedExpenses = expenses.filter(e => e.id !== id);
-    localStorage.setItem('microfox_admin_expenses', JSON.stringify(updatedExpenses));
-    localStorage.setItem('microfox_pending_sync', 'true');
-    setExpenses(updatedExpenses);
-    window.dispatchEvent(new Event('storage'));
+    setExpenses(prevExpenses => {
+      const targetExpense = prevExpenses.find(e => String(e.id) === String(id));
+      if (!targetExpense || targetExpense.isDeleted) return prevExpenses;
+
+      if (!window.confirm("Voulez-vous vraiment supprimer cette dépense ? Cette action restaurera également le montant dans la caisse correspondante.")) {
+        return prevExpenses;
+      }
+      
+      try {
+        // Restaurer le solde de la caisse si nécessaire
+        const user = currentUser || JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+        const targetCaisse = user?.role === 'agent commercial' ? null : (user?.caisse || (user?.role === 'administrateur' || user?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
+        
+        if (targetCaisse) {
+          const cashKey = `microfox_cash_balance_${targetCaisse}`;
+          const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
+          localStorage.setItem(cashKey, (currentCashBalance + targetExpense.amount).toString());
+        }
+
+        const updatedExpenses = prevExpenses.map(e => 
+          String(e.id) === String(id) ? { ...e, isDeleted: true } : e
+        );
+        
+        localStorage.setItem('microfox_admin_expenses', JSON.stringify(updatedExpenses));
+        localStorage.setItem('microfox_pending_sync', 'true');
+        
+        // Dispatch storage event to notify other components and trigger local state sync
+        setTimeout(() => {
+          window.dispatchEvent(new Event('storage'));
+        }, 50);
+
+        return updatedExpenses;
+      } catch (error) {
+        alert("Erreur lors de la suppression de la dépense.");
+        return prevExpenses;
+      }
+    });
   };
 
   const filteredExpenses = expenses.filter(e => {
+    if (e.isDeleted) return false;
     const eDate = e.date.split('T')[0];
     const matchesSearch = e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          e.category.toLowerCase().includes(searchTerm.toLowerCase());
@@ -321,6 +367,7 @@ const AdministrativeExpenses: React.FC = () => {
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Catégorie</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Description</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Montant</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Statut</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Actions</th>
               </tr>
             </thead>
@@ -346,13 +393,30 @@ const AdministrativeExpenses: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <p className="text-sm font-black text-red-600">{e.amount.toLocaleString()} F</p>
                     </td>
+                    <td className="px-6 py-4 border-l border-gray-50">
+                      <div className="flex justify-center">
+                        {e.isValidated ? (
+                          <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full border border-emerald-100">
+                            <CheckCircle size={12} />
+                            <span className="text-[9px] font-black uppercase tracking-tight">Validé</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1 rounded-full border border-amber-100">
+                             <TrendingDown size={12} className="animate-pulse" />
+                            <span className="text-[9px] font-black uppercase tracking-tight">En attente</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-center">
-                      <button 
-                        onClick={() => handleDelete(e.id)}
-                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      {currentUser?.role !== 'caissier' && (
+                        <button 
+                          onClick={() => handleDelete(e.id)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

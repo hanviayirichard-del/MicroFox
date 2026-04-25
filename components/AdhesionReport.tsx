@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History, Cloud, Calendar, Download, Printer, UserCheck, FileText } from 'lucide-react';
+import { Search, History as HistoryIcon, Cloud, Calendar, Download, Printer, UserCheck, FileText } from 'lucide-react';
 
 const AdhesionReport: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');

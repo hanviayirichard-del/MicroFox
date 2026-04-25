@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, X } from 'lucide-react';
+import { Search, History as HistoryIcon, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, X } from 'lucide-react';
 
 const GlobalJournal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -162,6 +162,9 @@ const GlobalJournal: React.FC = () => {
         if (savedExpenses) {
           const expenses = JSON.parse(savedExpenses);
           expenses.forEach((e: any) => {
+            // Respect soft delete flag
+            if (e.isDeleted) return;
+
             // Filter by user if caissier or agent commercial
             if ((user.role === 'caissier' || user.role === 'agent commercial') && e.recordedBy !== user.identifiant) return;
 
@@ -504,9 +507,9 @@ const GlobalJournal: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredTxs.length > 0 ? (
-                filteredTxs.map((tx) => (
+                filteredTxs.map((tx, idx) => (
                   <tr 
-                    key={tx.id} 
+                    key={`${tx.id}_${idx}`} 
                     className={`hover:bg-gray-50 transition-colors cursor-pointer group ${selectedIds.includes(tx.id) ? 'bg-blue-50/30' : ''}`}
                     onClick={() => toggleSelect(tx.id)}
                   >
@@ -554,7 +557,7 @@ const GlobalJournal: React.FC = () => {
                 <tr>
                   <td colSpan={6} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-3 opacity-20">
-                      <History size={48} />
+                      <HistoryIcon size={48} />
                       <p className="text-sm font-black uppercase tracking-widest">Aucune opération trouvée</p>
                     </div>
                   </td>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, Trash2, Calendar, FileText, TrendingUp, CheckCircle, X, Printer, Download, UserPlus, DollarSign, History } from 'lucide-react';
+import { Users, Plus, Search, Trash2, Calendar, FileText, TrendingUp, CheckCircle, X, Printer, Download, UserPlus, DollarSign, History as HistoryIcon } from 'lucide-react';
 
 interface Personnel {
   id: string;
@@ -9,6 +9,7 @@ interface Personnel {
   hiringDate: string;
   phone: string;
   status: 'Actif' | 'Inactif';
+  notes?: string;
 }
 
 interface SalaryPayment {
@@ -37,6 +38,7 @@ const PersonnelSalaries: React.FC = () => {
   const [baseSalary, setBaseSalary] = useState('');
   const [hiringDate, setHiringDate] = useState(new Date().toISOString().split('T')[0]);
   const [phone, setPhone] = useState('');
+  const [notes, setNotes] = useState('');
 
   // Filter state for history
   const [startDate, setStartDate] = useState(() => {
@@ -57,7 +59,7 @@ const PersonnelSalaries: React.FC = () => {
       const allExpenses = JSON.parse(savedExpenses);
       // Filter expenses that are salaries and have personnel info
       const salaryPayments = allExpenses
-        .filter((e: any) => e.category === 'Salaires' && e.personnelId)
+        .filter((e: any) => e.category === 'Salaires' && e.personnelId && !e.isDeleted)
         .map((e: any) => ({
           id: e.id,
           personnelId: e.personnelId,
@@ -87,20 +89,21 @@ const PersonnelSalaries: React.FC = () => {
     if (isEditing && selectedPersonnel) {
       const updatedList = personnelList.map(p => 
         p.id === selectedPersonnel.id 
-          ? { ...p, name, position, baseSalary: Number(baseSalary), hiringDate, phone }
+          ? { ...p, name, position, baseSalary: Number(baseSalary), hiringDate, phone, notes }
           : p
       );
       localStorage.setItem('microfox_personnel', JSON.stringify(updatedList));
       setPersonnelList(updatedList);
     } else {
       const newPersonnel: Personnel = {
-        id: Date.now().toString(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name,
         position,
         baseSalary: Number(baseSalary),
         hiringDate,
         phone,
-        status: 'Actif'
+        status: 'Actif',
+        notes
       };
 
       const updatedList = [newPersonnel, ...personnelList];
@@ -117,6 +120,7 @@ const PersonnelSalaries: React.FC = () => {
     setPosition('');
     setBaseSalary('');
     setPhone('');
+    setNotes('');
   };
 
   const handleEditPersonnel = (p: Personnel) => {
@@ -126,6 +130,7 @@ const PersonnelSalaries: React.FC = () => {
     setBaseSalary(p.baseSalary.toString());
     setHiringDate(p.hiringDate);
     setPhone(p.phone);
+    setNotes(p.notes || '');
     setIsEditing(true);
     setIsPersonnelModalOpen(true);
   };
@@ -192,13 +197,14 @@ const PersonnelSalaries: React.FC = () => {
                   <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Nom & Poste</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Salaire de Base</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Contact</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Commentaires</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-600 uppercase tracking-widest text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredPersonnel.length > 0 ? (
-                  filteredPersonnel.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
+                  filteredPersonnel.map((p, idx) => (
+                    <tr key={`${p.id}_${idx}`} className="hover:bg-gray-50/30 transition-colors">
                       <td className="px-6 py-4">
                         <p className="text-sm font-black text-[#121c32]">{p.name}</p>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{p.position}</p>
@@ -208,6 +214,11 @@ const PersonnelSalaries: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-xs font-bold text-gray-600">{p.phone || 'N/A'}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-[10px] font-medium text-gray-400 max-w-[150px] truncate" title={p.notes}>
+                          {p.notes || '-'}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
@@ -226,7 +237,7 @@ const PersonnelSalaries: React.FC = () => {
                             className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                             title="Historique des salaires"
                           >
-                            <History size={18} />
+                            <HistoryIcon size={18} />
                           </button>
                           <button 
                             onClick={() => handleDeletePersonnel(p.id)}
@@ -269,8 +280,8 @@ const PersonnelSalaries: React.FC = () => {
               Paiements récents
             </h3>
             <div className="space-y-4">
-              {payments.slice(0, 5).map(p => (
-                <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100">
+              {payments.slice(0, 5).map((p, idx) => (
+                <div key={`${p.id}_${idx}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100">
                   <div>
                     <p className="text-xs font-black text-[#121c32]">{p.personnelName}</p>
                     <p className="text-[10px] font-bold text-gray-400 uppercase">{p.type} - {p.period}</p>
@@ -306,6 +317,7 @@ const PersonnelSalaries: React.FC = () => {
                   setPosition('');
                   setBaseSalary('');
                   setPhone('');
+                  setNotes('');
                 }} 
                 className="hover:bg-white/10 p-2 rounded-full transition-colors"
               >
@@ -368,6 +380,16 @@ const PersonnelSalaries: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Commentaires / Notes</label>
+                <textarea 
+                  placeholder="Informations complémentaires sur l'employé..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-[#121c32] min-h-[100px] resize-none"
+                />
+              </div>
+
               <button 
                 onClick={handleSavePersonnel}
                 className={`w-full py-5 ${isEditing ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'} text-white rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95`}
@@ -387,7 +409,7 @@ const PersonnelSalaries: React.FC = () => {
             <div className="bg-[#121c32] p-6 flex items-center justify-between text-white sticky top-0 z-10">
               <div className="flex items-center gap-3">
                 <div className="bg-blue-500 p-2 rounded-xl">
-                  <History size={20} />
+                  <HistoryIcon size={20} />
                 </div>
                 <div>
                   <h2 className="text-lg font-black uppercase tracking-tight">Historique des Salaires</h2>
@@ -566,8 +588,8 @@ const PersonnelSalaries: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredPayments.length > 0 ? (
-                      filteredPayments.map((p) => (
-                        <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
+                      filteredPayments.map((p, idx) => (
+                        <tr key={`${p.id}_${idx}`} className="hover:bg-gray-50/30 transition-colors">
                           <td className="px-6 py-4 text-sm font-bold text-gray-700">
                             {new Date(p.date).toLocaleDateString()}
                           </td>

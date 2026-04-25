@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Search, 
-  History, 
+  History as HistoryIcon, 
   Filter, 
   Download, 
   Printer, 
@@ -264,8 +264,8 @@ const AuditSecurity: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors group">
+                filteredLogs.map((log, idx) => (
+                  <tr key={`${log.id}-${idx}`} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-xs font-black text-[#121c32]">{new Date(log.timestamp).toLocaleDateString()}</span>
@@ -309,7 +309,7 @@ const AuditSecurity: React.FC = () => {
                 <tr>
                   <td colSpan={5} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-3 opacity-20">
-                      <History size={48} />
+                      <HistoryIcon size={48} />
                       <p className="text-sm font-black uppercase tracking-widest text-gray-600">Aucun log technique trouvé</p>
                     </div>
                   </td>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Search, History, User, Calendar, TrendingUp, AlertCircle } from 'lucide-react';
+import { CreditCard, Search, History as HistoryIcon, User, Calendar, TrendingUp, AlertCircle } from 'lucide-react';
 
 const ActiveCredits: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
@@ -138,8 +138,8 @@ const ActiveCredits: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {sortedCredits.length > 0 ? (
-                sortedCredits.map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50/30 transition-colors">
+                sortedCredits.map((m, idx) => (
+                  <tr key={`${m.id}-${idx}`} className="hover:bg-gray-50/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-[#121c32] text-white flex items-center justify-center font-black text-sm">

@@ -8,7 +8,7 @@ import {
   Clock, 
   User, 
   AlertCircle,
-  History,
+  History as HistoryIcon,
   LayoutGrid,
   ChevronDown,
   ChevronUp,
@@ -569,7 +569,7 @@ const TontineVerification: React.FC = () => {
 
       const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
       const newGapEntry = {
-        id: `gap_${Date.now()}`,
+        id: `gap_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         date: new Date().toISOString(),
         type: 'TONTINE',
         sourceId: request.id,
@@ -850,7 +850,7 @@ const TontineVerification: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredRequests.length > 0 ? (
-                filteredRequests.map(request => {
+                filteredRequests.map((request, idx) => {
                   const client = members.find(m => m.id === request.clientId);
                   const observed = observedBalances[request.id];
                   const disburse = disburseAmounts[request.id];
@@ -905,7 +905,7 @@ const TontineVerification: React.FC = () => {
                     .reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
                     return (
-                      <React.Fragment key={request.id}>
+                      <React.Fragment key={`${request.id}-frag-${idx}`}>
                         <tr 
                           className={`hover:bg-gray-50 transition-colors cursor-pointer ${isExpanded ? 'bg-gray-50/50' : ''} ${selectedRequestIds.includes(request.id) ? 'bg-blue-50/50' : ''}`} 
                           onClick={() => {
@@ -1022,7 +1022,7 @@ const TontineVerification: React.FC = () => {
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-2">
-                                    <History size={18} className="text-[#121c32]" />
+                                    <HistoryIcon size={18} className="text-[#121c32]" />
                                     <h4 className="text-xs font-black text-[#121c32] uppercase tracking-widest">Journal des cotisations</h4>
                                   </div>
                                   {selectedSum > 0 && (
@@ -1034,9 +1034,9 @@ const TontineVerification: React.FC = () => {
                                 </div>
                                 <div className="space-y-2 max-h-[250px] lg:max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                                   {filteredClientHistory.length > 0 ? (
-                                    filteredClientHistory.map((tx: any) => (
+                                    filteredClientHistory.map((tx: any, tIdx: number) => (
                                       <div 
-                                        key={tx.id} 
+                                        key={`${tx.id}-${tIdx}`} 
                                         onClick={() => toggleSelectTx(tx.id)}
                                         className={`p-3 rounded-xl border flex items-center justify-between shadow-sm cursor-pointer transition-all ${selectedTxIds.includes(tx.id) ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
                                       >
@@ -1204,7 +1204,7 @@ const TontineVerification: React.FC = () => {
           <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center justify-between w-full lg:w-auto">
               <h3 className="text-xs font-black text-[#121c32] uppercase tracking-widest flex items-center gap-2">
-                <History size={16} /> Historique des vérifications
+                <HistoryIcon size={16} /> Historique des vérifications
               </h3>
               <div className="flex lg:hidden items-center gap-2">
                 <button onClick={handlePrintHistory} className="p-2 text-gray-400 hover:text-[#121c32] transition-colors" title="Imprimer">
@@ -1331,8 +1331,8 @@ const TontineVerification: React.FC = () => {
                 }
                 return true;
               })
-              .map(item => (
-              <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              .map((item, idx) => (
+              <div key={`${item.id}-${idx}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
                     <Check size={20} />

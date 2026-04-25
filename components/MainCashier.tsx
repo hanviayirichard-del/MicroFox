@@ -171,7 +171,7 @@ const MainCashier: React.FC = () => {
               const agentCode = agent?.code || p.agentId;
 
               const newGapEntry = {
-                id: `gap_${Date.now()}`,
+          id: `gap_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 date: new Date().toISOString(),
                 opDate: p.date, // Original operation date
                 type: 'AGENT',
@@ -274,7 +274,7 @@ const MainCashier: React.FC = () => {
       const allPayments = savedPayments ? JSON.parse(savedPayments) : [];
       
       const transferPayment = {
-        id: `transfer_${Date.now()}`,
+        id: `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         agentId: selectedCaisse,
         agentName: selectedCaisse,
         cashierName: currentUser.identifiant,
@@ -307,7 +307,7 @@ const MainCashier: React.FC = () => {
       const responsibleUserId = cashier?.id || JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id;
 
       const newGapEntry = {
-        id: `gap_${Date.now()}`,
+        id: `gap_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         date: new Date().toISOString(),
         opDate: new Date().toISOString(), // Transfer date is now
         type: 'CAISSIER',
@@ -330,7 +330,7 @@ const MainCashier: React.FC = () => {
     // Enregistrer la transaction
     const newTxs = [];
     const newTx = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'Versement Caisse',
       from: selectedCaisse,
       to: targetDestination,
@@ -345,7 +345,7 @@ const MainCashier: React.FC = () => {
 
     if (transferType === 'total' && gap !== 0) {
       const gapTx = {
-        id: (Date.now() + 1).toString(),
+        id: `${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'Régularisation Écart',
         from: selectedCaisse,
         to: 'ÉCART',
@@ -685,9 +685,9 @@ const MainCashier: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {filteredPayments.length > 0 ? (
-                    filteredPayments.map((p) => (
+                    filteredPayments.map((p, idx) => (
                       <tr 
-                        key={p.id} 
+                        key={`${p.id}_${idx}`} 
                         className="hover:bg-gray-50/50 transition-colors cursor-pointer"
                         onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}
                       >

@@ -30,7 +30,7 @@ import Analyse from './components/Analyse';
 import Configuration from './components/Configuration';
 import UserManagement from './components/UserManagement';
 import Permissions from './components/Permissions';
-import OperationCorrections from './components/OperationCorrections';
+import ModificationEpargneCredit from './components/ModificationEpargneCredit';
 import AuditSecurity from './components/AuditSecurity';
 import UserActivity from './components/UserActivity';
 import FieldControl from './components/FieldControl';
@@ -767,8 +767,19 @@ const App: React.FC = () => {
       return <FieldControl />;
     }
 
-    if (activeSection === 'Corrections d\'opération') {
-      return <OperationCorrections />;
+    if (activeSection === 'Modifications Epargne & Crédit') {
+      return <ModificationEpargneCredit />;
+    }
+
+    if (activeSection === "Réclamations Clients") {
+      return (
+        <div className="bg-[#121c32] rounded-xl shadow-sm border border-gray-800 p-6 lg:p-8 min-h-[500px] flex items-center justify-center text-gray-400 text-center">
+          <div>
+            <h2 className="text-xl lg:text-2xl font-semibold text-gray-200 mb-2">Réclamations Clients</h2>
+            <p className="text-sm lg:text-base">Module de messagerie et suivi des réclamations en cours de déploiement.</p>
+          </div>
+        </div>
+      );
     }
 
     if (activeSection === 'Audit & Accès Sécurité') {

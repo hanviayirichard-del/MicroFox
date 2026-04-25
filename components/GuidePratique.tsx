@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, ShieldCheck, Users, Clock, Landmark, Calculator, ClipboardCheck, GraduationCap, Settings, LayoutDashboard, Map, FileText, MessageSquare, TrendingUp, RefreshCw, FileCheck, Wallet, ShoppingCart, Vault, TrendingDown, Package, Gem, CreditCard, Percent, Printer, Scale, AlertTriangle, Hexagon } from 'lucide-react';
+import { BookOpen, ShieldCheck, Users, Clock, Landmark, Calculator, ClipboardCheck, GraduationCap, Settings, LayoutDashboard, Map as MapIcon, FileText, MessageSquare, TrendingUp, RefreshCw, FileCheck, Wallet, ShoppingCart, Vault, TrendingDown, Package, Gem, CreditCard, Percent, Printer, Scale, AlertTriangle, Hexagon } from 'lucide-react';
 
 const GuidePratique: React.FC = () => {
   const userStr = localStorage.getItem('microfox_current_user');

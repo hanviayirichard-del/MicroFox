@@ -223,7 +223,7 @@ const VenteLivrets: React.FC = () => {
         }
 
         const newTx = {
-          id: Date.now().toString(),
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'depot',
           account: selectedType === 'tontine' ? 'tontine' : 'epargne',
           amount: price,
@@ -595,8 +595,8 @@ const VenteLivrets: React.FC = () => {
                   value={searchTerm}
                 >
                   <option value="">-- Sélectionner un client --</option>
-                  {filteredMembers.sort((a, b) => a.name.localeCompare(b.name)).map(m => (
-                    <option key={m.id} value={m.code}>
+                  {filteredMembers.sort((a, b) => a.name.localeCompare(b.name)).map((m, idx) => (
+                    <option key={`${m.id}-${idx}`} value={m.code}>
                       {m.name} ({m.code}) 
                       {m.epargneAccountNumber ? ` | EP: ${m.epargneAccountNumber}` : ''}
                       {m.tontineAccounts?.length > 0 ? ` | TN: ${m.tontineAccounts.map((t: any) => t.number).join(', ')}` : ''}

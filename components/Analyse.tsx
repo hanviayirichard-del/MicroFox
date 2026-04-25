@@ -40,7 +40,7 @@ const Analyse: React.FC = () => {
     setCommissions(allCommissions);
 
     const savedExpenses = localStorage.getItem('microfox_admin_expenses');
-    const allExpenses = savedExpenses ? JSON.parse(savedExpenses) : [];
+    const allExpenses = savedExpenses ? JSON.parse(savedExpenses).filter((e: any) => !e.isDeleted) : [];
     setExpenses(allExpenses);
 
     const allTxs: any[] = [];
@@ -919,8 +919,8 @@ const Analyse: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {groupedData
                 .filter(item => item.tontineDepots > 0 || item.tontineRetraits > 0)
-                .map((item: any) => (
-                <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${selectedItems.includes(item.id) ? 'bg-emerald-50/30' : ''}`}>
+                .map((item: any, idx: number) => (
+                <tr key={`${item.id}-${idx}`} className={`hover:bg-gray-50 transition-colors ${selectedItems.includes(item.id) ? 'bg-emerald-50/30' : ''}`}>
                   <td className="py-4">
                     <button 
                       onClick={() => {
@@ -1002,8 +1002,8 @@ const Analyse: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {groupedData
                 .filter(item => item.epargneDepots > 0 || item.epargneRetraits > 0)
-                .map((item: any) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                .map((item: any, idx: number) => (
+                <tr key={`epargne-${item.id}-${idx}`} className="hover:bg-gray-50 transition-colors">
                   <td className="py-4 text-sm font-bold text-[#121c32]">{item.label}</td>
                   <td className="py-4 text-sm font-black text-emerald-600 text-right">{item.epargneDepots.toLocaleString()} FCFA</td>
                   <td className="py-4 text-sm font-black text-red-600 text-right">-{item.epargneRetraits.toLocaleString()} FCFA</td>
@@ -1074,8 +1074,8 @@ const Analyse: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {groupedData
                 .filter(item => item.creditDeblocages > 0 || item.creditRemboursements > 0 || item.creditInterets > 0 || item.creditFrais > 0)
-                .map((item: any) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                .map((item: any, idx: number) => (
+                <tr key={`credit-${item.id}-${idx}`} className="hover:bg-gray-50 transition-colors">
                   <td className="py-4 text-sm font-bold text-[#121c32]">{item.label}</td>
                   <td className="py-4 text-sm font-black text-purple-600 text-right">{item.creditDeblocages.toLocaleString()} FCFA</td>
                   <td className="py-4 text-sm font-black text-emerald-600 text-right">{item.creditRemboursements.toLocaleString()} FCFA</td>
@@ -1149,8 +1149,8 @@ const Analyse: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {groupedData
                 .filter(item => item.partsSociales !== 0 || item.commissionsTontine > 0 || item.depensesAdmin > 0)
-                .map((item: any) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                .map((item: any, idx: number) => (
+                <tr key={`other-${item.id}-${idx}`} className="hover:bg-gray-50 transition-colors">
                   <td className="py-4 text-sm font-bold text-[#121c32]">{item.label}</td>
                   <td className="py-4 text-sm font-black text-indigo-600 text-right">{item.partsSociales.toLocaleString()} FCFA</td>
                   <td className="py-4 text-sm font-black text-amber-600 text-right">{item.commissionsTontine.toLocaleString()} FCFA</td>

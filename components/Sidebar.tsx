@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Map, 
+  Map as MapIcon, 
   BookOpen, 
   Users, 
   Clock, 
@@ -35,6 +35,7 @@ import {
   TrendingDown,
   Search,
   RotateCcw,
+  CheckCircle,
   Scale as BalanceIcon
 } from 'lucide-react';
 import { MenuItem, SidebarProps } from '../types';
@@ -149,7 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       items: [
         { id: 'Tableau de Bord', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} /> },
         { id: 'Notification', label: 'Notification', icon: <Bell size={20} />, badge: notificationCount },
-        { id: 'Carte Géographique', label: 'Carte Géographique', icon: <Map size={20} /> },
+        { id: 'Carte Géographique', label: 'Carte Géographique', icon: <MapIcon size={20} /> },
       ]
     },
     {
@@ -210,7 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       title: "Contrôle & Sécurité",
       items: [
         { id: 'Contrôle Terrain', label: 'Contrôle Terrain', icon: <ClipboardCheck size={20} /> },
-        { id: 'Corrections d\'opération', label: 'Corrections d\'opération', icon: <RefreshCw size={20} /> },
+        { id: 'Modifications Epargne & Crédit', label: 'Modifications Epargne & Crédit', icon: <RotateCcw size={20} /> },
         { id: 'Conformité (Ratios & LAB)', label: 'Conformité (Ratios & LAB)', icon: <Scale size={20} /> },
         { id: 'Audit & Accès Sécurité', label: 'Audit & Accès Sécurité', icon: <ShieldCheck size={20} /> },
         { id: 'Suivi des Activités', label: 'Suivi des Activités', icon: <Activity size={20} /> },

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Send, History, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download, Search } from 'lucide-react';
+import { Package, Plus, Send, History as HistoryIcon, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download, Search } from 'lucide-react';
 import { User } from '../types';
 import * as XLSX from 'xlsx';
 
@@ -121,7 +121,7 @@ const StocksLivrets: React.FC = () => {
     if (purchaseForm.quantity <= 0) return;
 
     const newPurchase: StockPurchase = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_pur_${Math.random().toString(36).substr(2, 5)}`,
       date: new Date().toISOString(),
       type: purchaseForm.type,
       quantity: purchaseForm.quantity
@@ -168,7 +168,7 @@ const StocksLivrets: React.FC = () => {
     }
 
     const newDistrib: StockDistribution = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_dist_${Math.random().toString(36).substr(2, 5)}`,
       date: new Date().toISOString(),
       sender: senderName,
       recipient: (distribForm.recipient || '').trim(),
@@ -203,7 +203,7 @@ const StocksLivrets: React.FC = () => {
     }
 
     const newReturn: StockReturn = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_ret_${Math.random().toString(36).substr(2, 5)}`,
       date: new Date().toISOString(),
       from: currentUser.identifiant,
       to: returnForm.to,
@@ -645,7 +645,7 @@ const StocksLivrets: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <History className="text-indigo-600" size={20} />
+            <HistoryIcon className="text-indigo-600" size={20} />
             <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Historique des Mouvements</h2>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -746,7 +746,7 @@ const StocksLivrets: React.FC = () => {
                   return matchesRole && matchesSearch;
                 })
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map((m: any) => {
+                .map((m: any, idx: number) => {
                   const isPositive = (() => {
                     const myId = currentUser.identifiant.toLowerCase();
                     if (m.mType === 'ACHAT') return true;
@@ -757,7 +757,7 @@ const StocksLivrets: React.FC = () => {
                   })();
 
                   return (
-                    <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={`${m.id}_${idx}`} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <span className="text-xs font-bold text-gray-500">{new Date(m.date).toLocaleString()}</span>
                       </td>

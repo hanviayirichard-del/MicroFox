@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Landmark, Wallet, Gem, CreditCard, TrendingUp, History, Download, Printer, User } from 'lucide-react';
+import { Search, Landmark, Wallet, Gem, CreditCard, TrendingUp, History as HistoryIcon, Download, Printer, User } from 'lucide-react';
 import { ClientAccount } from '../types';
 
 const AccountBalance: React.FC = () => {
@@ -273,10 +273,10 @@ const AccountBalance: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {sortedMembers.map((m) => {
+              {sortedMembers.map((m, idx) => {
                 const credit = calculateCreditDetails(m);
                 return (
-                  <tr key={m.id} className="hover:bg-white/5 transition-colors">
+                  <tr key={`${m.id}-${idx}`} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-black text-xs">

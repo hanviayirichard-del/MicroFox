@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, User, Landmark, Wallet } from 'lucide-react';
+import { Search, History as HistoryIcon, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, User, Landmark, Wallet } from 'lucide-react';
 
 const CashReceipts: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,6 +105,9 @@ const CashReceipts: React.FC = () => {
       if (savedExpenses) {
         const expenses = JSON.parse(savedExpenses);
         expenses.forEach((e: any) => {
+          // Respect soft delete flag
+          if (e.isDeleted) return;
+          
           // Strict filter for user: only their own recorded expenses
           if (isRestricted && String(e.recordedBy) !== String(user.identifiant)) return;
 
@@ -476,7 +479,7 @@ const CashReceipts: React.FC = () => {
                 <tr>
                   <td colSpan={5} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-3 opacity-20">
-                      <History size={48} />
+                      <HistoryIcon size={48} />
                       <p className="text-sm font-black uppercase tracking-widest">Aucune opération trouvée</p>
                     </div>
                   </td>

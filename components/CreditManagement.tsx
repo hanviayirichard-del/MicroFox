@@ -8,7 +8,7 @@ import {
   Wallet, 
   Clock, 
   ShieldCheck,
-  History,
+  History as HistoryIcon,
   Filter,
   Download,
   Printer,
@@ -231,7 +231,7 @@ export default function CreditManagement() {
 
         const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
         const newTx = {
-          id: Date.now().toString(),
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'frais',
           account: 'credit',
           amount: amount,
@@ -317,7 +317,7 @@ export default function CreditManagement() {
             onClick={() => setShowArchives(!showArchives)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${showArchives ? 'bg-amber-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
-            <History size={18} /> {showArchives ? 'Retour aux crédits actifs' : 'Archives des crédits'}
+            <HistoryIcon size={18} /> {showArchives ? 'Retour aux crédits actifs' : 'Archives des crédits'}
           </button>
           <button 
             onClick={handlePrint}
@@ -525,7 +525,7 @@ export default function CreditManagement() {
                   <td colSpan={6} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300">
-                        <History size={32} strokeWidth={1} />
+                        <HistoryIcon size={32} strokeWidth={1} />
                       </div>
                       <p className="text-gray-400 font-bold text-sm uppercase italic">Aucun crédit actif trouvé</p>
                     </div>

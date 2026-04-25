@@ -111,7 +111,7 @@ const FraisPartsSociales: React.FC = () => {
           if (savedHistory) fullHistory = JSON.parse(savedHistory);
         }
 
-        const txId = `tx_${Date.now()}`;
+        const txId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         const newTx = {
           id: txId,
           date: new Date().toISOString(),

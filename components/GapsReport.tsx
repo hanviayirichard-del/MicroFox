@@ -161,7 +161,7 @@ const GapsReport: React.FC = () => {
           const transactionsSaved = localStorage.getItem('microfox_vault_transactions');
           const transactions = transactionsSaved ? JSON.parse(transactionsSaved) : [];
           const newTx = {
-            id: `gap_tx_${Date.now()}`,
+            id: `gap_tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             type: txType,
             from: (newStatus === 'Annulé' || newStatus === 'Remis') ? targetCaisse : gap.sourceName,
             to: newStatus === 'Annulé' ? 'AJUSTEMENT' : (newStatus === 'Remis' ? gap.sourceName : targetCaisse),

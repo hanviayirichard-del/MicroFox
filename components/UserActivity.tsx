@@ -163,8 +163,8 @@ const UserActivity: React.FC = () => {
             <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
               <h2 className="text-sm font-black text-[#121c32] uppercase tracking-widest mb-6">Dernières Actions</h2>
               <div className="space-y-4">
-                {logs.slice(0, 15).map((log) => (
-                  <div key={log.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-2xl border border-transparent hover:bg-white hover:shadow-md hover:border-gray-100 transition-all group">
+                {logs.slice(0, 15).map((log, idx) => (
+                  <div key={`${log.id}_${idx}`} className="flex items-start gap-4 p-4 bg-gray-50 rounded-2xl border border-transparent hover:bg-white hover:shadow-md hover:border-gray-100 transition-all group">
                     <div className="mt-1">
                       {getActionIcon(log.action)}
                     </div>
@@ -238,8 +238,8 @@ const UserActivity: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                {filteredLogs.map((log, idx) => (
+                  <tr key={`${log.id}_${idx}`} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-xs font-black text-[#121c32]">{new Date(log.timestamp).toLocaleDateString()}</span>

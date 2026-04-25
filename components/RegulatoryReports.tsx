@@ -131,6 +131,9 @@ const RegulatoryReports: React.FC = () => {
       if (savedExpenses) {
         const allExpenses = JSON.parse(savedExpenses);
         allExpenses.forEach((e: any) => {
+          // Respect soft delete flag
+          if (e.isDeleted) return;
+
           const eDate = new Date(e.date);
           if (eDate >= start && eDate <= end) {
             if (isCaissier && e.recordedBy !== user.identifiant) return;

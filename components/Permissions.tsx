@@ -51,7 +51,7 @@ const ALL_TABS = [
   'Rapports Financiers',
   'Pièces à imprimer',
   'Contrôle Terrain',
-  'Corrections d\'opération',
+  'Modifications Epargne & Crédit',
   'Conformité (Ratios & LAB)',
   'Audit & Accès Sécurité',
   'Suivi des Activités',

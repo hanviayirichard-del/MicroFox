@@ -71,6 +71,8 @@ export interface Transaction {
   rembInterest?: number;
   rembPenalty?: number;
   rembRebate?: number;
+  isValidated?: boolean;
+  validatedAt?: string;
 }
 
 export interface ClientAccount {

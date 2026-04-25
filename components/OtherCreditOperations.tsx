@@ -5,7 +5,7 @@ import {
   CheckCircle,
   User,
   CreditCard,
-  History,
+  History as HistoryIcon,
   ChevronDown
 } from 'lucide-react';
 
@@ -94,7 +94,7 @@ const OtherCreditOperations: React.FC = () => {
         };
 
         const newTx = {
-          id: Date.now().toString(),
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'deblocage', // On utilise deblocage pour augmenter l'encours (pénalité)
           account: 'credit',
           amount: amount,
@@ -378,9 +378,9 @@ const OtherCreditOperations: React.FC = () => {
                       </div>
                       <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
                         {filteredMembers.length > 0 ? (
-                          filteredMembers.map(m => (
+                          filteredMembers.map((m, idx) => (
                             <button
-                              key={m.id}
+                              key={`${m.id}-${idx}`} 
                               onClick={() => {
                                 setSelectedMemberId(m.id);
                                 setIsDropdownOpen(false);
@@ -491,7 +491,7 @@ const OtherCreditOperations: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-[#121c32] p-6 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <History size={24} className="text-blue-400" />
+            <HistoryIcon size={24} className="text-blue-400" />
             <h3 className="text-lg font-black uppercase tracking-tight">Historique des Opérations</h3>
           </div>
         </div>

@@ -3,7 +3,7 @@ import {
   CreditCard, 
   Search, 
   CheckCircle,
-  History,
+  History as HistoryIcon,
   ArrowUpRight,
   ShieldCheck,
   X
@@ -126,7 +126,7 @@ const CreditDisbursement: React.FC = () => {
             const newTotal = currentCredit + capital + interest + penalty;
             
             const newTx = {
-              id: Date.now().toString(),
+              id: `${Date.now()}_disb_${Math.random().toString(36).substr(2, 9)}`,
               type: 'deblocage',
               account: 'credit',
               amount: capital,
@@ -137,7 +137,7 @@ const CreditDisbursement: React.FC = () => {
             };
 
             const feesTx = fees > 0 ? {
-              id: `fees-${Date.now()}`,
+              id: `fees-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
               type: 'depot',
               account: 'frais',
               amount: fees,
@@ -349,8 +349,8 @@ const CreditDisbursement: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4">
         {pendingRequests.length > 0 ? (
-          pendingRequests.map((m) => (
-            <div key={m.id} className="bg-[#121c32] rounded-[2rem] p-6 border border-white/5 shadow-sm hover:shadow-md transition-all">
+          pendingRequests.map((m, idx) => (
+            <div key={`${m.id}-${idx}`} className="bg-[#121c32] rounded-[2rem] p-6 border border-white/5 shadow-sm hover:shadow-md transition-all">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-2xl bg-white/5 text-white flex items-center justify-center font-black text-lg">
@@ -407,7 +407,7 @@ const CreditDisbursement: React.FC = () => {
         ) : (
           <div className="bg-[#121c32] rounded-[2.5rem] p-20 text-center border border-dashed border-white/5">
             <div className="w-20 h-20 bg-white/5 text-gray-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <History size={40} />
+              <HistoryIcon size={40} />
             </div>
             <h3 className="text-xl font-black text-gray-500 uppercase tracking-tight">Aucun crédit à débloquer</h3>
             <p className="text-gray-600 text-sm mt-2">Les crédits validés apparaîtront ici pour déblocage.</p>
@@ -449,8 +449,8 @@ const CreditDisbursement: React.FC = () => {
                   const now = new Date();
                   const diffInHours = (now.getTime() - disbursementDate.getTime()) / (1000 * 60 * 60);
                   return diffInHours <= 48;
-                }).map((m) => (
-                  <tr key={m.id} className="hover:bg-white/5 transition-colors">
+                }).map((m, idx) => (
+                  <tr key={`${m.id}-disb-${idx}`} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <p className="text-sm font-black text-white uppercase">{m.name}</p>
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{m.code}</p>

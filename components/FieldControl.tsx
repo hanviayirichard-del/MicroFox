@@ -4,7 +4,7 @@ import {
   ClipboardCheck, 
   AlertCircle, 
   CheckCircle, 
-  History, 
+  History as HistoryIcon, 
   Save, 
   User, 
   Wallet,
@@ -112,7 +112,7 @@ const FieldControl: React.FC = () => {
     }
 
     const newReport: FieldControlReport = {
-      id: `fcr_${Date.now()}`,
+      id: `fcr_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       date: new Date().toISOString(),
       clientId: selectedClient.id,
       clientName: selectedClient.name,
@@ -330,7 +330,7 @@ const FieldControl: React.FC = () => {
             showHistory ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
           }`}
         >
-          <History size={16} /> {showHistory ? 'Nouveau Contrôle' : 'Historique'}
+          <HistoryIcon size={16} /> {showHistory ? 'Nouveau Contrôle' : 'Historique'}
         </button>
       </div>
 
@@ -338,7 +338,7 @@ const FieldControl: React.FC = () => {
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight mb-6 flex items-center gap-2">
           <div className="flex items-center gap-2">
-            <History size={20} className="text-indigo-600" />
+            <HistoryIcon size={20} className="text-indigo-600" />
             Historique des Contrôles
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -514,7 +514,7 @@ const FieldControl: React.FC = () => {
                   <tr>
                     <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3 opacity-20">
-                        <History size={48} />
+                        <HistoryIcon size={48} />
                         <p className="text-sm font-black uppercase tracking-widest text-gray-600">Aucun rapport trouvé</p>
                       </div>
                     </td>

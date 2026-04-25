@@ -45,7 +45,7 @@ const Configuration: React.FC = () => {
       return;
     }
     const rule: AutoDeactivationRule = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       roles: newRule.roles as UserRole[],
       days: newRule.days as string[],
       startTime: newRule.startTime || '00:00',
@@ -139,6 +139,14 @@ const Configuration: React.FC = () => {
     e.preventDefault();
     localStorage.setItem('microfox_mf_config', JSON.stringify(mfConfig));
     localStorage.setItem('microfox_current_mf', mfConfig.nom);
+    
+    // Also update livret prices for components that depend on it
+    const livretPrices = {
+      epargne: mfConfig.prixLivretCompte || 300,
+      tontine: mfConfig.prixLivretTontine || 500
+    };
+    localStorage.setItem('microfox_livret_prices', JSON.stringify(livretPrices));
+
     setShowSaveConfirmation(true);
     setTimeout(() => setShowSaveConfirmation(false), 3000);
     alert("Configuration de la microfinance enregistrée !");

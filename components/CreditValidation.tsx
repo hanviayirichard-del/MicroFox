@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   CheckCircle,
-  History,
+  History as HistoryIcon,
   ShieldCheck,
   X,
   FileCheck
@@ -89,7 +89,7 @@ const CreditValidation: React.FC = () => {
             }
 
             const newTx = {
-              id: Date.now().toString(),
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               type: 'validation',
               account: 'credit',
               amount: c.lastCreditRequest.capital,
@@ -191,8 +191,8 @@ const CreditValidation: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4">
         {pendingRequests.length > 0 ? (
-          pendingRequests.map((m) => (
-            <div key={m.id} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+          pendingRequests.map((m, idx) => (
+            <div key={`${m.id}-${idx}`} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-2xl bg-[#121c32] text-white flex items-center justify-center font-black text-lg">

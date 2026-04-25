@@ -84,7 +84,7 @@ const UserManagement: React.FC = () => {
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     const newUser: User = {
-      id: `user_${Date.now()}`,
+      id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       identifiant: formData.identifiant.trim(),
       role: formData.role,
       microfinance: formData.microfinance.trim(),

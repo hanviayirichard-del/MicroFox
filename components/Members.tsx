@@ -3,7 +3,7 @@ import { recordAuditLog } from '../utils/audit';
 import { 
   Search, 
   Plus, 
-  History, 
+  History as HistoryIcon, 
   Wallet, 
   Clock, 
   CreditCard, 
@@ -156,7 +156,7 @@ const OperationForm: React.FC<{
   const [description, setSearchDescription] = useState('');
 
   const isEpargneBlocked = (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && 
-                           ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < prices.epargne)) ||
+                           ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < 300)) ||
                            (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && isEpargneBlockedByAdmin);
   
   const selectedTontines = tontineAccounts.filter(a => selectedTontineIds.includes(a.id));
@@ -244,8 +244,8 @@ const OperationForm: React.FC<{
         setStatusMessage({ text: "Opération impossible : Le compte épargne est bloqué.", type: 'error' });
         return;
       }
-      if ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < prices.epargne) {
-        setStatusMessage({ text: `Opération impossible : Le client doit d'abord s'acquitter du minimum requis (1000 F Part Sociale, 2000 F Adhésion, ${prices.epargne} F Livret) pour utiliser le compte épargne.`, type: 'error' });
+      if ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < 300) {
+        setStatusMessage({ text: `Opération impossible : Le client doit d'abord s'acquitter du minimum requis (1000 F Part Sociale, 2000 F Adhésion, 300 F Livret) pour utiliser le compte épargne.`, type: 'error' });
         return;
       }
     }
@@ -639,9 +639,9 @@ const OperationForm: React.FC<{
                 <ClipboardCheck size={14} /> Demandes validées
               </label>
               <div className="space-y-2">
-                {validatedRequests.map(req => (
+                {validatedRequests.map((req, idx) => (
                   <button
-                    key={req.id}
+                    key={`${req.id}_${idx}`}
                     onClick={() => handleSelectValidated(req)}
                     className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${selectedValidatedIds.includes(req.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-100 text-[#121c32] hover:bg-blue-50'}`}
                   >
@@ -752,7 +752,7 @@ const OperationForm: React.FC<{
                     Le client doit d'abord payer :
                     <br />• Min. 1000 F de Part Sociale (Actuel: {partSocialeBalance || 0} F)
                     <br />• Min. 2000 F d'Adhésion (Payé: {adhesionPaid || 0} F)
-                    <br />• Min. {prices.epargne} F de Frais de Livret (Payé: {livretPaid || 0} F)
+                    <br />• Min. 300 F de Frais de Livret (Payé: {livretPaid || 0} F)
                   </p>
                 </div>
               )}
@@ -1048,7 +1048,7 @@ const RegistrationForm: React.FC<{
     if (isEpargneSelected) {
       if (partSocialePayee > 0) {
         history.push({
-          id: `ps-${clientId}-${Date.now()}`,
+          id: `ps-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           type: 'depot',
           account: 'partSociale',
           amount: partSocialePayee,
@@ -1061,7 +1061,7 @@ const RegistrationForm: React.FC<{
       }
       if (fraisAdhesion > 0) {
         history.push({
-          id: `fa-${clientId}-${Date.now()}`,
+          id: `fa-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           type: 'depot',
           account: 'frais',
           amount: fraisAdhesion,
@@ -1074,7 +1074,7 @@ const RegistrationForm: React.FC<{
       }
       if (fraisLivret > 0) {
         history.push({
-          id: `fl-${clientId}-${Date.now()}`,
+          id: `fl-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           type: 'depot',
           account: 'frais',
           amount: fraisLivret,
@@ -1087,7 +1087,7 @@ const RegistrationForm: React.FC<{
       }
       if (depotInitialEpargne > 0) {
         history.push({
-          id: `di-${clientId}-${Date.now()}`,
+          id: `di-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           type: 'depot',
           account: 'epargne',
           amount: depotInitialEpargne,
@@ -1690,7 +1690,7 @@ const EditProfileForm: React.FC<{
                   </div>
 
                   {formData.tontineAccounts && formData.tontineAccounts.map((acc, idx) => (
-                    <div key={acc.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-4">
+                    <div key={`${acc.id}-${idx}`} className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-4">
                       <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Compte Tontine: {acc.number}</p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -2999,7 +2999,7 @@ const Members: React.FC = () => {
         
         if (info.partSociale > 0) {
           history.unshift({
-            id: `ps-${c.id}-${Date.now()}`,
+            id: `ps-${c.id}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             type: 'depot',
             account: 'partSociale',
             amount: info.partSociale,
@@ -3007,12 +3007,13 @@ const Members: React.FC = () => {
             description: 'Ouverture compte: Part sociale',
             userId: currentUser?.id,
             cashierName: currentUser?.identifiant,
-            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
+            isValidated: false
           });
         }
         if (info.adhesion > 0) {
           history.unshift({
-            id: `fa-${c.id}-${Date.now()}`,
+            id: `fa-${c.id}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             type: 'depot',
             account: 'frais',
             amount: info.adhesion,
@@ -3020,12 +3021,13 @@ const Members: React.FC = () => {
             description: 'Ouverture compte: Frais d\'adhésion',
             userId: currentUser?.id,
             cashierName: currentUser?.identifiant,
-            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
+            caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
+            isValidated: false
           });
         }
         if (info.livret > 0) {
           history.unshift({
-            id: `fl-${c.id}-${Date.now()}`,
+            id: `fl-${c.id}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             type: 'depot',
             account: 'frais',
             amount: info.livret,
@@ -3038,7 +3040,7 @@ const Members: React.FC = () => {
         }
         if (info.depot > 0) {
           history.unshift({
-            id: `di-${c.id}-${Date.now()}`,
+            id: `di-${c.id}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             type: 'depot',
             account: 'epargne',
             amount: info.depot,
@@ -3173,13 +3175,14 @@ const Members: React.FC = () => {
                   tontineAccountNumber: newTontineAccounts[accIdx].number,
                   amount: data.amount + (data.gap > 0 ? data.gap : 0),
                   description: `${op.type === 'transfert' ? 'Transfert' : 'Retrait'} Tontine ${newTontineAccounts[accIdx].number} - Motifs: ${data.reasons.join(', ')}`,
-                  id: `${Date.now()}_${index}`,
+                  id: `${Date.now()}_${index}_${Math.random().toString(36).substr(2, 5)}`,
                   date: new Date().toISOString(),
                   userId: currentUser?.id,
                   cashierName: currentUser?.identifiant,
                   caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
                   balance: balanceAfter,
-                  balanceBefore: balanceBefore
+                  balanceBefore: balanceBefore,
+                  isValidated: false
                 };
                 c.history = [newTransaction, ...c.history];
               }
@@ -3277,7 +3280,8 @@ const Members: React.FC = () => {
                 cashierName: currentUser?.identifiant,
                 caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
                 balance: newBalances.epargne,
-                balanceBefore: newBalances.epargne - surplus
+                balanceBefore: newBalances.epargne - surplus,
+                isValidated: false
               };
               c.history = [epargneTx, ...c.history];
             }
@@ -3316,7 +3320,8 @@ const Members: React.FC = () => {
           cashierName: (op.account === 'tontine' && (op.type === 'depot' || op.type === 'cotisation')) ? agentName : currentUser?.identifiant,
           caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
           balance: balanceAfter,
-          balanceBefore: balanceBefore
+          balanceBefore: balanceBefore,
+          isValidated: false
         };
 
         if (newTransaction.account === 'tontine' && newTransaction.type === 'depot') {
@@ -3826,8 +3831,8 @@ const Members: React.FC = () => {
                             + Ouvrir Épargne
                           </button>
                         )}
-                        {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')).map(acc => (
-                          <span key={acc.id} className={`text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 uppercase tracking-tighter shadow-sm flex items-center gap-1 ${acc.isBlocked ? 'opacity-50' : ''}`}>
+                        {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')).map((acc, idx) => (
+                          <span key={`${acc.id}-${idx}`} className={`text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 uppercase tracking-tighter shadow-sm flex items-center gap-1 ${acc.isBlocked ? 'opacity-50' : ''}`}>
                             TONTINE: {acc.number}
                             {acc.isBlocked && <Lock size={10} />}
                             {acc.isInvisible && <AlertCircle size={10} className="text-amber-500" />}
@@ -3872,7 +3877,7 @@ const Members: React.FC = () => {
               <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide items-center w-full">
                 {activeTab === 'overview' ? (
                   <>
-                    <button onClick={() => setActiveTab('overview')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-8 py-4 text-sm sm:text-base bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-lg scale-105"><History size={20} /> Synthèse</button>
+                    <button onClick={() => setActiveTab('overview')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-8 py-4 text-sm sm:text-base bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-lg scale-105"><HistoryIcon size={20} /> Synthèse</button>
                     <button onClick={() => setActiveTab('epargne')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><Wallet size={16} /> Épargne</button>
                     <button onClick={() => setActiveTab('tontine')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><Clock size={16} /> Tontine</button>
                     <button onClick={() => setActiveTab('credit')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><CreditCard size={16} /> Crédits</button>
@@ -3880,7 +3885,7 @@ const Members: React.FC = () => {
                     <button onClick={() => setActiveTab('partSociale')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><Gem size={16} /> Part Sociale</button>
                     <button onClick={() => setActiveTab('profile')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><BookOpen size={16} /> Dossier Client</button>
                     <button onClick={() => { setActiveTab('current_credit'); setIsEditingCredit(false); }} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><CreditCard size={16} /> Dossier crédit actuel</button>
-                    <button onClick={() => setActiveTab('credit_archives')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><History size={16} /> Archives des crédits</button>
+                    <button onClick={() => setActiveTab('credit_archives')} className="flex items-center justify-center gap-2 rounded-2xl font-bold transition-all border shrink-0 px-4 py-3 text-xs bg-white/5 text-gray-500 border-transparent opacity-60 hover:opacity-100"><HistoryIcon size={16} /> Archives des crédits</button>
                   </>
                 ) : (
                   <div className="flex items-center gap-4 w-full">
@@ -3904,7 +3909,7 @@ const Members: React.FC = () => {
                       )}
                       {activeTab === 'credit_archives' && (
                         <div className="w-full flex items-center justify-center gap-3 rounded-2xl font-black py-5 text-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-2xl">
-                          <History size={28} /> ARCHIVES DES CRÉDITS
+                          <HistoryIcon size={28} /> ARCHIVES DES CRÉDITS
                         </div>
                       )}
                     </div>
@@ -4012,8 +4017,8 @@ const Members: React.FC = () => {
                     </div>
                     <div className="space-y-3">
                       {selectedClient.history.length > 0 ? (
-                        selectedClient.history.slice(0, 5).map((tx) => (
-                          <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-[2rem] border border-white/5 hover:bg-white/10 transition-all group relative overflow-hidden">
+                        selectedClient.history.slice(0, 5).map((tx, idx) => (
+                          <div key={`${tx.id}_${idx}`} className="flex items-center justify-between p-5 bg-white/5 rounded-[2rem] border border-white/5 hover:bg-white/10 transition-all group relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-1 h-full transition-all group-hover:w-1.5" style={{ backgroundColor: tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? '#10b981' : (tx.type === 'remboursement' ? '#a855f7' : '#ef4444') }} />
                             <div className="flex items-center gap-5 flex-1 min-w-0">
                               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shrink-0 ${tx.type === 'depot' || tx.type === 'cotisation' || (tx.type === 'transfert' && tx.destinationAccount) ? 'bg-emerald-500/10 text-emerald-400' : (tx.type === 'remboursement' ? 'bg-purple-500/10 text-purple-400' : 'bg-red-500/10 text-red-400')}`}>
@@ -4044,7 +4049,7 @@ const Members: React.FC = () => {
                         ))
                       ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-gray-600">
-                          <History size={48} strokeWidth={1} className="mb-4 opacity-20" />
+                          <HistoryIcon size={48} strokeWidth={1} className="mb-4 opacity-20" />
                           <p className="italic text-sm font-bold uppercase tracking-widest">Aucune opération récente</p>
                         </div>
                       )}
@@ -4072,7 +4077,7 @@ const Members: React.FC = () => {
                   <div className="bg-[#121c32] rounded-[2rem] p-6 sm:p-8 shadow-sm border border-white/5">
                     <div className="flex items-center justify-between mb-8">
                       <div className="flex items-center gap-3">
-                        <History size={20} className="text-blue-400" />
+                        <HistoryIcon size={20} className="text-blue-400" />
                         <h3 className="text-lg font-black text-white uppercase tracking-tight">Journal d'Épargne</h3>
                       </div>
                     </div>
@@ -4084,11 +4089,11 @@ const Members: React.FC = () => {
                           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         
                         if (sortedHistory.length > 0) {
-                          return sortedHistory.map((tx) => {
+                          return sortedHistory.map((tx, idx) => {
                             const isCancelled = tx.type === 'annulation';
                             const isIncoming = !isCancelled && (tx.destinationAccount === 'epargne' || tx.type === 'depot');
                             return (
-                              <div key={tx.id} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
+                              <div key={`${tx.id}_${idx}`} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
                                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}`}>
                                     {isCancelled ? <X size={20} /> : (isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />)}
@@ -4130,9 +4135,9 @@ const Members: React.FC = () => {
                 <div className="space-y-6">
                   {selectedClient.tontineAccounts.length > 0 && (
                     <div className="bg-[#121c32] p-2 rounded-[1.5rem] border border-white/5 flex gap-2 overflow-x-auto scrollbar-hide shadow-sm items-center">
-                      {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')).map(acc => (
+                      {selectedClient.tontineAccounts.filter(acc => !acc.isInvisible || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur')).map((acc, idx) => (
                         <button 
-                          key={acc.id} 
+                          key={`${acc.id}-${idx}`} 
                           onClick={() => setSelectedTontineId(acc.id)}
                           className={`px-6 py-2 rounded-xl font-black text-xs uppercase tracking-tighter whitespace-nowrap transition-all ${selectedTontineId === acc.id ? 'bg-emerald-600 text-white shadow-md' : 'bg-white/5 text-gray-500'}`}
                         >
@@ -4154,7 +4159,7 @@ const Members: React.FC = () => {
 
                   <div className="bg-[#121c32] rounded-[2rem] p-4 shadow-sm border border-white/5">
                     <div className="flex items-center justify-between gap-4 p-2 bg-white/5 rounded-[1.5rem]">
-                        <button onClick={() => setTontineSubTab('journal')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm ${tontineSubTab === 'journal' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500'}`}><History size={18} /> JOURNAL</button>
+                        <button onClick={() => setTontineSubTab('journal')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm ${tontineSubTab === 'journal' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500'}`}><HistoryIcon size={18} /> JOURNAL</button>
                         <button onClick={() => setTontineSubTab('cases')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm ${tontineSubTab === 'cases' ? 'bg-[#00c896] text-white shadow-md' : 'text-gray-500'}`}><LayoutGrid size={18} /> CASES</button>
                     </div>
                   </div>
@@ -4202,11 +4207,11 @@ const Members: React.FC = () => {
                           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         
                         if (sortedHistory.length > 0) {
-                          return sortedHistory.map((tx) => {
+                          return sortedHistory.map((tx, idx) => {
                             const isCancelled = tx.type === 'annulation';
                             const isIncoming = !isCancelled && (tx.type === 'depot' || tx.type === 'cotisation');
                             return (
-                              <div key={tx.id} className={`bg-[#121c32] p-4 rounded-2xl border border-white/5 shadow-sm flex items-center justify-between ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
+                              <div key={`${tx.id}_${idx}`} className={`bg-[#121c32] p-4 rounded-2xl border border-white/5 shadow-sm flex items-center justify-between ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
                                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}`}>
                                     {isCancelled ? <X size={18} /> : (isIncoming ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
@@ -4437,14 +4442,14 @@ const Members: React.FC = () => {
                   <div className="bg-[#121c32] rounded-[2rem] p-6 sm:p-8 shadow-sm border border-white/5">
                     <div className="flex items-center justify-between mb-8">
                       <div className="flex items-center gap-3">
-                        <History size={20} className="text-purple-400" />
+                        <HistoryIcon size={20} className="text-purple-400" />
                         <h3 className="text-lg font-black text-white uppercase tracking-tight">Journal des Crédits</h3>
                       </div>
                     </div>
                     <div className="space-y-4">
                       {selectedClient.history.filter(tx => tx.account === 'credit').length > 0 ? (
-                        selectedClient.history.filter(tx => tx.account === 'credit').map((tx) => (
-                          <div key={tx.id} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5">
+                        selectedClient.history.filter(tx => tx.account === 'credit').map((tx, idx) => (
+                          <div key={`${tx.id}_${idx}`} className="flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5">
                             <div className="flex items-center gap-4 flex-1 min-w-0">
                               <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${tx.type === 'remboursement' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                 {tx.type === 'remboursement' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
@@ -4504,11 +4509,11 @@ const Members: React.FC = () => {
                           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         
                         if (sortedHistory.length > 0) {
-                          return sortedHistory.map((tx) => {
+                          return sortedHistory.map((tx, idx) => {
                             const isCancelled = tx.type === 'annulation';
                             const isIncoming = !isCancelled && (tx.destinationAccount === 'garantie' || tx.type === 'depot');
                             return (
-                              <div key={tx.id} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
+                              <div key={`${tx.id}_${idx}`} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
                                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400')}`}>
                                     {isCancelled ? <X size={20} /> : (isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />)}
@@ -4572,11 +4577,11 @@ const Members: React.FC = () => {
                           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         
                         if (sortedHistory.length > 0) {
-                          return sortedHistory.map((tx) => {
+                          return sortedHistory.map((tx, idx) => {
                             const isCancelled = tx.type === 'annulation';
                             const isIncoming = !isCancelled && (tx.destinationAccount === 'partSociale' || tx.type === 'depot');
                             return (
-                              <div key={tx.id} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
+                              <div key={`${tx.id}_${idx}`} className={`flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-pink-500/20 transition-all ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
                                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-400' : (isIncoming ? 'bg-emerald-500/10 text-emerald-400' : 'bg-pink-500/10 text-pink-400')}`}>
                                     {isCancelled ? <X size={20} /> : (isIncoming ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />)}
@@ -4865,7 +4870,7 @@ const Members: React.FC = () => {
                     if (archives.length === 0) {
                       return (
                         <div className="bg-[#121c32] rounded-[2rem] p-12 text-center border border-white/5">
-                          <History size={48} className="text-gray-700 mx-auto mb-4 opacity-20" />
+                          <HistoryIcon size={48} className="text-gray-700 mx-auto mb-4 opacity-20" />
                           <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">Aucun historique de crédit archivé</p>
                         </div>
                       );

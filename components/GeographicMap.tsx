@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { MapPin, Navigation, Search, Layers, ZoomIn, ZoomOut, Filter, User as UserIcon, X, Map as MapIcon, History, ChevronRight, Trash2 } from 'lucide-react';
+import { MapPin, Navigation, Search, Layers, ZoomIn, ZoomOut, Filter, User as UserIcon, X, Map as MapIcon, History as HistoryIcon, ChevronRight, Trash2 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { ClientAccount, User } from '../types';
@@ -231,7 +231,7 @@ const GeographicMap: React.FC = () => {
               onClick={() => setActiveTab('report')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'report' ? 'bg-[#00c896] text-white shadow-lg shadow-[#00c896]/20' : 'text-gray-400 hover:text-white'}`}
             >
-              <History size={16} />
+              <HistoryIcon size={16} />
               Trajets
             </button>
           )}
@@ -595,7 +595,7 @@ const GeographicMap: React.FC = () => {
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center py-20">
                 <div className="w-20 h-20 bg-white rounded-[2.5rem] flex items-center justify-center text-gray-200 mb-6 shadow-sm border border-gray-100">
-                  <History size={40} />
+                  <HistoryIcon size={40} />
                 </div>
                 <p className="text-gray-400 font-black uppercase text-[10px] tracking-[0.3em]">Aucun trajet enregistré pour aujourd'hui</p>
               </div>

@@ -5,7 +5,7 @@ import {
   CheckCircle,
   X,
   FileText,
-  History,
+  History as HistoryIcon,
   ChevronDown
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
@@ -149,7 +149,7 @@ const CreditRequest: React.FC = () => {
             }
 
             const newTx = {
-              id: Date.now().toString(),
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               type: 'annulation',
               account: 'credit',
               amount: c.lastCreditRequest.capital,
@@ -532,7 +532,7 @@ const CreditRequest: React.FC = () => {
       <div className="mt-8 bg-[#121c32] rounded-[2rem] overflow-hidden shadow-xl border border-white/5">
         <div className="bg-white/5 p-6 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <History size={24} className="text-amber-400" />
+            <HistoryIcon size={24} className="text-amber-400" />
             <h3 className="text-lg font-black uppercase tracking-tight">Historique des Demandes</h3>
           </div>
         </div>
@@ -551,8 +551,8 @@ const CreditRequest: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-white/5">
               {members.some(m => m.lastCreditRequest) ? (
-                members.filter(m => m.lastCreditRequest).map((m) => (
-                  <tr key={m.id} className="hover:bg-white/5 transition-colors">
+                members.filter(m => m.lastCreditRequest).map((m, idx) => (
+                  <tr key={`${m.id}-${idx}`} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <p className="text-sm font-black text-white uppercase">{m.name}</p>
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{m.code}</p>

@@ -210,7 +210,7 @@ const AgentPayments: React.FC = () => {
       const allPayments = saved ? JSON.parse(saved) : [];
 
       const newPayment = {
-        id: Date.now().toString(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         agentId: currentUser?.id,
         agentName: currentUser?.identifiant,
         zone: currentUser?.zoneCollecte || currentUser?.zone,

@@ -210,6 +210,9 @@ const FinancialReports: React.FC = () => {
     if (savedExpenses) {
       const allExpenses = JSON.parse(savedExpenses);
       allExpenses.forEach((e: any) => {
+        // Respect soft delete flag
+        if (e.isDeleted) return;
+        
         const eDate = e.date.split('T')[0];
         const expUser = allUsers.find((u: any) => u.identifiant === e.recordedBy);
         const expCaisse = expUser?.caisse || 'N/A';
@@ -578,7 +581,7 @@ const FinancialReports: React.FC = () => {
     setIsPhysicalBalanceValidated(true);
     
     const newHistoryItem = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       date: new Date().toISOString(),
       theoreticalBalance: currentBalance,
       physicalBalance: total,
@@ -974,7 +977,7 @@ const FinancialReports: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {list.map((tx, idx) => (
-              <tr key={tx.id || idx} className="hover:bg-gray-50 transition-colors">
+              <tr key={`${tx.id}-${idx}`} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{new Date(tx.date).toLocaleDateString()}</td>
                 <td className="px-4 py-4">
                   <p className="text-[10px] sm:text-xs font-black text-[#121c32] uppercase">{tx.memberName}</p>
@@ -1433,8 +1436,8 @@ const FinancialReports: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {billetageHistory.length > 0 ? (
-                    billetageHistory.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                    billetageHistory.map((item, idx) => (
+                      <tr key={`${item.id}-${idx}`} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-4 py-4">
                           <p className="text-xs font-black text-[#121c32]">{new Date(item.date).toLocaleDateString()}</p>
                           <p className="text-[10px] font-bold text-gray-400">{new Date(item.date).toLocaleTimeString()}</p>

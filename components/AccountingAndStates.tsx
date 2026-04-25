@@ -120,13 +120,33 @@ const AccountingAndStates: React.FC = () => {
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Déblocage Crédit ${m.name}`, debit: 0, credit: amount });
               } else if (tx.type === 'remboursement' && tx.account === 'credit') {
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Remboursement Crédit ${m.name}`, debit: amount, credit: 0 });
-                allEntries.push({ date, account: '221110', label: 'Prêts aux membres', desc: `Remboursement Crédit ${m.name}`, debit: 0, credit: amount });
+                const cap = tx.rembCapital || amount;
+                const int = tx.rembInterest || 0;
+                const pen = tx.rembPenalty || 0;
+                
+                if (cap > 0) {
+                  allEntries.push({ date, account: '221110', label: 'Prêts aux membres', desc: `Remb. Capital ${m.name}`, debit: 0, credit: cap });
+                }
+                if (int > 0) {
+                  allEntries.push({ date, account: '701110', label: "Produits d'intérêts sur crédits", desc: `Remb. Intérêts ${m.name}`, debit: 0, credit: int });
+                }
+                if (pen > 0) {
+                  allEntries.push({ date, account: '701112', label: "Pénalités sur crédits", desc: `Remb. Pénalités ${m.name}`, debit: 0, credit: pen });
+                }
               } else if (tx.type === 'depot' && tx.account === 'frais') {
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `${m.name} - ${desc}`, debit: amount, credit: 0 });
                 allEntries.push({ date, account: '706114', label: 'Frais de dossier & adhésions', desc: `${m.name} - ${desc}`, debit: 0, credit: amount });
               } else if (tx.type === 'depot' && tx.account === 'partSociale') {
                 allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Part Sociale ${m.name}`, debit: amount, credit: 0 });
                 allEntries.push({ date, account: '101100', label: 'Capital Social', desc: `Part Sociale ${m.name}`, debit: 0, credit: amount });
+              } else if (tx.account === 'garantie') {
+                if (tx.type === 'depot') {
+                  allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Dépôt Garantie ${m.name}`, debit: amount, credit: 0 });
+                  allEntries.push({ date, account: '251120', label: 'Dépôts de garantie', desc: `Dépôt Garantie ${m.name}`, debit: 0, credit: amount });
+                } else if (tx.type === 'retrait') {
+                  allEntries.push({ date, account: '251120', label: 'Dépôts de garantie', desc: `Retrait Garantie ${m.name}`, debit: amount, credit: 0 });
+                  allEntries.push({ date, account: '571100', label: 'Caisse', desc: `Retrait Garantie ${m.name}`, debit: 0, credit: amount });
+                }
               }
             }
           });
@@ -136,7 +156,7 @@ const AccountingAndStates: React.FC = () => {
       // 2. Admin Expenses
       const savedExpenses = localStorage.getItem('microfox_admin_expenses');
       if (savedExpenses) {
-        const expenses = JSON.parse(savedExpenses);
+        const expenses = JSON.parse(savedExpenses).filter((e: any) => !e.isDeleted);
         expenses.forEach((e: any) => {
           const eDate = new Date(e.date);
           if (eDate >= start && eDate <= end) {
@@ -241,16 +261,17 @@ const AccountingAndStates: React.FC = () => {
         totalEpargne: allEntries.filter(e => e.account === '251110').reduce((acc, e) => acc + (e.credit - e.debit), 0),
         totalTontine: allEntries.filter(e => e.account === '252110').reduce((acc, e) => acc + (e.credit - e.debit), 0),
         totalCredit: allEntries.filter(e => e.account === '221110').reduce((acc, e) => acc + (e.debit - e.credit), 0),
-        totalGarantie: 0, // Should be added to journal if tracked
+        totalGarantie: allEntries.filter(e => e.account === '251120').reduce((acc, e) => acc + (e.credit - e.debit), 0),
         totalPartsSociales: allEntries.filter(e => e.account === '101100').reduce((acc, e) => acc + (e.credit - e.debit), 0),
         totalCaisse: allEntries.filter(e => e.account === '571100').reduce((acc, e) => acc + (e.debit - e.credit), 0),
         totalCoffre: allEntries.filter(e => e.account === '571200').reduce((acc, e) => acc + (e.debit - e.credit), 0),
         totalCommissions: allEntries.filter(e => e.account === '706113').reduce((acc, e) => acc + (e.credit - e.debit), 0),
-        totalLivrets: 0, // Should be added to journal if tracked
+        totalInterests: allEntries.filter(e => e.account === '701110' || e.account === '701112').reduce((acc, e) => acc + (e.credit - e.debit), 0),
+        totalLivrets: 0, 
         totalFrais: allEntries.filter(e => e.account === '706114').reduce((acc, e) => acc + (e.credit - e.debit), 0),
         totalDepenses: allEntries.filter(e => e.account === '612000').reduce((acc, e) => acc + (e.debit - e.credit), 0),
       };
-      setStats(newStats);
+      setStats(newStats as any);
     }
   };
 
@@ -800,7 +821,7 @@ const AccountingAndStates: React.FC = () => {
             <tr>
               <td className="px-6 py-4 text-xs font-bold text-gray-600">701110 - Produits d'intérêts sur crédits</td>
               <td className="px-6 py-4 text-right">-</td>
-              <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">{(stats.totalCredit * 0.1).toLocaleString()}</td>
+              <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">{(stats as any).totalInterests.toLocaleString()}</td>
             </tr>
             <tr>
               <td className="px-6 py-4 text-xs font-bold text-gray-600">706113 - Commissions sur tontine & services</td>
@@ -831,7 +852,7 @@ const AccountingAndStates: React.FC = () => {
               <td className="px-6 py-4 text-sm font-black text-[#121c32] uppercase">131000 - RÉSULTAT NET (BÉNÉFICE)</td>
               <td className="px-6 py-4 text-right">-</td>
               <td className="px-6 py-4 text-sm font-black text-blue-600 text-right">
-                {(stats.totalCommissions + stats.totalFrais - 850000 - stats.totalDepenses - 150000).toLocaleString()}
+                {(stats.totalCommissions + (stats as any).totalInterests + stats.totalFrais - 850000 - stats.totalDepenses - 150000).toLocaleString()}
               </td>
             </tr>
           </tbody>

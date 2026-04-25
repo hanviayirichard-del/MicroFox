@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Wallet, Cloud, RefreshCw, AlertCircle, CheckCircle, FileText, User, Trash2, X, ChevronRight, LayoutGrid, History, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Search, Wallet, Cloud, RefreshCw, AlertCircle, CheckCircle, FileText, User, Trash2, X, ChevronRight, LayoutGrid, History as HistoryIcon, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
 const TontineWithdrawal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -574,7 +574,7 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     const newRequest = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       clientId: selectedClient.realClientId || selectedClient.id,
       tontineAccountId: selectedClient.tontineAccountId,
       clientName: selectedClient.name,
@@ -721,8 +721,8 @@ const TontineWithdrawal: React.FC = () => {
                 <span className="bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-md text-[10px] font-black">{pendingRequests.length}</span>
               </div>
               <div className="divide-y divide-gray-50">
-                {pendingRequests.map(req => (
-                  <div key={req.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                {pendingRequests.map((req, idx) => (
+                  <div key={`${req.id}-${idx}`} className="p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
                         <FileText size={16} />
@@ -871,7 +871,7 @@ const TontineWithdrawal: React.FC = () => {
 
                 <div className="space-y-4 pt-4 border-t border-gray-100">
                   <div className="flex items-center gap-2">
-                    <History size={16} className="text-[#121c32]" />
+                    <HistoryIcon size={16} className="text-[#121c32]" />
                     <h4 className="text-[10px] font-black text-[#121c32] uppercase tracking-widest">Journal des cotisations</h4>
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
@@ -889,8 +889,8 @@ const TontineWithdrawal: React.FC = () => {
                           ))
                         )
                       )
-                      .map((tx: any) => (
-                        <div key={tx.id} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between transition-all hover:border-emerald-100">
+                      .map((tx: any, idx: number) => (
+                        <div key={`${tx.id}_${idx}`} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between transition-all hover:border-emerald-100">
                           <div className="flex items-center gap-3">
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.type === 'cotisation' || tx.type === 'depot' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
                               {tx.type === 'cotisation' || tx.type === 'depot' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}

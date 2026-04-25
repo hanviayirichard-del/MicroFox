@@ -447,7 +447,7 @@ const DailyTontine: React.FC = () => {
           const targetAccount = accountsWithIds.find((a: any) => a.id === targetAccountId);
 
           createdTx = {
-            id: Date.now().toString(),
+            id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type: 'cotisation',
             account: 'tontine',
             tontineAccountId: targetAccountId,
@@ -610,9 +610,9 @@ const DailyTontine: React.FC = () => {
             </thead>
             <tbody>
               {filteredClients.length > 0 ? (
-                filteredClients.map((client: any) => (
+                filteredClients.map((client: any, idx) => (
                   <tr 
-                    key={client.id} 
+                    key={`${client.id}-${idx}`} 
                     onClick={() => setSelectedClientId(client.id)}
                     className={`border-b border-gray-800/50 hover:bg-white/5 transition-colors cursor-pointer ${selectedClientId === client.id ? 'bg-[#00c896]/20 border-l-4 border-l-[#00c896]' : ''}`}
                   >

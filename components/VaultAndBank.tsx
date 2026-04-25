@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Vault, Landmark, ArrowRightLeft, TrendingUp, History, Send, ShieldCheck, Filter, Landmark as BankIcon, Calculator, X } from 'lucide-react';
+import { Vault, Landmark, ArrowRightLeft, TrendingUp, History as HistoryIcon, Send, ShieldCheck, Filter, Landmark as BankIcon, Calculator, X } from 'lucide-react';
 
 const VaultAndBank: React.FC = () => {
   const [vaultBalance, setVaultBalance] = useState(() => {
@@ -179,10 +179,10 @@ const VaultAndBank: React.FC = () => {
         const responsibleUserId = cashier?.id || JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id;
 
         const newGapEntry = {
-          id: `gap_${Date.now()}`,
+          id: `gap_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           date: new Date().toISOString(),
           type: 'CAISSIER',
-          sourceId: Date.now().toString(),
+          sourceId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           sourceName: selectedCaisse,
           sourceCode: selectedCaisse,
           declaredAmount: val,
@@ -205,7 +205,7 @@ const VaultAndBank: React.FC = () => {
 
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     const newTx = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: typeLabel,
       from,
       to,
@@ -371,7 +371,7 @@ const VaultAndBank: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <History size={20} className="text-gray-400" />
+            <HistoryIcon size={20} className="text-gray-400" />
             <h2 className="text-sm font-black text-[#121c32] uppercase tracking-widest">Historique des Mouvements</h2>
           </div>
           <TrendingUp size={20} className="text-emerald-500" />
@@ -406,8 +406,8 @@ const VaultAndBank: React.FC = () => {
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
                 if (filteredTxs.length > 0) {
-                  return filteredTxs.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                  return filteredTxs.map((tx, idx) => (
+                    <tr key={`${tx.id}_${idx}`} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <p className="text-xs font-black text-[#121c32]">{new Date(tx.date).toLocaleDateString()}</p>
                         <p className="text-[10px] font-bold text-gray-400">{new Date(tx.date).toLocaleTimeString()}</p>
