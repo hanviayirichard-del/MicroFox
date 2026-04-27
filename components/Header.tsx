@@ -22,9 +22,22 @@ const Header: React.FC<HeaderProps> = ({ activeSection, onOpenSidebar, currentUs
         >
           <Menu size={24} />
         </button>
-        <div className="flex items-center gap-2">
-          <Hexagon className="text-[#00c896]" size={28} />
-          <span className="text-xl font-bold text-white">MicroFoX</span>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full relative overflow-hidden flex items-center justify-center shrink-0 shadow-lg border border-white/10">
+            {/* The "shutter" logo effect with CSS - inspired by user image */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#3b82f6] via-[#22c55e] to-[#22c55e]"></div>
+            <div className="absolute inset-[3px] bg-[#121c32] rounded-full flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-0.5">
+                <div className="w-0.5 h-0.5 rounded-full bg-blue-400"></div>
+                <div className="w-0.5 h-0.5 rounded-full bg-blue-500"></div>
+                <div className="w-0.5 h-0.5 rounded-full bg-blue-300"></div>
+                <div className="w-0.5 h-0.5 rounded-full bg-emerald-400"></div>
+              </div>
+            </div>
+            {/* Lens flare effect */}
+            <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-white/10 rounded-full blur-[1px]"></div>
+          </div>
+          <span className="text-xl font-bold text-white tracking-tighter">MicroFoX</span>
         </div>
         <span className="text-gray-700">|</span>
         <span className="text-sm font-medium text-gray-300 uppercase tracking-wider">{activeSection}</span>

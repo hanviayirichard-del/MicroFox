@@ -43,6 +43,7 @@ import VenteLivrets from './components/VenteLivrets';
 import StocksLivrets from './components/StocksLivrets';
 import Notifications from './components/Notifications';
 import DuplicateAlert from './components/DuplicateAlert';
+import Accueil from './components/Accueil';
 import GuidePratique from './components/GuidePratique';
 import AccountBalance from './components/AccountBalance';
 import MicrofinanceLogin from './components/MicrofinanceLogin';
@@ -170,7 +171,7 @@ const App: React.FC = () => {
     await pullData(mfCode);
   };
 
-  const [activeSection, setActiveSection] = useState<string>('Guide Pratique');
+  const [activeSection, setActiveSection] = useState<string>('Accueil');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(window.innerWidth >= 1024);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     if (sessionStorage.getItem('microfox_session_active') !== 'true') return null;
@@ -648,6 +649,10 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    if (activeSection === 'Accueil') {
+      return <Accueil />;
+    }
+
     if (activeSection === 'Guide Pratique') {
       return <GuidePratique />;
     }

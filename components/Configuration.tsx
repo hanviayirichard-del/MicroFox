@@ -135,11 +135,51 @@ const Configuration: React.FC = () => {
     window.dispatchEvent(new Event('storage'));
   };
 
+  const handleDeleteMf = (code: string) => {
+    if (confirm("Voulez-vous vraiment supprimer cette institution ?")) {
+      const updatedList = microfinances.filter(mf => mf.code !== code);
+      setMicrofinances(updatedList);
+      localStorage.setItem('microfox_microfinances', JSON.stringify(updatedList));
+      alert("Institution supprimée.");
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
+  const handleSelectMf = (mf: Microfinance) => {
+    setMfConfig({
+      ...mfConfig,
+      ...mf
+    });
+    // Scroll to the config form
+    const configForm = document.getElementById('config-institution-form');
+    if (configForm) {
+      configForm.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   const handleSaveMfConfig = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('microfox_mf_config', JSON.stringify(mfConfig));
     localStorage.setItem('microfox_current_mf', mfConfig.nom);
     
+    // Update the list of microfinances to match the current config if it already exists or keep it updated
+    const savedMfList = localStorage.getItem('microfox_microfinances');
+    if (savedMfList) {
+      try {
+        const list: Microfinance[] = JSON.parse(savedMfList);
+        const index = list.findIndex(m => m.nom === mfConfig.nom || m.code === mfConfig.code);
+        if (index !== -1) {
+          list[index] = { ...mfConfig };
+        } else {
+          list.push({ ...mfConfig });
+        }
+        localStorage.setItem('microfox_microfinances', JSON.stringify(list));
+        setMicrofinances(list);
+      } catch (e) {
+        console.error("Error updating mf list:", e);
+      }
+    }
+
     // Also update livret prices for components that depend on it
     const livretPrices = {
       epargne: mfConfig.prixLivretCompte || 300,
@@ -426,7 +466,7 @@ const Configuration: React.FC = () => {
                 type="text" 
                 value={newMfForm.code}
                 onChange={e => setNewMfForm({...newMfForm, code: e.target.value})}
-                placeholder="CODE UNIQUE..."
+                placeholder="Ex: 001FABES"
                 className="w-full p-6 bg-[#1e293b] border-none rounded-3xl outline-none text-white text-xl font-bold"
               />
             </div>
@@ -438,14 +478,30 @@ const Configuration: React.FC = () => {
           {microfinances.length > 0 && (
             <div className="mt-8 pt-8 border-t border-gray-100">
               <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">LISTE DES INSTITUTIONS</h3>
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                 {microfinances.map((mf, index) => (
                   <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                     <div className="flex flex-col">
                       <span className="font-bold text-[#121c32]">{mf.nom}</span>
                       <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Code: {mf.code}</span>
                     </div>
-                    <Building2 size={20} className="text-gray-300" />
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => handleSelectMf(mf)}
+                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Modifier"
+                      >
+                        <Settings size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteMf(mf.code)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                      <Building2 size={20} className="text-gray-300" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -454,7 +510,7 @@ const Configuration: React.FC = () => {
         </div>
 
         {/* Configuration de l'Institution (Image 2) */}
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+        <div id="config-institution-form" className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-4xl font-black text-[#121c32] uppercase tracking-tight mb-8 leading-tight">Configuration de l'Institution</h2>
           
           {showSaveConfirmation && (
@@ -472,6 +528,16 @@ const Configuration: React.FC = () => {
                 onChange={e => setMfConfig({...mfConfig, nom: e.target.value})}
                 className="w-full p-6 bg-[#1e293b] border-none rounded-3xl outline-none text-white text-xl font-bold"
                 placeholder="COOPEC FABES"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-black text-gray-400 uppercase tracking-widest">CODE INSTITUTIONNEL</label>
+              <input 
+                type="text"
+                value={mfConfig.code}
+                onChange={e => setMfConfig({...mfConfig, code: e.target.value})}
+                className="w-full p-6 bg-[#1e293b] border-none rounded-3xl outline-none text-white text-xl font-bold"
+                placeholder="001FABES"
               />
             </div>
             <div className="space-y-2">

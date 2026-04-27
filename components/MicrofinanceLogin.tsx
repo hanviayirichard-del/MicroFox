@@ -221,8 +221,19 @@ const MicrofinanceLogin: React.FC<MicrofinanceLoginProps> = ({ onLogin }) => {
 
       <div className="max-w-md w-full relative z-10 bg-[#121c32]/90 backdrop-blur-2xl rounded-[3rem] shadow-2xl p-10 border border-white/10 animate-in fade-in zoom-in duration-700">
         <div className="flex flex-col items-center text-center mb-10">
-          <div className="w-24 h-24 bg-[#064e3b] rounded-[2rem] flex items-center justify-center text-white mb-6 shadow-2xl shadow-black/20 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
-            <Building2 size={48} strokeWidth={1.5} />
+          <div className="w-24 h-24 rounded-full relative overflow-hidden flex items-center justify-center mb-6 shadow-2xl shadow-black/40 border-4 border-white/10 transform -rotate-3 hover:rotate-0 transition-transform duration-700">
+             {/* The "shutter" logo effect with CSS - inspired by user image */}
+             <div className="absolute inset-0 bg-gradient-to-tr from-[#3b82f6] via-[#22c55e] to-[#22c55e]"></div>
+             <div className="absolute inset-[10px] bg-[#121c32] rounded-full flex items-center justify-center shadow-inner">
+               <div className="grid grid-cols-2 gap-2">
+                 <div className="w-3 h-3 rounded-full bg-blue-400 animate-pulse shadow-[0_0_10px_rgba(96,165,250,0.5)]"></div>
+                 <div className="w-3 h-3 rounded-full bg-blue-500 delay-75"></div>
+                 <div className="w-3 h-3 rounded-full bg-blue-300 delay-150"></div>
+                 <div className="w-3 h-3 rounded-full bg-emerald-400 delay-300 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></div>
+               </div>
+             </div>
+             {/* Lens flare effect */}
+             <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-white/20 rounded-full blur-[5px]"></div>
           </div>
           <h1 className="text-4xl font-black text-white uppercase tracking-tighter italic">MicroFoX</h1>
           <div className="h-1 w-12 bg-emerald-500 rounded-full mt-2 mb-1" />
