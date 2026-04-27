@@ -129,7 +129,7 @@ const App: React.FC = () => {
         // Récupérer les données globales et locataires en parallèle
         const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
         const [globalChanged, tenantChanged] = await Promise.all([
-          pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty),
+          pullFromSupabase('microfox_', nativeSetItem, nativeGetItem, isDirty),
           pullFromSupabase(prefix, nativeSetItem, nativeGetItem, isDirty)
         ]);
         
@@ -384,7 +384,11 @@ const App: React.FC = () => {
     // Global storage overrides
     localStorage.getItem = (key: string) => {
       const mfCode = mfCodeRef.current;
-      if (mfCode && key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_users') {
+      if (mfCode && key.startsWith('microfox_') && 
+          key !== 'microfox_current_mf' && 
+          key !== 'microfox_current_user' && 
+          key !== 'microfox_users' && 
+          key !== 'microfox_permissions') {
         const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
         return nativeGetItem(prefix + key);
       }
@@ -393,10 +397,10 @@ const App: React.FC = () => {
 
     localStorage.setItem = (key: string, value: string) => {
       const mfCode = mfCodeRef.current;
-      const isGlobal = key === 'microfox_users';
+      const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
       
       if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
-        const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+        const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
         const fullKey = isGlobal ? key : prefix + key;
         nativeSetItem(fullKey, value);
 
@@ -444,10 +448,10 @@ const App: React.FC = () => {
 
     localStorage.removeItem = (key: string) => {
       const mfCode = mfCodeRef.current;
-      const isGlobal = key === 'microfox_users';
+      const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
 
       if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
-        const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+        const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
         const fullKey = isGlobal ? key : prefix + key;
         nativeRemoveItem(fullKey);
 

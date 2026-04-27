@@ -987,8 +987,13 @@ const RegistrationForm: React.FC<{
       return;
     }
     
-    if (isTontineSelected && (!tontineNumber || !tontineMise)) {
-      alert("Veuillez remplir les informations du compte tontine.");
+    if (isTontineSelected && !tontineNumber) {
+      alert("Veuillez saisir un numéro de compte tontine.");
+      return;
+    }
+
+    if (isTontineSelected && (tontineMise === undefined || tontineMise === null)) {
+      alert("Veuillez saisir une mise pour le compte tontine.");
       return;
     }
 
@@ -997,42 +1002,36 @@ const RegistrationForm: React.FC<{
 
     if (isTontineSelected && members.some(m => m.tontineAccounts.some(acc => acc.number === tontineNumber))) {
       const next = suggestNextAccountNumber('tontine', members, zone);
-      alert(`Ce numéro de compte tontine est déjà utilisé. Suggestion : ${next}`);
+      alert(`Échec de l'enregistrement : Ce numéro de compte tontine est déjà utilisé. Suggestion : ${next}`);
       return;
     }
 
     if (isEpargneSelected) {
       if (!epargneNumber) {
-        alert("Veuillez saisir le numéro de compte épargne.");
+        alert("Échec de l'enregistrement : Veuillez saisir le numéro de compte épargne.");
         return;
       }
       
-      const savedMembers = localStorage.getItem('microfox_members_data');
-      const members: ClientAccount[] = savedMembers ? JSON.parse(savedMembers) : [];
-      
       if (members.some(m => m.epargneAccountNumber === epargneNumber)) {
         const next = suggestNextAccountNumber('epargne', members);
-        alert(`Ce numéro de compte épargne est déjà utilisé. Suggestion : ${next}`);
+        alert(`Échec de l'enregistrement : Ce numéro de compte épargne est déjà utilisé. Suggestion : ${next}`);
         return;
       }
 
       if (partSocialePayee < 1000) {
-        alert("Le minimum pour la part sociale à l'ouverture est de 1000 F.");
+        alert("Échec de l'enregistrement : Le minimum pour la part sociale à l'ouverture est de 1000 F.");
         return;
       }
       if (fraisAdhesion < 2000) {
-        alert("Les frais d'adhésion minimum sont de 2000 F.");
+        alert("Échec de l'enregistrement : Les frais d'adhésion minimum sont de 2000 F.");
         return;
       }
       if (fraisLivret < prices.epargne) {
-        alert(`Les frais de livret minimum sont de ${prices.epargne} F.`);
+        alert(`Échec de l'enregistrement : Les frais de livret minimum sont de ${prices.epargne} F.`);
         return;
       }
     } else if (isTontineSelected) {
-      if (fraisLivret < prices.tontine) {
-        alert(`Les frais de livret minimum sont de ${prices.tontine} F.`);
-        return;
-      }
+      // Pas de minimum exigé pour le compte tontine selon la demande utilisateur
     }
 
     const clientId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -2937,6 +2936,8 @@ const Members: React.FC = () => {
         localStorage.setItem(agentBalanceKey, (currentAgentBalance + totalInflow).toString());
       }
     }
+    alert("Membre enregistré avec succès !");
+    window.dispatchEvent(new Event('storage'));
   };
 
   const handleUpdateProfile = (updatedClient: ClientAccount) => {

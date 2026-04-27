@@ -57,12 +57,28 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
     const updateState = () => {
       setHasPendingSync(localStorage.getItem('microfox_pending_sync') === 'true' || !!isSyncing);
       const savedPerms = localStorage.getItem('microfox_permissions');
+      
+      const defaults: Record<string, string[]> = {
+        'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
+        'caissier': ['Accueil', 'Membres', 'Analyse', 'Crédit actif', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification', 'Guide Pratique'],
+        'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
+        'auditeur': ['Accueil', 'Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification', 'Guide Pratique'],
+        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
+        'gestionnaire de crédit': ['Accueil', 'Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Crédit actif', 'Autres opérations crédit', 'Notification', 'Guide Pratique']
+      };
+
       if (savedPerms) {
         try {
-          setPermissions(JSON.parse(savedPerms));
+          const parsed = JSON.parse(savedPerms);
+          // S'assurer que le rôle agent commercial a ses accès par défaut si manquants
+          const combined = { ...defaults, ...parsed };
+          setPermissions(combined);
         } catch (e) {
           console.error("Error parsing permissions:", e);
+          setPermissions(defaults);
         }
+      } else {
+        setPermissions(defaults);
       }
 
       // Calculate notification count

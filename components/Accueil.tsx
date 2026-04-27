@@ -5,17 +5,21 @@ const Accueil: React.FC = () => {
   const userStr = localStorage.getItem('microfox_current_user');
   const user = userStr ? JSON.parse(userStr) : null;
   const mfConfigStr = localStorage.getItem('microfox_mf_config');
-  const mfConfig = mfConfigStr ? JSON.parse(mfConfigStr) : { nom: localStorage.getItem('microfox_current_mf') || 'MICROFOX' };
+  const mfConfig = mfConfigStr ? JSON.parse(mfConfigStr) : null;
+  const currentMfName = localStorage.getItem('microfox_current_mf') || 'MICROFOX';
 
   if (!user) return null;
 
+  const displayNom = mfConfig?.nom || user.microfinance || currentMfName;
+  const displayCode = mfConfig?.code || user.codeMF || 'CODE NON DÉFINI';
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6 lg:space-y-10 py-6 lg:py-10 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-full flex flex-col justify-center">
-      <div className="text-center space-y-4 mb-4 lg:mb-8">
+    <div className="max-w-4xl mx-auto space-y-6 lg:space-y-10 py-6 lg:py-10 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-full flex flex-col justify-start">
+      <div className="text-center space-y-4 mb-4">
         <div className="w-20 h-20 lg:w-24 lg:h-24 bg-blue-600/10 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 lg:mb-6 shadow-inner">
           <Home size={40} className="lg:w-12 lg:h-12" />
         </div>
-        <h1 className="text-3xl lg:text-5xl font-black text-white uppercase tracking-tighter leading-tight">Bienvenue sur MICROFOX</h1>
+        <h1 className="text-2xl lg:text-5xl font-black text-white uppercase tracking-tighter leading-tight">Bienvenue sur MICROFOX</h1>
         <p className="text-gray-400 font-bold uppercase tracking-[0.2em] text-[10px] lg:text-xs">Portail d'accès sécurisé à votre institution</p>
       </div>
 
@@ -69,15 +73,15 @@ const Accueil: React.FC = () => {
             <div className="space-y-5">
               <div className="flex flex-col gap-1 py-1">
                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Raison Sociale</span>
-                <span className="text-sm lg:text-base text-emerald-400 font-black uppercase truncate">{mfConfig.nom || 'MICROFOX GLOBAL'}</span>
+                <span className="text-sm lg:text-base text-emerald-400 font-black uppercase truncate">{displayNom}</span>
               </div>
               <div className="flex flex-col gap-1 py-1">
                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Code Officiel</span>
                 <span className="text-sm font-black text-white bg-white/10 px-4 py-1.5 rounded-xl border border-white/5 w-fit font-mono tracking-wider">
-                  {mfConfig.code || user.codeMF || '001FABES'}
+                  {displayCode}
                 </span>
               </div>
-              {mfConfig.adresse && (
+              {mfConfig?.adresse && (
                 <div className="flex items-start gap-2 pt-2 text-[10px] uppercase text-gray-500 tracking-tighter font-bold leading-tight">
                   <MapPin size={12} className="text-emerald-500 shrink-0 mt-0.5" />
                   <span className="truncate-2-lines">{mfConfig.adresse}</span>
