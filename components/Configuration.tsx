@@ -150,7 +150,7 @@ const Configuration: React.FC = () => {
       ...mfConfig,
       ...mf
     });
-    // Scroll to the config form
+    // Défiler vers le formulaire de configuration
     const configForm = document.getElementById('config-institution-form');
     if (configForm) {
       configForm.scrollIntoView({ behavior: 'smooth' });
@@ -162,7 +162,7 @@ const Configuration: React.FC = () => {
     localStorage.setItem('microfox_mf_config', JSON.stringify(mfConfig));
     localStorage.setItem('microfox_current_mf', mfConfig.nom);
     
-    // Update the list of microfinances to match the current config if it already exists or keep it updated
+    // Mettre à jour la liste des microfinances pour correspondre à la configuration actuelle si elle existe déjà ou la garder à jour
     const savedMfList = localStorage.getItem('microfox_microfinances');
     if (savedMfList) {
       try {
@@ -180,7 +180,7 @@ const Configuration: React.FC = () => {
       }
     }
 
-    // Also update livret prices for components that depend on it
+    // Mettre également à jour les prix des livrets pour les composants qui en dépendent
     const livretPrices = {
       epargne: mfConfig.prixLivretCompte || 300,
       tontine: mfConfig.prixLivretTontine || 500

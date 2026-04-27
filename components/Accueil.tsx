@@ -52,7 +52,7 @@ const Accueil: React.FC = () => {
         </div>
 
         <div className="bg-[#121c32] p-6 lg:p-10 rounded-[2rem] lg:rounded-[3rem] shadow-2xl text-white flex flex-col justify-between relative overflow-hidden group">
-          {/* Decorative background element */}
+          {/* Élément de fond décoratif */}
           <div className="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all duration-700"></div>
           
           <div className="space-y-6 relative z-10">

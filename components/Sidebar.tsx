@@ -235,7 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       <div className="p-4 flex items-center justify-between border-b border-gray-800">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full relative overflow-hidden flex items-center justify-center shrink-0 shadow-lg border-2 border-white/10 group-hover:scale-110 transition-transform duration-500">
-            {/* The "shutter" logo effect with CSS - inspired by user image */}
+            {/* L'effet de logo "shutter" avec CSS - inspiré par l'image utilisateur */}
             <div className="absolute inset-0 bg-gradient-to-tr from-[#3b82f6] via-[#22c55e] to-[#22c55e]"></div>
             <div className="absolute inset-[4px] bg-[#121c32] rounded-full flex items-center justify-center">
               <div className="grid grid-cols-2 gap-1">
@@ -245,7 +245,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
                 <div className="w-1 h-1 rounded-full bg-emerald-400 delay-300"></div>
               </div>
             </div>
-            {/* Lens flare effect */}
+            {/* Effet de reflet de lentille */}
             <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-white/10 rounded-full blur-[2px]"></div>
           </div>
           <span className="text-2xl font-black tracking-tighter uppercase italic text-white">MicroFoX</span>

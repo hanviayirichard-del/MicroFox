@@ -53,7 +53,7 @@ import { recordAuditLog } from './utils/audit';
 import { Loader2, Clock, ShieldAlert } from 'lucide-react';
 import { supabase } from './src/supabase';
 
-// Capture native storage methods at module load to avoid issues with overrides
+// Capture des méthodes de stockage natives au chargement du module pour éviter les problèmes avec les surcharges
 const nativeGetItem = localStorage.getItem.bind(localStorage);
 const nativeSetItem = localStorage.setItem.bind(localStorage);
 const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -126,7 +126,7 @@ const App: React.FC = () => {
           }
         }
 
-        // Pull global and tenant data in parallel
+        // Récupérer les données globales et locataires en parallèle
         const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
         const [globalChanged, tenantChanged] = await Promise.all([
           pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty),
@@ -165,7 +165,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Multi-tenant storage isolation
+  // Isolation du stockage multi-locataire
   const setupStorageIsolation = async (mfCode: string) => {
     mfCodeRef.current = mfCode;
     await pullData(mfCode);
@@ -186,7 +186,7 @@ const App: React.FC = () => {
   const [isBlockedBySchedule, setIsBlockedBySchedule] = useState(false);
   const currentMF = currentUser?.microfinance || null;
 
-  // Storage cleanup to reduce database consumption
+  // Nettoyage du stockage pour réduire la consommation de la base de données
   const cleanupStorage = useCallback(() => {
     // 1. Audit Logs Cleanup
     const logs = nativeGetItem('microfox_audit_logs');
