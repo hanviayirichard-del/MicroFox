@@ -36,8 +36,8 @@ const AccountBalance: React.FC = () => {
     const total = m.balances?.credit || 0;
     if (total === 0) return { capital: 0, interest: 0 };
 
-    const initialCap = m.lastCreditDetails?.capital || m.lastCreditRequest?.capital || (total * 0.9);
-    const initialInt = m.lastCreditDetails?.interest || m.lastCreditRequest?.interest || (total * 0.1);
+    const initialCap = m.lastCreditDetails?.capital !== undefined ? m.lastCreditDetails.capital : (m.lastCreditRequest?.capital !== undefined ? m.lastCreditRequest.capital : (total * 0.9));
+    const initialInt = m.lastCreditDetails?.interest !== undefined ? m.lastCreditDetails.interest : (m.lastCreditRequest?.interest !== undefined ? m.lastCreditRequest.interest : (total * 0.1));
     const initialTot = Number(initialCap) + Number(initialInt);
 
     if (Math.abs(total - initialTot) < 1) {

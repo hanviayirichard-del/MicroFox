@@ -103,7 +103,7 @@ const suggestNextAccountNumber = (type: 'epargne' | 'tontine' | 'client', curren
     return `${instCode}${agencyCode}${nextNum}${key}`;
   } else {
     // Tontine zone-based: e.g., 02A1, 02A2
-    const prefix = zone || '01';
+    const prefix = (zone && zone !== '---') ? zone : '01';
     const numbers = currentMembers
       .flatMap(m => m.tontineAccounts)
       .map(acc => acc.number)
@@ -857,12 +857,18 @@ const RegistrationForm: React.FC<{
   const [idType, setIdType] = useState('CNI');
   const [idNumber, setIdNumber] = useState('');
   const [nationality, setNationality] = useState('Togolaise');
-  const [zone, setZone] = useState(currentUser?.role === 'agent commercial' ? (currentUser?.zoneCollecte || '01') : '01');
+  const [zone, setZone] = useState(() => {
+    if (currentUser?.role === 'agent commercial') return currentUser?.zoneCollecte || '01';
+    if (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') return '---';
+    return '01';
+  });
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   
-  const zones = ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
+  const zones = (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') 
+    ? ['---', '01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A']
+    : ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
 
   const [tontineNumber, setTontineNumber] = useState('');
   const [tontineMise, setTontineMise] = useState(500);
@@ -1470,7 +1476,9 @@ const EditProfileForm: React.FC<{
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(client.photo || null);
   const [capturedSignature, setCapturedSignature] = useState<string | null>(client.signature || null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const zones = ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
+  const zones = (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') 
+    ? ['---', '01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A']
+    : ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isSignatureActive, setIsSignatureActive] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
@@ -1858,7 +1866,11 @@ const AddTontineModal: React.FC<{
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || 'null');
   const [number, setNumber] = useState('');
   const [mise, setMise] = useState(500);
-  const [zone, setZone] = useState(currentUser?.role === 'agent commercial' ? (currentUser?.zoneCollecte || '01') : '01');
+  const [zone, setZone] = useState(() => {
+    if (currentUser?.role === 'agent commercial') return currentUser?.zoneCollecte || '01';
+    if (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') return '---';
+    return '01';
+  });
 
   useEffect(() => {
     const savedMembers = localStorage.getItem('microfox_members_data');
@@ -1869,7 +1881,9 @@ const AddTontineModal: React.FC<{
     }
   }, [zone]);
 
-  const zones = ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
+  const zones = (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') 
+    ? ['---', '01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A']
+    : ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto">
@@ -1950,7 +1964,9 @@ const EditTontineModal: React.FC<{
   const [number, setNumber] = useState(initialNumber);
   const [zone, setZone] = useState(currentUser?.role === 'agent commercial' ? (currentUser?.zoneCollecte || initialZone || '01') : (initialZone || '01'));
 
-  const zones = ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
+  const zones = (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') 
+    ? ['---', '01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A']
+    : ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto">
