@@ -1024,6 +1024,19 @@ const RegistrationForm: React.FC<{
         return;
       }
 
+      // Vérification du stock central pour Admin/Directeur
+      const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
+      if (isCentral && fraisLivret > 0) {
+        const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+        if (savedStocks) {
+          const stocks = JSON.parse(savedStocks);
+          if (stocks.central.epargne <= 0) {
+            alert("Échec de l'enregistrement : Stock central de livrets épargne épuisé.");
+            return;
+          }
+        }
+      }
+
       if (partSocialePayee < 1000) {
         alert("Échec de l'enregistrement : Le minimum pour la part sociale à l'ouverture est de 1000 F.");
         return;
@@ -2113,7 +2126,21 @@ const OpenEpargneModal: React.FC<{
                 alert(`Ce numéro de compte épargne est déjà utilisé. Suggestion : ${next}`);
                 return;
               }
-
+              
+              // Vérification du stock central pour Admin/Directeur
+              const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+              const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
+              if (isCentral && livret > 0) {
+                const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+                if (savedStocks) {
+                  const stocks = JSON.parse(savedStocks);
+                  if (stocks.central.epargne <= 0) {
+                    alert("Stock central de livrets épargne épuisé !");
+                    return;
+                  }
+                }
+              }
+              
               if(partSociale < 1000) { alert("Part sociale minimum: 1000 F"); return; }
               if(adhesion < 2000) { alert("Frais d'adhésion minimum: 2000 F"); return; }
               if(livret < prices.epargne) { alert(`Frais de livret minimum: ${prices.epargne} F`); return; }
@@ -2952,6 +2979,23 @@ const Members: React.FC = () => {
         localStorage.setItem(agentBalanceKey, (currentAgentBalance + totalInflow).toString());
       }
     }
+
+    // Mise à jour du stock central pour Admin/Directeur
+    const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
+    if (isCentral) {
+      const soldEpargne = newClient.history.some(tx => tx.description?.toLowerCase().includes('vente de livret épargne'));
+      const soldTontine = newClient.history.some(tx => tx.description?.toLowerCase().includes('vente de livret tontine'));
+      if (soldEpargne || soldTontine) {
+        const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+        if (savedStocks) {
+          const stocks = JSON.parse(savedStocks);
+          if (soldEpargne) stocks.central.epargne = Math.max(0, stocks.central.epargne - 1);
+          if (soldTontine) stocks.central.tontine = Math.max(0, stocks.central.tontine - 1);
+          localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+        }
+      }
+    }
+
     alert("Membre enregistré avec succès !");
     window.dispatchEvent(new Event('storage'));
   };
@@ -3101,8 +3145,20 @@ const Members: React.FC = () => {
       }
     }
 
+    // Mise à jour du stock central pour Admin/Directeur
+    const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
+    if (isCentral && info.livret > 0) {
+      const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+      if (savedStocks) {
+        const stocks = JSON.parse(savedStocks);
+        stocks.central.epargne = Math.max(0, stocks.central.epargne - 1);
+        localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+      }
+    }
+
     setShowOpenEpargneModal(false);
     alert("Compte épargne ouvert avec succès.");
+    window.dispatchEvent(new Event('storage'));
   };
 
   const handleSaveOperation = (op: Omit<Transaction, 'id' | 'date'>, validatedRequestIds?: string[]) => {
