@@ -65,7 +65,7 @@ const AdhesionReport: React.FC = () => {
   });
 
   const currentTotalFrais = filteredAdhesions
-    .filter(tx => tx.account === 'frais')
+    .filter(tx => tx.account === 'frais' && !(tx.description || '').toLowerCase().includes('livret'))
     .reduce((acc, tx) => acc + tx.amount, 0);
     
   const currentTotalParts = filteredAdhesions

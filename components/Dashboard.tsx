@@ -226,8 +226,44 @@ const Dashboard: React.FC = () => {
     const totalCredit = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'credit', targetDate), 0);
     const totalPartSociale = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'partSociale', targetDate), 0);
     const totalGarantie = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'garantie', targetDate), 0);
-    const totalFrais = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'frais', targetDate), 0);
+    const totalFrais = clients.reduce((acc: number, c: any) => {
+      const history = c.history || [];
+      return acc + history.reduce((sum: number, tx: any) => {
+        const txDate = new Date(tx.date);
+        if (txDate > targetDate) return sum;
+        if (tx.account === 'frais' && !(tx.description || '').toLowerCase().includes('livret')) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    }, 0);
     
+    const totalCreditAccorde = clients.reduce((acc: number, c: any) => {
+      const history = c.history || [];
+      return acc + history.reduce((sum: number, tx: any) => {
+        const txDate = new Date(tx.date);
+        if (txDate > targetDate) return sum;
+        if (tx.account === 'credit' && tx.type === 'deblocage') {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    }, 0);
+
+    const totalInteretsPayes = clients.reduce((acc: number, c: any) => {
+      const history = c.history || [];
+      return acc + history.reduce((sum: number, tx: any) => {
+        const txDate = new Date(tx.date);
+        if (txDate > targetDate) return sum;
+        if (tx.account === 'credit' && tx.type === 'remboursement') {
+          const intMatch = (tx.description || '').match(/Int: (\d+)/);
+          if (intMatch) return sum + parseInt(intMatch[1]);
+          if ((tx.description || '').toLowerCase().includes('intérêt')) return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    }, 0);
+
     // Calculer les ventes de livrets séparément
     const totalVentesTontine = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Tontine', targetDate), 0);
     const totalVentesEpargne = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Épargne', targetDate), 0);
@@ -253,6 +289,8 @@ const Dashboard: React.FC = () => {
       fraisAdhesion: totalFrais,
       garanties: totalGarantie,
       encoursCredits: totalCredit,
+      creditAccorde: totalCreditAccorde,
+      interetsPayes: totalInteretsPayes,
       par: 0.00,
       creancesSouffrance: 0,
       solvabilite: solvabilite,
@@ -359,7 +397,43 @@ const Dashboard: React.FC = () => {
     const totalCredit = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'credit', targetDate), 0);
     const totalPartSociale = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'partSociale', targetDate), 0);
     const totalGarantie = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'garantie', targetDate), 0);
-    const totalFrais = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'frais', targetDate), 0);
+    const totalFrais = clients.reduce((acc: number, c: any) => {
+      const history = c.history || [];
+      return acc + history.reduce((sum: number, tx: any) => {
+        const txDate = new Date(tx.date);
+        if (txDate > targetDate) return sum;
+        if (tx.account === 'frais' && !(tx.description || '').toLowerCase().includes('livret')) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    }, 0);
+
+    const totalCreditAccorde = clients.reduce((acc: number, c: any) => {
+      const history = c.history || [];
+      return acc + history.reduce((sum: number, tx: any) => {
+        const txDate = new Date(tx.date);
+        if (txDate > targetDate) return sum;
+        if (tx.account === 'credit' && tx.type === 'deblocage') {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    }, 0);
+
+    const totalInteretsPayes = clients.reduce((acc: number, c: any) => {
+      const history = c.history || [];
+      return acc + history.reduce((sum: number, tx: any) => {
+        const txDate = new Date(tx.date);
+        if (txDate > targetDate) return sum;
+        if (tx.account === 'credit' && tx.type === 'remboursement') {
+          const intMatch = (tx.description || '').match(/Int: (\d+)/);
+          if (intMatch) return sum + parseInt(intMatch[1]);
+          if ((tx.description || '').toLowerCase().includes('intérêt')) return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    }, 0);
     
     const totalVentesTontine = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Tontine', targetDate), 0);
     const totalVentesEpargne = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Épargne', targetDate), 0);
@@ -393,6 +467,8 @@ const Dashboard: React.FC = () => {
       fraisAdhesion: totalFrais,
       garanties: totalGarantie,
       encoursCredits: totalCredit,
+      creditAccorde: totalCreditAccorde,
+      interetsPayes: totalInteretsPayes,
       par: 0.00,
       creancesSouffrance: 0,
       solvabilite: solvabilite,
@@ -643,9 +719,17 @@ const Dashboard: React.FC = () => {
             <span className="text-6xl font-black">{stats.encoursCredits.toLocaleString()}</span>
             <span className="text-2xl font-black">F</span>
           </div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Encours Brut de Crédit</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1 text-center">Crédit en cours</p>
           
           <div className="grid grid-cols-2 gap-3 mt-8">
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+              <p className="text-xs font-bold text-emerald-400 uppercase tracking-tighter mb-1">Crédit Accordé</p>
+              <p className="text-xl font-black text-white">{(stats as any).creditAccorde?.toLocaleString() || 0} F</p>
+            </div>
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-tighter mb-1">Intérêts Payés</p>
+              <p className="text-xl font-black text-white">{(stats as any).interetsPayes?.toLocaleString() || 0} F</p>
+            </div>
             <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
               <p className="text-xs font-bold text-emerald-400 uppercase tracking-tighter mb-1">PAR (90+)</p>
               <p className="text-xl font-black text-white">{stats.par.toFixed(2)}%</p>
