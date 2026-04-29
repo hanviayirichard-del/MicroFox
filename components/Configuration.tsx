@@ -283,7 +283,7 @@ const Configuration: React.FC = () => {
       // Reset main balances
       localStorage.setItem('microfox_vault_balance', '0');
       localStorage.setItem('microfox_bank_balance', '0');
-      localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '40000000');
+      localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '0');
       localStorage.setItem('microfox_cash_balance_CAISSE 1', '0');
       localStorage.setItem('microfox_cash_balance_CAISSE 2', '0');
 

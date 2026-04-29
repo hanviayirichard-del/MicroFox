@@ -5,12 +5,12 @@ import { Vault, Landmark, ArrowRightLeft, TrendingUp, History as HistoryIcon, Se
 const VaultAndBank: React.FC = () => {
   const [vaultBalance, setVaultBalance] = useState(() => {
     const saved = localStorage.getItem('microfox_vault_balance');
-    return saved ? Number(saved) : 0;
+    return saved ? Number(saved) : 20000000;
   });
 
   const [bankBalance, setBankBalance] = useState(() => {
     const saved = localStorage.getItem('microfox_bank_balance');
-    return saved ? Number(saved) : 0;
+    return saved ? Number(saved) : 30000000;
   });
 
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -103,11 +103,11 @@ const VaultAndBank: React.FC = () => {
 
     const savedVault = localStorage.getItem('microfox_vault_balance');
     const savedBank = localStorage.getItem('microfox_bank_balance');
-    let newVault = savedVault ? Number(savedVault) : 10000000;
-    let newBank = savedBank ? Number(savedBank) : 0;
+    let newVault = savedVault ? Number(savedVault) : 20000000;
+    let newBank = savedBank ? Number(savedBank) : 30000000;
     const cashKey = `microfox_cash_balance_${selectedCaisse}`;
     const savedCash = localStorage.getItem(cashKey);
-    let cashBalance = savedCash !== null ? Number(savedCash) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0);
+    let cashBalance = savedCash !== null ? Number(savedCash) : 0;
     let typeLabel = "";
     let to = "";
     let from = "";
@@ -161,7 +161,7 @@ const VaultAndBank: React.FC = () => {
         }
       } else {
         const mainCaisseKey = 'microfox_cash_balance_CAISSE PRINCIPALE';
-        const mainCaisseBalance = Number(localStorage.getItem(mainCaisseKey) || 40000000);
+        const mainCaisseBalance = Number(localStorage.getItem(mainCaisseKey) || 0);
         localStorage.setItem(mainCaisseKey, (mainCaisseBalance + observed).toString());
         to = "CAISSE PRINCIPALE";
       }
@@ -562,9 +562,9 @@ const VaultAndBank: React.FC = () => {
                       onChange={(e) => setSelectedCaisse(e.target.value)}
                       className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-black text-[#121c32] focus:border-indigo-500 transition-all appearance-none uppercase tracking-tight"
                     >
-                      {caisses.filter(c => modalType === 'CtoV' ? c === 'CAISSE PRINCIPALE' : (c === 'CAISSE 1' || c === 'CAISSE 2' || c === 'CAISSE 3' || c === 'CAISSE 4')).map(c => {
+                      {caisses.filter(c => modalType === 'CtoV' ? c === 'CAISSE PRINCIPALE' : (c === 'CAISSE PRINCIPALE' || c === 'CAISSE 1' || c === 'CAISSE 2' || c === 'CAISSE 3' || c === 'CAISSE 4')).map(c => {
                         const saved = localStorage.getItem(`microfox_cash_balance_${c}`);
-                        const bal = saved !== null ? Number(saved) : (c === 'CAISSE PRINCIPALE' ? 40000000 : 0);
+                        const bal = saved !== null ? Number(saved) : 0;
                         return <option key={c} value={c}>{c} ({bal.toLocaleString()} F)</option>;
                       })}
                     </select>
@@ -577,7 +577,7 @@ const VaultAndBank: React.FC = () => {
                     <span className="text-xs font-black text-indigo-600">
                       {(() => {
                         const saved = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-                        return (saved !== null ? Number(saved) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0)).toLocaleString();
+                        return (saved !== null ? Number(saved) : 0).toLocaleString();
                       })()} F
                     </span>
                   </div>
@@ -593,7 +593,7 @@ const VaultAndBank: React.FC = () => {
                    modalType === 'BtoV' ? bankBalance.toLocaleString() : 
                    (() => {
                      const saved = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-                     return (saved !== null ? Number(saved) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0)).toLocaleString();
+                     return (saved !== null ? Number(saved) : 0).toLocaleString();
                    })()} F
                 </p>
               </div>

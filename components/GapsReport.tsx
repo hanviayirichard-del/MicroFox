@@ -125,7 +125,7 @@ const GapsReport: React.FC = () => {
       onConfirm: (obs: string) => {
         const targetCaisse = currentUser.caisse || 'CAISSE PRINCIPALE';
         const balanceKey = `microfox_cash_balance_${targetCaisse}`;
-        const currentBal = Number(localStorage.getItem(balanceKey) || (targetCaisse === 'CAISSE PRINCIPALE' ? 40000000 : 0));
+        const currentBal = Number(localStorage.getItem(balanceKey) || 0);
         let newBal = currentBal;
         let amountAffected = 0;
         let txType = '';

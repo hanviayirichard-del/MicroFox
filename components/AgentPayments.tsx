@@ -304,7 +304,7 @@ const AgentPayments: React.FC = () => {
               >
                 {caisses.map(c => {
                   const saved = localStorage.getItem(`microfox_cash_balance_${c}`);
-                  const bal = saved !== null ? Number(saved) : (c === 'CAISSE PRINCIPALE' ? 40000000 : 0);
+                  const bal = saved !== null ? Number(saved) : 0;
                   return (
                     <option key={c} value={c}>
                       {c} {currentUser?.role !== 'agent commercial' ? `(${bal.toLocaleString()} F)` : ''}
