@@ -4688,6 +4688,7 @@ const Members: React.FC = () => {
 
               {activeTab === 'profile' && selectedClient && (
                 <EditProfileForm 
+                  key={selectedClient.id}
                   client={selectedClient} 
                   onSave={handleUpdateProfile} 
                 />
