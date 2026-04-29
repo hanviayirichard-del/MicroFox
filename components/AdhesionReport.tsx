@@ -31,12 +31,12 @@ const AdhesionReport: React.FC = () => {
         if (member.history) {
           member.history.forEach((tx: any) => {
             if (isCaissier && tx.userId !== user.id) return;
-            const desc = (tx.description || '').toLowerCase();
-            if (desc.includes('adhésion') || desc.includes('part sociale')) {
+            if (tx.account === 'frais' || tx.account === 'partSociale') {
               allAdhesions.push({
                 ...tx,
+                memberId: member.id,
                 memberName: member.name,
-                memberCode: member.code,
+                memberCode: member.code || member.id,
                 restePartSociale: restePS
               });
             }
@@ -65,11 +65,11 @@ const AdhesionReport: React.FC = () => {
   });
 
   const currentTotalFrais = filteredAdhesions
-    .filter(tx => (tx.description || '').toLowerCase().includes('adhésion'))
+    .filter(tx => tx.account === 'frais')
     .reduce((acc, tx) => acc + tx.amount, 0);
     
   const currentTotalParts = filteredAdhesions
-    .filter(tx => (tx.description || '').toLowerCase().includes('part sociale'))
+    .filter(tx => tx.account === 'partSociale')
     .reduce((acc, tx) => acc + tx.amount, 0);
 
   const totalAmount = currentTotalFrais + currentTotalParts;
@@ -195,7 +195,7 @@ const AdhesionReport: React.FC = () => {
         </div>
         <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
           <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Effectif Client</p>
-          <p className="text-xl font-black text-[#121c32] mt-1">{filteredAdhesions.length}</p>
+          <p className="text-xl font-black text-[#121c32] mt-1">{new Set(filteredAdhesions.map(tx => tx.memberId)).size}</p>
         </div>
         <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center justify-center">
            <div className="text-center">
