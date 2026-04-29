@@ -11,6 +11,8 @@ const AdhesionReport: React.FC = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
   });
+  const [totalFrais, setTotalFrais] = useState(0);
+  const [totalParts, setTotalParts] = useState(0);
   const [adhesions, setAdhesions] = useState<any[]>([]);
 
   const loadData = () => {
@@ -30,7 +32,7 @@ const AdhesionReport: React.FC = () => {
           member.history.forEach((tx: any) => {
             if (isCaissier && tx.userId !== user.id) return;
             const desc = (tx.description || '').toLowerCase();
-            if (desc.includes('adhésion')) {
+            if (desc.includes('adhésion') || desc.includes('part sociale')) {
               allAdhesions.push({
                 ...tx,
                 memberName: member.name,
@@ -62,7 +64,15 @@ const AdhesionReport: React.FC = () => {
     return matchesSearch && matchesStartDate && matchesEndDate;
   });
 
-  const totalAmount = filteredAdhesions.reduce((acc, tx) => acc + tx.amount, 0);
+  const currentTotalFrais = filteredAdhesions
+    .filter(tx => (tx.description || '').toLowerCase().includes('adhésion'))
+    .reduce((acc, tx) => acc + tx.amount, 0);
+    
+  const currentTotalParts = filteredAdhesions
+    .filter(tx => (tx.description || '').toLowerCase().includes('part sociale'))
+    .reduce((acc, tx) => acc + tx.amount, 0);
+
+  const totalAmount = currentTotalFrais + currentTotalParts;
 
   const generateHTMLContent = (isForPrint = false) => {
     if (filteredAdhesions.length === 0) return null;
@@ -86,6 +96,8 @@ const AdhesionReport: React.FC = () => {
           td { border-bottom: 1px solid #eee; padding: 10px 8px; font-size: 13px; }
           tr:nth-child(even) { background-color: #f9fafb; }
           .amount { font-weight: bold; }
+          .totals { margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 10px; }
+          .total-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
         </style>
       </head>
       <body>
@@ -94,10 +106,16 @@ const AdhesionReport: React.FC = () => {
           <p class="mf-address">${mfConfig.adresse}</p>
           <p class="mf-address">Tél: ${mfConfig.telephone || 'N/A'} | Code: ${mfConfig.code}</p>
         </div>
-        <h2>Rapport des Frais d'Adhésion</h2>
+        <h2>Rapport des Adhésions</h2>
         <div style="margin-bottom: 20px;">
           <p>Période: ${startDate || 'Début'} au ${endDate || 'Aujourd\'hui'}</p>
-          <p>Total cumulé: <strong>${totalAmount.toLocaleString()} F</strong></p>
+          <div class="totals">
+            <div class="total-row"><span>Total Frais d'Adhésion:</span> <strong>${currentTotalFrais.toLocaleString()} F</strong></div>
+            <div class="total-row"><span>Total Parts Sociales:</span> <strong>${currentTotalParts.toLocaleString()} F</strong></div>
+            <div class="total-row" style="border-top: 1px solid #ddd; padding-top: 5px; margin-top: 5px; font-weight: 900;">
+              <span>TOTAL GÉNÉRAL:</span> <span>${totalAmount.toLocaleString()} F</span>
+            </div>
+          </div>
         </div>
         <table>
           <thead>
@@ -151,7 +169,7 @@ const AdhesionReport: React.FC = () => {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-extrabold text-[#121c32] uppercase tracking-tight">Rapport Adhésions</h1>
-          <p className="text-gray-500 text-sm font-medium mt-1">Suivi des frais d'adhésion des membres</p>
+          <p className="text-gray-500 text-sm font-medium mt-1">Suivi des frais et parts sociales à l'adhésion</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 text-xs font-bold">
           <Cloud size={16} />
@@ -159,21 +177,29 @@ const AdhesionReport: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-[#121c32] p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden group">
           <div className="absolute top-4 right-4 text-emerald-400/20 group-hover:scale-110 transition-transform">
-            <UserCheck size={48} strokeWidth={1} />
+            <UserCheck size={32} strokeWidth={1} />
           </div>
-          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Total Adhésions</p>
-          <p className="text-3xl font-black text-emerald-400 mt-1">{totalAmount.toLocaleString()} F</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Général</p>
+          <p className="text-2xl font-black text-emerald-400 mt-1">{totalAmount.toLocaleString()} F</p>
         </div>
         <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-          <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Nombre d'Adhésions</p>
-          <p className="text-3xl font-black text-[#121c32] mt-1">{filteredAdhesions.length}</p>
+          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Parts Sociales</p>
+          <p className="text-xl font-black text-blue-600 mt-1">{currentTotalParts.toLocaleString()} F</p>
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Frais Adhésion</p>
+          <p className="text-xl font-black text-amber-600 mt-1">{currentTotalFrais.toLocaleString()} F</p>
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Effectif Client</p>
+          <p className="text-xl font-black text-[#121c32] mt-1">{filteredAdhesions.length}</p>
         </div>
         <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center justify-center">
            <div className="text-center">
-             <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Période Active</p>
+             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Période Active</p>
              <div className="flex items-center gap-2 text-xs font-bold text-[#121c32]">
                <Calendar size={14} className="text-emerald-500" />
                <span>{new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}</span>

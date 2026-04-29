@@ -29,10 +29,7 @@ const Dashboard: React.FC = () => {
       const txDate = new Date(tx.date);
       if (txDate > date) return sum;
       
-      // Exclure les ventes de livrets des soldes de dépôts réguliers
-      const desc = (tx.description || '').toLowerCase();
-      if (desc.includes('vente de livret')) return sum;
-
+      // Note: On compte tout pour le dashboard réglementaire si c'est le bon compte
       if (tx.account === account) {
         if (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'deblocage') return sum + tx.amount;
         if (tx.type === 'retrait' || tx.type === 'remboursement' || tx.type === 'transfert') return sum - tx.amount;
@@ -219,9 +216,11 @@ const Dashboard: React.FC = () => {
     }
 
     const targetDate = new Date();
+    targetDate.setHours(23, 59, 59, 999);
     
     const totalEpargne = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'epargne', targetDate), 0);
     const tontineData = calculateNetTontine(clients, targetDate);
+    const totalTontineGross = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'tontine', targetDate), 0);
     const totalTontineNet = tontineData.netBalance;
     const totalTontineCommission = tontineData.totalCommissions;
     const totalCredit = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'credit', targetDate), 0);
@@ -234,8 +233,7 @@ const Dashboard: React.FC = () => {
     const totalVentesEpargne = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Épargne', targetDate), 0);
 
     // Les ressources totales sont la somme de tous les comptes qui ont reçu de l'argent
-    // Note: Les ventes de livrets et commissions sont déjà incluses dans les soldes des comptes (frais, epargne ou tontine)
-    const deposits = totalEpargne + totalTontineNet + totalTontineCommission + totalPartSociale + totalGarantie + totalFrais;
+    const deposits = totalEpargne + totalTontineGross + totalPartSociale + totalGarantie + totalFrais;
     
     const liquidite = (totalEpargne + totalTontineNet) > 0 ? (totalCredit / (totalEpargne + totalTontineNet)) * 100 : 0;
     const solvabilite = totalCredit > 0 ? (totalPartSociale / totalCredit) * 100 : 0;
@@ -322,6 +320,11 @@ const Dashboard: React.FC = () => {
     }
     const start = startDate ? new Date(startDate) : new Date(0);
     const end = endDate ? new Date(endDate) : new Date();
+    
+    // Ajuster end pour inclure toute la journée
+    if (endDate) {
+      end.setHours(23, 59, 59, 999);
+    }
     const targetDate = end;
     
     const isPeriodDefined = !!(startDate && endDate);
@@ -350,6 +353,7 @@ const Dashboard: React.FC = () => {
 
     const totalEpargne = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'epargne', targetDate), 0);
     const tontineData = calculateNetTontine(clients, targetDate);
+    const totalTontineGross = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'tontine', targetDate), 0);
     const totalTontineNet = tontineData.netBalance;
     const totalTontineCommission = tontineData.totalCommissions;
     const totalCredit = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'credit', targetDate), 0);
@@ -360,7 +364,7 @@ const Dashboard: React.FC = () => {
     const totalVentesTontine = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Tontine', targetDate), 0);
     const totalVentesEpargne = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Épargne', targetDate), 0);
 
-    const deposits = totalEpargne + totalTontineNet + totalTontineCommission + totalPartSociale + totalGarantie + totalFrais;
+    const deposits = totalEpargne + totalTontineGross + totalPartSociale + totalGarantie + totalFrais;
     const liquidite = (totalEpargne + totalTontineNet) > 0 ? (totalCredit / (totalEpargne + totalTontineNet)) * 100 : 0;
     const solvabilite = totalCredit > 0 ? (totalPartSociale / totalCredit) * 100 : 0;
 
