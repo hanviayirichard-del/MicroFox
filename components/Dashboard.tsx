@@ -223,7 +223,10 @@ const Dashboard: React.FC = () => {
     const totalTontineGross = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'tontine', targetDate), 0);
     const totalTontineNet = tontineData.netBalance;
     const totalTontineCommission = tontineData.totalCommissions;
-    const totalCredit = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'credit', targetDate), 0);
+    
+    // Utiliser les soldes directs pour le crédit en cours comme dans la balance des comptes
+    const totalCredit = clients.reduce((acc: number, c: any) => acc + (c.balances?.credit || 0), 0);
+    
     const totalPartSociale = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'partSociale', targetDate), 0);
     const totalGarantie = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'garantie', targetDate), 0);
     const totalFrais = clients.reduce((acc: number, c: any) => {
@@ -240,7 +243,11 @@ const Dashboard: React.FC = () => {
     
     const totalCreditAccorde = clients.reduce((acc: number, c: any) => {
       const history = c.history || [];
+      // On dédoublonne par ID de transaction si doublons
+      const seenIds = new Set();
       return acc + history.reduce((sum: number, tx: any) => {
+        if (seenIds.has(tx.id)) return sum;
+        seenIds.add(tx.id);
         const txDate = new Date(tx.date);
         if (txDate > targetDate) return sum;
         if (tx.account === 'credit' && tx.type === 'deblocage') {
@@ -394,7 +401,10 @@ const Dashboard: React.FC = () => {
     const totalTontineGross = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'tontine', targetDate), 0);
     const totalTontineNet = tontineData.netBalance;
     const totalTontineCommission = tontineData.totalCommissions;
-    const totalCredit = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'credit', targetDate), 0);
+    
+    // Utiliser les soldes directs pour le crédit en cours comme dans la balance des comptes
+    const totalCredit = clients.reduce((acc: number, c: any) => acc + (c.balances?.credit || 0), 0);
+    
     const totalPartSociale = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'partSociale', targetDate), 0);
     const totalGarantie = clients.reduce((acc: number, c: any) => acc + getBalanceAtDate(c.history || [], 'garantie', targetDate), 0);
     const totalFrais = clients.reduce((acc: number, c: any) => {
@@ -411,7 +421,11 @@ const Dashboard: React.FC = () => {
 
     const totalCreditAccorde = clients.reduce((acc: number, c: any) => {
       const history = c.history || [];
+      // On dédoublonne par ID de transaction si doublons
+      const seenIds = new Set();
       return acc + history.reduce((sum: number, tx: any) => {
+        if (seenIds.has(tx.id)) return sum;
+        seenIds.add(tx.id);
         const txDate = new Date(tx.date);
         if (txDate > targetDate) return sum;
         if (tx.account === 'credit' && tx.type === 'deblocage') {
