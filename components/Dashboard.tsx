@@ -737,10 +737,6 @@ const Dashboard: React.FC = () => {
           
           <div className="grid grid-cols-2 gap-3 mt-8">
             <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-              <p className="text-xs font-bold text-emerald-400 uppercase tracking-tighter mb-1">Crédit Accordé</p>
-              <p className="text-xl font-black text-white">{(stats as any).creditAccorde?.toLocaleString() || 0} F</p>
-            </div>
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
               <p className="text-xs font-bold text-blue-400 uppercase tracking-tighter mb-1">Intérêts Payés</p>
               <p className="text-xl font-black text-white">{(stats as any).interetsPayes?.toLocaleString() || 0} F</p>
             </div>
