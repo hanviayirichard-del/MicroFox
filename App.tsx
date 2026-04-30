@@ -462,6 +462,16 @@ const App: React.FC = () => {
               const localValue = nativeGetItem(key);
               
               if (remoteValue && remoteValue !== localValue) {
+                // Skip if locally dirty to avoid overwriting newer local changes
+                const isDirty = () => {
+                  try {
+                    const dirty = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+                    return Array.isArray(dirty) && dirty.includes(key);
+                  } catch (e) { return false; }
+                };
+
+                if (isDirty()) return;
+
                 const { mergeJSON } = await import('./src/utils/supabaseSync');
                 const finalValue = localValue ? mergeJSON(localValue, remoteValue) : remoteValue;
                 

@@ -203,9 +203,11 @@ const VenteLivrets: React.FC = () => {
 
     const price = selectedType === 'epargne' ? prices.epargne : prices.tontine;
     const agentName = currentUser?.identifiant || "Inconnu";
+    const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
 
     // Check stock
-    if (!agentStocks || agentStocks[selectedType] <= 0) {
+    const currentAvailable = isCentral ? centralStocks[selectedType] : (agentStocks?.[selectedType] || 0);
+    if (currentAvailable <= 0) {
       setErrorMessage(`Impossible de vendre : Votre stock de livrets ${selectedType === 'epargne' ? 'épargne' : 'tontine'} est épuisé (0 restant).`);
       setTimeout(() => setErrorMessage(null), 5000);
       return;
@@ -252,6 +254,18 @@ const VenteLivrets: React.FC = () => {
       const cashKey = `microfox_cash_balance_${targetCaisse}`;
       const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
       localStorage.setItem(cashKey, (currentCashBalance + price).toString());
+      
+      // Mise à jour du stock central pour Admin/Directeur
+      const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
+      if (isCentral) {
+        const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+        if (savedStocks) {
+          const stocks = JSON.parse(savedStocks);
+          if (selectedType === 'epargne') stocks.central.epargne = Math.max(0, stocks.central.epargne - 1);
+          else if (selectedType === 'tontine') stocks.central.tontine = Math.max(0, stocks.central.tontine - 1);
+          localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+        }
+      }
     } else if (currentUser?.role === 'agent commercial') {
       const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
       const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
