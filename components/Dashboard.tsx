@@ -497,7 +497,14 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     window.addEventListener('storage', syncStats);
-    return () => window.removeEventListener('storage', syncStats);
+    // Request a fresh sync from Supabase when dashboard opens
+    window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+    // Small extra delay to recalculate after potential sync
+    const timer = setTimeout(syncStats, 3000);
+    return () => {
+      window.removeEventListener('storage', syncStats);
+      clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {

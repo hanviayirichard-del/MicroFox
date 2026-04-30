@@ -142,8 +142,11 @@ export const pullFromSupabase = async (
         const localValue = originalGetItem(item.key);
         if (localValue !== item.value) {
           // If the key is dirty locally, we skip pulling it to avoid overwriting unpushed changes
+          // EXCEPT if the local value is empty/initial (like on a fresh device setup)
           if (isDirty && isDirty(item.key)) {
-            return;
+            if (localValue && localValue !== '[]' && localValue !== '{}' && localValue !== 'null') {
+              return;
+            }
           }
 
           const finalValue = localValue ? mergeJSON(localValue, item.value) : item.value;
