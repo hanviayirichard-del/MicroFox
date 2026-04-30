@@ -183,6 +183,7 @@ localStorage.removeItem = (key: string) => {
 
 const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = React.useRef(false);
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [syncVersion, setSyncVersion] = useState(0);
   const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
@@ -196,6 +197,9 @@ const App: React.FC = () => {
       console.log('Skipping sync due to offline mode');
       return;
     }
+    if (isSyncingRef.current) return;
+    
+    isSyncingRef.current = true;
     setIsSyncing(true);
     setIsBackgroundSyncing(false);
     
@@ -242,11 +246,11 @@ const App: React.FC = () => {
           const results = await Promise.all(pushPromises);
           const pushSuccess = results.every(ok => ok);
           
-          if (!pushSuccess && import.meta.env.VITE_SUPABASE_URL) {
+          if (!pushSuccess && (import.meta as any).env?.VITE_SUPABASE_URL) {
             console.warn('La synchronisation vers le serveur a échoué. Vos modifications locales seront synchronisées ultérieurement.');
           }
           
-          if (pushSuccess || !import.meta.env.VITE_SUPABASE_URL) {
+          if (pushSuccess || !(import.meta as any).env?.VITE_SUPABASE_URL) {
             // Clear pending sync flag only if all pushed successfully or no sync configured
             nativeRemoveItem('microfox_pending_sync');
             nativeRemoveItem('microfox_dirty_keys');
@@ -284,13 +288,12 @@ const App: React.FC = () => {
       if (result === 'timeout') {
         console.warn('Initial sync timed out, continuing in background');
         setIsBackgroundSyncing(true);
-        setIsSyncing(false);
-      } else {
-        setIsSyncing(false);
       }
     } catch (error) {
       console.error('Error during initial sync:', error);
+    } finally {
       setIsSyncing(false);
+      isSyncingRef.current = false;
     }
   };
 
@@ -941,7 +944,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (isSyncing) {
+  if (isSyncing && !currentUser) {
     return (
       <div className="h-screen bg-[#0a1226] flex flex-col items-center justify-center text-white p-6 text-center">
         <Loader2 className="w-12 h-12 text-[#00c896] animate-spin mb-4" />
@@ -986,6 +989,13 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#0a1226] overflow-hidden relative text-gray-100">
+      {isSyncing && (
+        <div className="fixed inset-0 z-[300] bg-[#0a1226]/80 flex flex-col items-center justify-center text-white p-6 text-center backdrop-blur-sm">
+          <Loader2 className="w-12 h-12 text-[#00c896] animate-spin mb-4" />
+          <h2 className="text-xl font-black uppercase tracking-widest mb-2">Synchronisation</h2>
+          <p className="text-gray-400 text-sm max-w-xs">Mise à jour de vos données...</p>
+        </div>
+      )}
       {welcomeMessage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
           <div className="bg-emerald-600 text-white px-12 py-8 rounded-[3rem] font-black uppercase tracking-[0.2em] shadow-[0_0_100px_rgba(16,185,129,0.4)] animate-in fade-in zoom-in duration-500 text-2xl sm:text-4xl text-center">
