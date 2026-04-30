@@ -223,6 +223,10 @@ const App: React.FC = () => {
           if (usersData) {
             pushPromises.push(syncToSupabase('microfox_users', usersData));
           }
+          const permsData = nativeGetItem('microfox_permissions');
+          if (permsData) {
+            pushPromises.push(syncToSupabase('microfox_permissions', permsData));
+          }
           
           // Push all tenant-specific data
           for (let i = 0; i < localStorage.length; i++) {
