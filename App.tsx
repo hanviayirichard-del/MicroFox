@@ -58,6 +58,129 @@ const nativeGetItem = localStorage.getItem.bind(localStorage);
 const nativeSetItem = localStorage.setItem.bind(localStorage);
 const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
 
+// Variable globale pour stocker le code MF courant afin que les surcharges y aient accès immédiatement
+let globalMfCode = nativeGetItem('microfox_current_mf');
+
+// Surcharges globales du stockage
+localStorage.getItem = (key: string) => {
+  const mfCode = globalMfCode;
+  if (mfCode && key.startsWith('microfox_') && 
+      key !== 'microfox_current_mf' && 
+      key !== 'microfox_current_user' && 
+      key !== 'microfox_users' && 
+      key !== 'microfox_permissions') {
+    const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+    return nativeGetItem(prefix + key);
+  }
+  return nativeGetItem(key);
+};
+
+localStorage.setItem = (key: string, value: string) => {
+  const mfCode = globalMfCode;
+  const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
+  
+  if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+    const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+    const fullKey = isGlobal ? key : prefix + key;
+    nativeSetItem(fullKey, value);
+
+    // Mark as dirty locally to avoid being overwritten by a pull before this change is pushed
+    if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+      try {
+        const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+        if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+          dirtyKeys.push(fullKey);
+          nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+        }
+      } catch (e) {
+        nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
+      }
+    }
+
+    // Sync to Supabase in background if not in offline mode
+    if (nativeGetItem('microfox_offline_mode') !== 'true') {
+      import('./src/utils/supabaseSync').then(async m => {
+        const success = await m.syncToSupabase(fullKey, value);
+        if (success) {
+          try {
+            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+            if (Array.isArray(dirtyKeys)) {
+              const updated = dirtyKeys.filter(k => k !== fullKey);
+              if (updated.length === 0) {
+                nativeRemoveItem('microfox_dirty_keys');
+                nativeRemoveItem('microfox_pending_sync');
+              } else {
+                nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+              }
+            }
+          } catch (e) {}
+        }
+      });
+    }
+    // Mark as pending sync for UI feedback
+    if (key !== 'microfox_pending_sync') {
+      nativeSetItem('microfox_pending_sync', 'true');
+    }
+  } else {
+    nativeSetItem(key, value);
+  }
+};
+
+localStorage.removeItem = (key: string) => {
+  const mfCode = globalMfCode;
+  const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
+
+  if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+    const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+    const fullKey = isGlobal ? key : prefix + key;
+    nativeRemoveItem(fullKey);
+
+    // Mark as dirty locally
+    if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+      try {
+        const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+        if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+          dirtyKeys.push(fullKey);
+          nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+        }
+      } catch (e) {
+        nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
+      }
+    }
+
+    // Remove from Supabase in background if not in offline mode
+    if (nativeGetItem('microfox_offline_mode') !== 'true') {
+      import('./src/supabase').then(async m => {
+        if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
+          const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
+          if (!error) {
+            try {
+              const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+              if (Array.isArray(dirtyKeys)) {
+                const updated = dirtyKeys.filter(k => k !== fullKey);
+                if (updated.length === 0) {
+                  nativeRemoveItem('microfox_dirty_keys');
+                  nativeRemoveItem('microfox_pending_sync');
+                } else {
+                  nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                }
+              }
+            } catch (e) {}
+          } else {
+            console.error('Error removing from Supabase:', error);
+          }
+        }
+      });
+    }
+    // Mark as pending sync for UI feedback
+    if (key !== 'microfox_pending_sync') {
+      nativeSetItem('microfox_pending_sync', 'true');
+    }
+  } else {
+    nativeRemoveItem(key);
+  }
+};
+
 const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
@@ -135,6 +258,8 @@ const App: React.FC = () => {
         
         if (globalChanged || tenantChanged) {
           setSyncVersion(v => v + 1);
+          // Dispatch storage event to notify components to reload from localStorage
+          window.dispatchEvent(new Event('storage'));
         }
         return 'success';
       } catch (error) {
@@ -167,6 +292,7 @@ const App: React.FC = () => {
 
   // Isolation du stockage multi-locataire
   const setupStorageIsolation = async (mfCode: string) => {
+    globalMfCode = mfCode;
     mfCodeRef.current = mfCode;
     await pullData(mfCode);
   };
@@ -381,125 +507,7 @@ const App: React.FC = () => {
   }, [currentUser, isOfflineMode]);
 
   useEffect(() => {
-    // Global storage overrides
-    localStorage.getItem = (key: string) => {
-      const mfCode = mfCodeRef.current;
-      if (mfCode && key.startsWith('microfox_') && 
-          key !== 'microfox_current_mf' && 
-          key !== 'microfox_current_user' && 
-          key !== 'microfox_users' && 
-          key !== 'microfox_permissions') {
-        const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-        return nativeGetItem(prefix + key);
-      }
-      return nativeGetItem(key);
-    };
-
-    localStorage.setItem = (key: string, value: string) => {
-      const mfCode = mfCodeRef.current;
-      const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
-      
-      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
-        const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
-        const fullKey = isGlobal ? key : prefix + key;
-        nativeSetItem(fullKey, value);
-
-        // Mark as dirty locally to avoid being overwritten by a pull before this change is pushed
-        if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
-          try {
-            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-            if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
-              dirtyKeys.push(fullKey);
-              nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
-            }
-          } catch (e) {
-            nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
-          }
-        }
-
-        // Sync to Supabase in background if not in offline mode
-        if (nativeGetItem('microfox_offline_mode') !== 'true') {
-          import('./src/utils/supabaseSync').then(async m => {
-            const success = await m.syncToSupabase(fullKey, value);
-            if (success) {
-              try {
-                const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-                if (Array.isArray(dirtyKeys)) {
-                  const updated = dirtyKeys.filter(k => k !== fullKey);
-                  if (updated.length === 0) {
-                    nativeRemoveItem('microfox_dirty_keys');
-                    nativeRemoveItem('microfox_pending_sync');
-                  } else {
-                    nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
-                  }
-                }
-              } catch (e) {}
-            }
-          });
-        }
-        // Mark as pending sync for UI feedback
-        if (key !== 'microfox_pending_sync') {
-          nativeSetItem('microfox_pending_sync', 'true');
-        }
-      } else {
-        nativeSetItem(key, value);
-      }
-    };
-
-    localStorage.removeItem = (key: string) => {
-      const mfCode = mfCodeRef.current;
-      const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
-
-      if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
-        const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
-        const fullKey = isGlobal ? key : prefix + key;
-        nativeRemoveItem(fullKey);
-
-        // Mark as dirty locally
-        if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
-          try {
-            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-            if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
-              dirtyKeys.push(fullKey);
-              nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
-            }
-          } catch (e) {
-            nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
-          }
-        }
-
-        // Remove from Supabase in background if not in offline mode
-        if (nativeGetItem('microfox_offline_mode') !== 'true') {
-          import('./src/supabase').then(async m => {
-            if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-              const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
-              if (!error) {
-                try {
-                  const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-                  if (Array.isArray(dirtyKeys)) {
-                    const updated = dirtyKeys.filter(k => k !== fullKey);
-                    if (updated.length === 0) {
-                      nativeRemoveItem('microfox_dirty_keys');
-                      nativeRemoveItem('microfox_pending_sync');
-                    } else {
-                      nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
-                    }
-                  }
-                } catch (e) {}
-              } else {
-                console.error('Error removing from Supabase:', error);
-              }
-            }
-          });
-        }
-        // Mark as pending sync for UI feedback
-        if (key !== 'microfox_pending_sync') {
-          nativeSetItem('microfox_pending_sync', 'true');
-        }
-      } else {
-        nativeRemoveItem(key);
-      }
-    };
+    // Audit logs cleaning etc handled at intervals below
 
     // Initial data pull
     const mfCodeOnLoad = localStorage.getItem('microfox_current_mf');
@@ -877,6 +885,9 @@ const App: React.FC = () => {
     sessionStorage.removeItem('microfox_session_active');
     nativeRemoveItem('microfox_current_mf');
     nativeRemoveItem('microfox_current_user');
+    
+    // Reset global MF code
+    globalMfCode = null;
     
     // Explicitly reset state before reload
     setIsSyncing(false);
