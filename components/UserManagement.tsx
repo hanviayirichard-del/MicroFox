@@ -67,7 +67,7 @@ const UserManagement: React.FC = () => {
     'agent commercial'
   ];
 
-  useEffect(() => {
+  const loadUsers = () => {
     const savedUsers = localStorage.getItem('microfox_users');
     if (savedUsers) {
       try {
@@ -79,6 +79,12 @@ const UserManagement: React.FC = () => {
         console.error("Error parsing users in management:", e);
       }
     }
+  };
+
+  useEffect(() => {
+    loadUsers();
+    window.addEventListener('storage', loadUsers);
+    return () => window.removeEventListener('storage', loadUsers);
   }, []);
 
   const handleCreateUser = (e: React.FormEvent) => {

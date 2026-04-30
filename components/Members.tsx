@@ -2198,6 +2198,56 @@ const Members: React.FC = () => {
 
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
 
+  const reloadClients = () => {
+    const saved = localStorage.getItem('microfox_members_data');
+    let loadedClients: ClientAccount[] = [];
+    
+    if (saved) {
+      try {
+        loadedClients = JSON.parse(saved);
+      } catch (e) {
+        console.error("Error parsing members data:", e);
+      }
+    } else {
+      loadedClients = [
+        {
+          id: '1',
+          name: 'KOFFI Ama Gertrude',
+          code: '41110A001254',
+          epargneAccountNumber: 'EP-44201',
+          status: 'Actif',
+          balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
+          creditStatus: 'Sain',
+          tontineAccounts: [{ id: '1_tn_0', number: 'TN-8829-01', dailyMise: 500, balance: 0 }],
+          history: [],
+          phoneNumber: '90 12 34 56',
+          address: 'Lomé, Rue 123, Maison 45',
+          gender: 'Féminin', nationality: 'Togolaise', profession: 'Revendeuse',
+          dossierInstruitPar: 'Agent de Crédit Principal', dureeCredit: '3 Mois'
+        },
+        { id: '2', name: 'MENSAH Yao Jean', code: '41110A001289', epargneAccountNumber: 'EP-99102', status: 'Actif', balances: { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 }, creditStatus: 'Sain', tontineAccounts: [], history: [], gender: 'Masculin', nationality: 'Togolaise' }
+      ];
+    }
+
+    const finalClients = loadedClients.map(c => {
+      if (!c.history || c.history.length === 0) {
+        const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
+        if (savedHistory) {
+          try {
+            return { ...c, history: JSON.parse(savedHistory) };
+          } catch (e) {}
+        }
+      }
+      return c;
+    });
+    setClients(finalClients);
+  };
+
+  useEffect(() => {
+    window.addEventListener('storage', reloadClients);
+    return () => window.removeEventListener('storage', reloadClients);
+  }, []);
+
   useEffect(() => {
     const loadPending = () => {
       const savedPending = localStorage.getItem('microfox_pending_withdrawals');

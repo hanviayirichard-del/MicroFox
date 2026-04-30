@@ -464,6 +464,7 @@ const App: React.FC = () => {
                 if (finalValue !== localValue) {
                   nativeSetItem(key, finalValue);
                   setSyncVersion(v => v + 1);
+                  window.dispatchEvent(new Event('storage'));
                 }
               }
             }
@@ -493,6 +494,7 @@ const App: React.FC = () => {
           const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem, isDirty);
           if (globalChanged || tenantChanged) {
             setSyncVersion(v => v + 1);
+            window.dispatchEvent(new Event('storage'));
           }
         }).finally(() => {
           setIsBackgroundSyncing(false);
