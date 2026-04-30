@@ -249,27 +249,28 @@ const VenteLivrets: React.FC = () => {
     localStorage.setItem('microfox_pending_sync', 'true');
 
     // 3. Update caisse or agent balance
-    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' ? 'CAISSE PRINCIPALE' : null));
+    const targetCaisse = currentUser?.role === 'agent commercial' ? null : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
     if (targetCaisse) {
       const cashKey = `microfox_cash_balance_${targetCaisse}`;
       const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
       localStorage.setItem(cashKey, (currentCashBalance + price).toString());
-      
-      // Mise à jour du stock central pour Admin/Directeur
-      const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
-      if (isCentral) {
-        const savedStocks = localStorage.getItem('microfox_livrets_stocks');
-        if (savedStocks) {
-          const stocks = JSON.parse(savedStocks);
-          if (selectedType === 'epargne') stocks.central.epargne = Math.max(0, stocks.central.epargne - 1);
-          else if (selectedType === 'tontine') stocks.central.tontine = Math.max(0, stocks.central.tontine - 1);
-          localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
-        }
-      }
     } else if (currentUser?.role === 'agent commercial') {
       const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
       const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
       localStorage.setItem(agentBalanceKey, (currentAgentBalance + price).toString());
+    }
+
+    // Mise à jour du stock central pour Admin/Directeur
+    if (isCentral) {
+      const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+      if (savedStocks) {
+        const stocks = JSON.parse(savedStocks);
+        if (stocks.central) {
+          if (selectedType === 'epargne') stocks.central.epargne = Math.max(0, (stocks.central.epargne || 0) - 1);
+          else if (selectedType === 'tontine') stocks.central.tontine = Math.max(0, (stocks.central.tontine || 0) - 1);
+          localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+        }
+      }
     }
 
     loadData(); // Update journal and stocks immediately

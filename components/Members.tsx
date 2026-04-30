@@ -3033,15 +3033,23 @@ const Members: React.FC = () => {
     // Mise à jour du stock central pour Admin/Directeur
     const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
     if (isCentral) {
-      const soldEpargne = newClient.history.some(tx => tx.description?.toLowerCase().includes('vente de livret épargne'));
-      const soldTontine = newClient.history.some(tx => tx.description?.toLowerCase().includes('vente de livret tontine'));
+      const soldEpargne = newClient.history.some(tx => {
+        const desc = (tx.description || '').toLowerCase();
+        return desc.includes('vente de livret') && (desc.includes('épargne') || desc.includes('epargne'));
+      });
+      const soldTontine = newClient.history.some(tx => {
+        const desc = (tx.description || '').toLowerCase();
+        return desc.includes('vente de livret') && (desc.includes('tontine'));
+      });
       if (soldEpargne || soldTontine) {
         const savedStocks = localStorage.getItem('microfox_livrets_stocks');
         if (savedStocks) {
           const stocks = JSON.parse(savedStocks);
-          if (soldEpargne) stocks.central.epargne = Math.max(0, stocks.central.epargne - 1);
-          if (soldTontine) stocks.central.tontine = Math.max(0, stocks.central.tontine - 1);
-          localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+          if (stocks.central) {
+            if (soldEpargne) stocks.central.epargne = Math.max(0, (stocks.central.epargne || 0) - 1);
+            if (soldTontine) stocks.central.tontine = Math.max(0, (stocks.central.tontine || 0) - 1);
+            localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+          }
         }
       }
     }
@@ -3201,8 +3209,10 @@ const Members: React.FC = () => {
       const savedStocks = localStorage.getItem('microfox_livrets_stocks');
       if (savedStocks) {
         const stocks = JSON.parse(savedStocks);
-        stocks.central.epargne = Math.max(0, stocks.central.epargne - 1);
-        localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+        if (stocks.central) {
+          stocks.central.epargne = Math.max(0, (stocks.central.epargne || 0) - 1);
+          localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+        }
       }
     }
 

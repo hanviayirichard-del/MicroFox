@@ -276,7 +276,7 @@ const Dashboard: React.FC = () => {
     const totalVentesEpargne = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Épargne', targetDate), 0);
 
     // Les ressources totales sont la somme de tous les comptes qui ont reçu de l'argent
-    const deposits = totalEpargne + totalTontineGross + totalPartSociale + totalGarantie + totalFrais;
+    const deposits = totalEpargne + totalTontineGross + totalPartSociale + totalGarantie + totalFrais + totalVentesTontine + totalVentesEpargne;
     
     const liquidite = (totalEpargne + totalTontineNet) > 0 ? (totalCredit / (totalEpargne + totalTontineNet)) * 100 : 0;
     const solvabilite = totalCredit > 0 ? (totalPartSociale / totalCredit) * 100 : 0;
@@ -452,7 +452,7 @@ const Dashboard: React.FC = () => {
     const totalVentesTontine = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Tontine', targetDate), 0);
     const totalVentesEpargne = clients.reduce((acc: number, c: any) => acc + getBookletSalesAtDate(c.history || [], 'Épargne', targetDate), 0);
 
-    const deposits = totalEpargne + totalTontineGross + totalPartSociale + totalGarantie + totalFrais;
+    const deposits = totalEpargne + totalTontineGross + totalPartSociale + totalGarantie + totalFrais + totalVentesTontine + totalVentesEpargne;
     const liquidite = (totalEpargne + totalTontineNet) > 0 ? (totalCredit / (totalEpargne + totalTontineNet)) * 100 : 0;
     const solvabilite = totalCredit > 0 ? (totalPartSociale / totalCredit) * 100 : 0;
 
@@ -655,7 +655,7 @@ const Dashboard: React.FC = () => {
           </div>
           <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Inclusion Financière</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-6xl font-black text-white">{stats.membresActifs}</span>
+            <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white">{stats.membresActifs}</span>
           </div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Membres Actifs</p>
           
@@ -682,9 +682,9 @@ const Dashboard: React.FC = () => {
             <Landmark size={24} strokeWidth={1.5} />
           </div>
           <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Ressources (Total Inflows)</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-6xl font-black text-emerald-400">{stats.encoursDepots.toLocaleString()}</span>
-            <span className="text-2xl font-black text-emerald-400">F</span>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-emerald-400">{stats.encoursDepots.toLocaleString()}</span>
+            <span className="text-xl sm:text-2xl font-black text-emerald-400">F</span>
           </div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1 text-balance">Total des ressources collectées (Dépôts, Parts, Frais)</p>
           
@@ -729,9 +729,9 @@ const Dashboard: React.FC = () => {
             <CreditCard size={24} strokeWidth={1.5} />
           </div>
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-4">Emplois (Crédits)</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-6xl font-black">{stats.encoursCredits.toLocaleString()}</span>
-            <span className="text-2xl font-black">F</span>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black">{stats.encoursCredits.toLocaleString()}</span>
+            <span className="text-xl sm:text-2xl font-black">F</span>
           </div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1 text-center">Crédit en cours</p>
           
