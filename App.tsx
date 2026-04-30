@@ -589,6 +589,18 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Specific initialization for FABES MICROFINANCE (002FABES)
+  useEffect(() => {
+    if (currentUser?.codeMF?.toUpperCase() === '002FABES') {
+      if (localStorage.getItem('microfox_fabes_init_v2') !== 'true') {
+        localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '30000000');
+        localStorage.setItem('microfox_vault_balance', '20000000');
+        localStorage.setItem('microfox_fabes_init_v2', 'true');
+        window.dispatchEvent(new Event('storage'));
+      }
+    }
+  }, [currentUser]);
+
   // User Location Tracking
   useEffect(() => {
     if (!currentUser || currentUser.role === 'administrateur') return;

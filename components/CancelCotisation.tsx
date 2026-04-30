@@ -11,6 +11,8 @@ interface TontineTransaction {
   date: string;
   description: string;
   tontineAccountId: string;
+  userId: string;
+  caisse: string;
   tontineAccountNumber?: string;
   recordedBy: string;
   isValidated: boolean; // true if already deposited at the main desk
@@ -54,13 +56,15 @@ const CancelCotisation: React.FC = () => {
       const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
       
       history.forEach((tx: any) => {
-        // Only show cotisations recorded by the current agent that are not yet "poured"
-        // In this system, "poured" status is usually tracked via agent deposits or a specific flag
-        if (tx.type === 'cotisation' && tx.account === 'tontine' && tx.userId === user.id) {
+        // Can only cancel cotisations recorded by the person OR anyone if admin/director
+        const isOwner = tx.userId === user.id;
+        const isAdmin = user.role === 'admin' || user.role === 'directeur';
+
+        if (tx.type === 'cotisation' && tx.account === 'tontine' && (isOwner || isAdmin)) {
           
           // Check if this specific transaction was part of a validated deposit
           const isPoured = validatedDeposits.some((d: any) => 
-            d.agentId === user.id && 
+            d.agentId === tx.userId && 
             new Date(tx.date) <= new Date(d.date) // Simplification: if deposit happened after tx
           );
 
@@ -80,6 +84,8 @@ const CancelCotisation: React.FC = () => {
             description: tx.description,
             tontineAccountId: tx.tontineAccountId,
             tontineAccountNumber: tx.tontineAccountNumber,
+            userId: tx.userId,
+            caisse: tx.caisse || 'AGENT',
             recordedBy: tx.cashierName || 'N/A',
             isValidated: isPoured || isZoneValidated
           });
@@ -144,10 +150,18 @@ const CancelCotisation: React.FC = () => {
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
       }
 
-      // 2. Update agent balance
-      const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
-      const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
-      localStorage.setItem(agentBalanceKey, Math.max(0, currentAgentBalance - tx.amount).toString());
+      // 2. Update Correct Balance (Caisse or Agent)
+      if (tx.caisse && tx.caisse !== 'AGENT' && tx.caisse !== 'N/A') {
+        // Update Caisse balance
+        const cashKey = `microfox_cash_balance_${tx.caisse}`;
+        const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
+        localStorage.setItem(cashKey, Math.max(0, currentCashBalance - tx.amount).toString());
+      } else {
+        // Update Agent balance
+        const agentBalanceKey = `microfox_agent_balance_${tx.userId}`;
+        const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+        localStorage.setItem(agentBalanceKey, Math.max(0, currentAgentBalance - tx.amount).toString());
+      }
 
       // 3. Record Audit Log
       recordAuditLog('MODIFICATION', 'TONTINE', `Annulation cotisation ${tx.amount} F - Client: ${tx.clientName} (${tx.clientCode})`);
