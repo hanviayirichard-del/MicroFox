@@ -33,6 +33,17 @@ const mergeObjects = (obj1: any, obj2: any): any => {
     return Array.from(map.values());
   }
 
+  // If obj1 and obj2 are objects with an updatedAt or timestamp field, prefer the more recent one
+  const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  if (typeof obj1 === 'object' && obj1 !== null && typeof obj2 === 'object' && obj2 !== null) {
+    const date1 = obj1.updatedAt || obj1.updated_at || obj1.timestamp || obj1.date;
+    const date2 = obj2.updatedAt || obj2.updated_at || obj2.timestamp || obj2.date;
+    if (date1 && date2 && typeof date1 === 'string' && typeof date2 === 'string' && isoDateRegex.test(date1) && isoDateRegex.test(date2)) {
+      if (date1 > date2) return obj1;
+      if (date2 > date1) return obj2;
+    }
+  }
+
   if (typeof obj1 === 'object' && obj1 !== null && typeof obj2 === 'object' && obj2 !== null) {
     const result = { ...obj1 };
     for (const key in obj2) {
@@ -48,7 +59,6 @@ const mergeObjects = (obj1: any, obj2: any): any => {
   }
 
   // If obj1 and obj2 are ISO date strings, prefer the more recent one
-  const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
   if (typeof obj1 === 'string' && typeof obj2 === 'string' && isoDateRegex.test(obj1) && isoDateRegex.test(obj2)) {
     return obj1 > obj2 ? obj1 : obj2;
   }

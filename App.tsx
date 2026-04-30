@@ -525,6 +525,13 @@ const App: React.FC = () => {
   useEffect(() => {
     // Audit logs cleaning etc handled at intervals below
 
+    const handlePullRequest = () => {
+      const mfCode = localStorage.getItem('microfox_current_mf');
+      if (mfCode) pullData(mfCode);
+    };
+
+    window.addEventListener('request_supabase_sync', handlePullRequest);
+
     // Initial data pull
     const mfCodeOnLoad = localStorage.getItem('microfox_current_mf');
     if (mfCodeOnLoad) {
