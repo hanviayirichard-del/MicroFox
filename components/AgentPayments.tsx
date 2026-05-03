@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Wallet, Send, CheckCircle, Clock, AlertCircle, TrendingUp, BookOpen } from 'lucide-react';
 
 const AgentPayments: React.FC = () => {
@@ -177,8 +178,10 @@ const AgentPayments: React.FC = () => {
     loadDailyStats();
     loadHistory();
     window.addEventListener('storage', handleStorage);
+    window.addEventListener('microfox_storage' as any, handleStorage);
     return () => {
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('microfox_storage' as any, handleStorage);
     };
   }, [startDate, endDate]);
 
@@ -253,7 +256,7 @@ const AgentPayments: React.FC = () => {
       setAuthCode('');
       
       // Trigger storage event after all localStorage updates to refresh stats
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
       
       setSuccessMessage(`Versement de ${totalAmount} FCFA soumis à la ${selectedCaisse} avec succès.`);
       setIsSubmitting(false);

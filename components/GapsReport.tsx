@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Search, AlertTriangle, TrendingUp, TrendingDown, Cloud, FileText, Download, Printer, Calendar, User, ChevronDown, CheckCircle2, XCircle, AlertCircle, CreditCard, Landmark } from 'lucide-react';
 import { Gap } from '../types';
 
@@ -195,7 +196,7 @@ const GapsReport: React.FC = () => {
 
         // 3. Rafraîchissement immédiat de l'interface et notification aux autres composants
         loadGaps();
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
 
         if (amountAffected !== 0) {
           setAlertMessage(`Opération terminée. La caisse ${targetCaisse} a été mise à jour.`);
@@ -209,7 +210,9 @@ const GapsReport: React.FC = () => {
   useEffect(() => {
     loadGaps();
     window.addEventListener('storage', loadGaps);
+    window.addEventListener('microfox_storage' as any, loadGaps);
     return () => window.removeEventListener('storage', loadGaps);
+      window.removeEventListener('microfox_storage' as any, loadGaps);
   }, [startDate, endDate, selectedUserId, selectedCaisse]);
 
   const generateHTMLContent = (isForPrint = false) => {

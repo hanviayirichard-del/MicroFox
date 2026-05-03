@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   Gem, 
   Download, 
@@ -83,7 +84,9 @@ const FraisPartsSociales: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, [selectedMonth, selectedYear]);
 
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
@@ -133,7 +136,7 @@ const FraisPartsSociales: React.FC = () => {
 
         localStorage.setItem('microfox_members_data', JSON.stringify(allMembers));
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         
         setSelectedMember(null);
         setPaymentAmount('');

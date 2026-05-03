@@ -163,7 +163,10 @@ const AccountingAndStates: React.FC = () => {
             if (isCaissier && e.recordedBy !== user.identifiant) return;
             if (selectedCaisse !== 'TOUT' && e.caisse && e.caisse !== selectedCaisse) return;
             const date = eDate.toLocaleDateString();
-            allEntries.push({ date, account: '612000', label: 'Dépenses Admin', desc: e.description, debit: e.amount, credit: 0 });
+            const isSalary = e.category === 'Salaires';
+            const account = isSalary ? '611110' : '612000';
+            const label = isSalary ? 'Charges de Personnel' : 'Dépenses Admin';
+            allEntries.push({ date, account, label, desc: e.description, debit: e.amount, credit: 0 });
             allEntries.push({ date, account: '571100', label: 'Caisse', desc: e.description, debit: 0, credit: e.amount });
           }
         });
@@ -270,6 +273,7 @@ const AccountingAndStates: React.FC = () => {
         totalLivrets: 0, 
         totalFrais: allEntries.filter(e => e.account === '706114').reduce((acc, e) => acc + (e.credit - e.debit), 0),
         totalDepenses: allEntries.filter(e => e.account === '612000').reduce((acc, e) => acc + (e.debit - e.credit), 0),
+        totalSalaires: allEntries.filter(e => e.account === '611110').reduce((acc, e) => acc + (e.debit - e.credit), 0),
       };
       setStats(newStats as any);
     }
@@ -278,7 +282,9 @@ const AccountingAndStates: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, [startDate, endDate, selectedCaisse]);
 
   const exportJournalToHTML = () => {
@@ -835,7 +841,7 @@ const AccountingAndStates: React.FC = () => {
             </tr>
             <tr>
               <td className="px-6 py-4 text-xs font-bold text-gray-600">611110 - Charges de personnel</td>
-              <td className="px-6 py-4 text-xs font-black text-red-500 text-right">850 000</td>
+              <td className="px-6 py-4 text-xs font-black text-red-500 text-right">{(stats as any).totalSalaires.toLocaleString()}</td>
               <td className="px-6 py-4 text-right">-</td>
             </tr>
             <tr>
@@ -852,7 +858,7 @@ const AccountingAndStates: React.FC = () => {
               <td className="px-6 py-4 text-sm font-black text-[#121c32] uppercase">131000 - RÉSULTAT NET (BÉNÉFICE)</td>
               <td className="px-6 py-4 text-right">-</td>
               <td className="px-6 py-4 text-sm font-black text-blue-600 text-right">
-                {(stats.totalCommissions + (stats as any).totalInterests + stats.totalFrais - 850000 - stats.totalDepenses - 150000).toLocaleString()}
+                {(stats.totalCommissions + (stats as any).totalInterests + stats.totalFrais - (stats as any).totalSalaires - stats.totalDepenses - 150000).toLocaleString()}
               </td>
             </tr>
           </tbody>

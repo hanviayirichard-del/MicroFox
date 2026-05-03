@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { ShoppingCart, Search, BookOpen, Plus, CheckCircle, AlertCircle, User, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -189,7 +190,9 @@ const VenteLivrets: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, [selectedType, currentUser?.id]);
 
   const handleVendreLivret = (member: any) => {
@@ -277,7 +280,7 @@ const VenteLivrets: React.FC = () => {
     setSuccessMessage(`Vente réussie : Livret ${selectedType === 'epargne' ? 'Épargne' : 'Tontine'} pour ${member.name}`);
     setSearchTerm(''); // Réinitialiser pour fermer la carte de vente et afficher le message clairement
     setTimeout(() => setSuccessMessage(null), 5000);
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const handleConfirm = (id: string) => {
@@ -290,7 +293,7 @@ const VenteLivrets: React.FC = () => {
     );
     
     localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     loadData();
     setSuccessMessage("Réception confirmée !");
     setTimeout(() => setSuccessMessage(null), 3000);
@@ -507,7 +510,6 @@ const VenteLivrets: React.FC = () => {
 
       {activeTab === 'vente' ? (
         <>
-          {/* Quick Sell Card for Selected Member */}
           {searchTerm && members.find(m => 
             m.code === searchTerm || 
             m.epargneAccountNumber === searchTerm || 
@@ -568,7 +570,7 @@ const VenteLivrets: React.FC = () => {
                 </div>
               </div>
                 <button
-                  disabled={!agentStocks || agentStocks[selectedType] <= 0}
+                  disabled={(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? centralStocks[selectedType] : (agentStocks?.[selectedType] || 0)) <= 0}
                   onClick={() => {
                     const member = members.find(m => 
                       m.code === searchTerm || 
@@ -578,13 +580,13 @@ const VenteLivrets: React.FC = () => {
                     if (member) handleVendreLivret(member);
                   }}
                   className={`w-full mt-6 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 ${
-                    (!agentStocks || agentStocks[selectedType] <= 0)
+                    ((currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? centralStocks[selectedType] : (agentStocks?.[selectedType] || 0)) <= 0)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                     : selectedType === 'epargne' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-amber-600 text-white hover:bg-amber-700'
                   }`}
                 >
                   <ShoppingCart size={20} />
-                  {(!agentStocks || agentStocks[selectedType] <= 0) ? 'Stock Épuisé' : `Vendre le Livret ${selectedType === 'epargne' ? 'Épargne' : 'Tontine'}`}
+                  {((currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? centralStocks[selectedType] : (agentStocks?.[selectedType] || 0)) <= 0) ? 'Stock Épuisé' : `Vendre le Livret ${selectedType === 'epargne' ? 'Épargne' : 'Tontine'}`}
                 </button>
             </div>
           )}

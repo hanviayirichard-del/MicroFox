@@ -25,10 +25,13 @@ export const recordAuditLog = (
   const savedLogs = localStorage.getItem('microfox_audit_logs');
   const logs: AuditLog[] = savedLogs ? JSON.parse(savedLogs) : [];
   
-  // Keep only the last 1000 logs to avoid storage bloat and save database space
-  const updatedLogs = [newLog, ...logs].slice(0, 1000);
-  localStorage.setItem('microfox_audit_logs', JSON.stringify(updatedLogs));
+  // Auto-deletion after 1 month as requested
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
   
-  // Also mark for sync if needed
-  localStorage.setItem('microfox_pending_sync', 'true');
+  const updatedLogs = [newLog, ...logs]
+    .filter(log => new Date(log.timestamp) > oneMonthAgo)
+    .slice(0, 1000); // Also limit total count
+
+  localStorage.setItem('microfox_audit_logs', JSON.stringify(updatedLogs));
 };

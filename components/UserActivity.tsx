@@ -29,7 +29,19 @@ const UserActivity: React.FC = () => {
   const loadData = () => {
     const savedLogs = localStorage.getItem('microfox_audit_logs');
     if (savedLogs) {
-      setLogs(JSON.parse(savedLogs));
+      let parsedLogs: AuditLog[] = JSON.parse(savedLogs);
+      
+      // Auto-deletion after 1 month
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const filtered = parsedLogs.filter(log => new Date(log.timestamp) > oneMonthAgo);
+      
+      if (filtered.length !== parsedLogs.length) {
+        localStorage.setItem('microfox_audit_logs', JSON.stringify(filtered));
+        parsedLogs = filtered;
+      }
+      
+      setLogs(parsedLogs);
     }
     const savedUsers = localStorage.getItem('microfox_users');
     if (savedUsers) {
@@ -40,9 +52,11 @@ const UserActivity: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     const interval = setInterval(loadData, 5000);
     return () => {
       window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
       clearInterval(interval);
     };
   }, []);

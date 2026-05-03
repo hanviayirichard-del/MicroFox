@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Package, Plus, Send, History as HistoryIcon, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download, Search } from 'lucide-react';
 import { User } from '../types';
 import * as XLSX from 'xlsx';
@@ -107,13 +108,15 @@ const StocksLivrets: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   const saveStocks = (newStocks: LivretsStocks) => {
     localStorage.setItem('microfox_livrets_stocks', JSON.stringify(newStocks));
     setStocks(newStocks);
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const handlePurchase = (e: React.FormEvent) => {

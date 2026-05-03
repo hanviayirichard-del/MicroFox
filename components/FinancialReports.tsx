@@ -378,7 +378,9 @@ const FinancialReports: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, [startDate, endDate, selectedCaisse]);
 
   const calculateTotal = (list: any[]) => list.reduce((sum, item) => sum + (item.amount || 0), 0);

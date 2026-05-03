@@ -539,7 +539,9 @@ const TontineWithdrawal: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   useEffect(() => {
@@ -584,7 +586,8 @@ const TontineWithdrawal: React.FC = () => {
       reason: withdrawalReason,
       date: new Date().toISOString(),
       status: 'En attente',
-      userId: currentUser?.id
+      userId: currentUser?.id,
+      userName: currentUser?.identifiant || currentUser?.name || 'Inconnu'
     };
 
     const savedRequests = localStorage.getItem('microfox_pending_withdrawals');
@@ -729,7 +732,14 @@ const TontineWithdrawal: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm font-bold text-[#121c32]">{req.clientName}</p>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase">{new Date(req.date).toLocaleDateString()} • {req.amount.toLocaleString()} F • {req.reason}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase">{new Date(req.date).toLocaleDateString()} • {req.amount.toLocaleString()} F • {req.reason}</p>
+                          {req.userName && (
+                            <span className="text-[8px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 uppercase">
+                              Par: {req.userName}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <button 

@@ -47,6 +47,8 @@ interface MenuCategory {
   items: MenuItem[];
 }
 
+import { dispatchStorageEvent } from '../utils/events';
+
 const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout, onSync, isSyncing }) => {
   const [hasPendingSync, setHasPendingSync] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, string[]>>({});
@@ -59,12 +61,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       const savedPerms = localStorage.getItem('microfox_permissions');
       
       const defaults: Record<string, string[]> = {
-        'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Crédit actif', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
-        'caissier': ['Accueil', 'Membres', 'Analyse', 'Crédit actif', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification', 'Guide Pratique'],
+        'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
+        'caissier': ['Accueil', 'Membres', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification', 'Guide Pratique'],
         'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
         'auditeur': ['Accueil', 'Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification', 'Guide Pratique'],
-        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Crédit actif', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
-        'gestionnaire de crédit': ['Accueil', 'Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Crédit actif', 'Autres opérations crédit', 'Notification', 'Guide Pratique']
+        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Suivi des crédits', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
+        'gestionnaire de crédit': ['Accueil', 'Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Notification', 'Guide Pratique']
       };
 
       if (savedPerms) {
@@ -130,9 +132,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
     };
     updateState();
     window.addEventListener('storage', updateState);
+    window.addEventListener('microfox_storage' as any, updateState);
     const interval = setInterval(updateState, 2000);
     return () => {
       window.removeEventListener('storage', updateState);
+      window.removeEventListener('microfox_storage' as any, updateState);
       clearInterval(interval);
     };
   }, [isSyncing]);
@@ -148,7 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       localStorage.setItem('microfox_pending_sync', 'false');
       setHasPendingSync(false);
       alert("Synchronisation terminée avec succès.");
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
     } catch (error) {
       console.error('Sync error:', error);
       alert("Une erreur est survenue lors de la synchronisation.");
@@ -180,7 +184,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         { id: 'Réclamations Clients', label: 'Réclamations Clients', icon: <MessageSquare size={20} /> },
         { id: 'Demande de crédit', label: 'Demande de crédit', icon: <FileText size={20} /> },
         { id: 'Validation de Crédit', label: 'Validation de Crédit', icon: <FileCheck size={20} /> },
-        { id: 'Crédit actif', label: 'Crédit actif', icon: <TrendingUp size={20} /> },
+        { id: 'Suivi des crédits', label: 'Suivi des crédits', icon: <TrendingUp size={20} /> },
         { id: 'Autres opérations crédit', label: 'Autres opérations crédit', icon: <RefreshCw size={20} /> },
       ]
     },
@@ -231,7 +235,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         { id: 'Contrôle Terrain', label: 'Contrôle Terrain', icon: <ClipboardCheck size={20} /> },
         { id: 'Modifications Epargne & Crédit', label: 'Modifications Epargne & Crédit', icon: <RotateCcw size={20} /> },
         { id: 'Conformité (Ratios & LAB)', label: 'Conformité (Ratios & LAB)', icon: <Scale size={20} /> },
-        { id: 'Audit & Accès Sécurité', label: 'Audit & Accès Sécurité', icon: <ShieldCheck size={20} /> },
         { id: 'Suivi des Activités', label: 'Suivi des Activités', icon: <Activity size={20} /> },
       ]
     },

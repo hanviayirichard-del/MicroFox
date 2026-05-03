@@ -48,7 +48,19 @@ const FieldControl: React.FC = () => {
 
     const savedReports = localStorage.getItem('microfox_field_control_reports');
     if (savedReports) {
-      setReports(JSON.parse(savedReports));
+      let parsedReports: FieldControlReport[] = JSON.parse(savedReports);
+      
+      // Auto-deletion after 2 months
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      const filtered = parsedReports.filter(report => new Date(report.date) > twoMonthsAgo);
+      
+      if (filtered.length !== parsedReports.length) {
+        localStorage.setItem('microfox_field_control_reports', JSON.stringify(filtered));
+        parsedReports = filtered;
+      }
+      
+      setReports(parsedReports);
     }
   }, []);
 
@@ -129,7 +141,11 @@ const FieldControl: React.FC = () => {
       zone: selectedClient.zone
     };
 
-    const updatedReports = [newReport, ...reports];
+    // Auto-deletion after 2 months
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    const updatedReports = [newReport, ...reports].filter(r => new Date(r.date) > twoMonthsAgo);
+    
     setReports(updatedReports);
     localStorage.setItem('microfox_field_control_reports', JSON.stringify(updatedReports));
     localStorage.setItem('microfox_pending_sync', 'true');
@@ -314,20 +330,20 @@ const FieldControl: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 px-4 sm:px-6 lg:px-8">
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50/10 flex items-center justify-center text-indigo-400 shadow-sm border border-indigo-500/20">
             <ClipboardCheck size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-[#121c32] uppercase tracking-tight">Contrôle Terrain</h1>
-            <p className="text-gray-700 text-xs font-bold uppercase tracking-widest mt-0.5">Vérification des livrets et rapprochement des soldes</p>
+            <h1 className="text-2xl font-black text-white uppercase tracking-tight">Contrôle Terrain</h1>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-0.5">Vérification des livrets et rapprochement des soldes</p>
           </div>
         </div>
         <button 
           onClick={() => setShowHistory(!showHistory)}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm active:scale-95 uppercase tracking-widest ${
-            showHistory ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
+            showHistory ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-[#121c32] border border-gray-700 text-gray-300 hover:text-white hover:bg-[#1a2947]'
           }`}
         >
           <HistoryIcon size={16} /> {showHistory ? 'Nouveau Contrôle' : 'Historique'}
@@ -335,60 +351,64 @@ const FieldControl: React.FC = () => {
       </div>
 
       {showHistory ? (
-        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black text-[#121c32] uppercase tracking-tight mb-6 flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <HistoryIcon size={20} className="text-indigo-600" />
-            Historique des Contrôles
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl border border-gray-100">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 border-b border-gray-50 pb-6">
+            <div className="flex items-center gap-3">
+              <HistoryIcon size={24} className="text-indigo-600" />
+              <h2 className="text-xl font-black text-[#121c32] uppercase tracking-tight">
+                Historique des Contrôles
+              </h2>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <div className="flex flex-col gap-1 min-w-[120px]">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Zone</label>
+                <select
+                  value={historyZone}
+                  onChange={(e) => setHistoryZone(e.target.value)}
+                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-[#121c32] outline-none focus:border-indigo-400 transition-all cursor-pointer"
+                >
+                  <option value="">Toutes les zones</option>
+                  {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1 min-w-[130px]">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Début</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-[#121c32] outline-none focus:border-indigo-400 transition-all"
+                />
+              </div>
+              <div className="flex flex-col gap-1 min-w-[130px]">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Fin</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-[#121c32] outline-none focus:border-indigo-400 transition-all"
+                />
+              </div>
+              <div className="flex items-end gap-2 mt-auto">
+                <button 
+                  onClick={handlePrint}
+                  className="p-2.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm active:scale-95"
+                  title="Imprimer l'historique"
+                >
+                  <Printer size={18} />
+                </button>
+                <button 
+                  onClick={handleExport}
+                  className="p-2.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm active:scale-95"
+                  title="Exporter l'historique"
+                >
+                  <Download size={18} />
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Zone</label>
-              <select
-                value={historyZone}
-                onChange={(e) => setHistoryZone(e.target.value)}
-                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
-              >
-                <option value="">Toutes les zones</option>
-                {zones.map(z => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Début</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Fin</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-[#121c32] outline-none focus:border-indigo-400"
-              />
-            </div>
-            <div className="flex items-end gap-2 pb-0.5">
-              <button 
-                onClick={handlePrint}
-                className="p-2 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-indigo-600 transition-all shadow-sm"
-                title="Imprimer l'historique"
-              >
-                <Printer size={16} />
-              </button>
-              <button 
-                onClick={handleExport}
-                className="p-2 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-emerald-600 transition-all shadow-sm"
-                title="Exporter l'historique"
-              >
-                <Download size={16} />
-              </button>
-            </div>
-          </div>
-        </h2>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>

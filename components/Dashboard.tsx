@@ -12,7 +12,7 @@ import {
   Loader2,
   Package
 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const Dashboard: React.FC = () => {
   const [startDate, setStartDate] = useState<string>(() => {
@@ -497,36 +497,47 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     window.addEventListener('storage', syncStats);
+    window.addEventListener('microfox_storage' as any, syncStats);
     // Request a fresh sync from Supabase when dashboard opens
-    window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+    try {
+      window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+    } catch (e) {
+      const event = document.createEvent('CustomEvent');
+      event.initCustomEvent('request_supabase_sync', true, true, {});
+      window.dispatchEvent(event);
+    }
     // Small extra delay to recalculate after potential sync
     const timer = setTimeout(syncStats, 3000);
     return () => {
       window.removeEventListener('storage', syncStats);
+      window.removeEventListener('microfox_storage' as any, syncStats);
       clearTimeout(timer);
     };
   }, []);
 
   useEffect(() => {
     const generateAiAdvice = async () => {
+      if (!process.env.GEMINI_API_KEY) return;
       setIsLoadingAi(true);
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: `Analyse ces indicateurs de microfinance (SFD Togo, normes UMOA) ${startDate && endDate ? `pour la période du ${startDate} au ${endDate}` : `au ${new Date().toLocaleDateString()}`} :
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-1.5-flash",
+          systemInstruction: "Tu es un expert en réglementation bancaire SFD/UMOA. Ton ton est institutionnel, bref et précis."
+        });
+        
+        const prompt = `Analyse ces indicateurs de microfinance (SFD Togo, normes UMOA) ${startDate && endDate ? `pour la période du ${startDate} au ${endDate}` : `au ${new Date().toLocaleDateString()}`} :
             - Membres: ${stats.membresActifs}
             - Dépôts: ${stats.encoursDepots} F
             - Crédits: ${stats.encoursCredits} F
             - PAR: ${stats.par}%
             - Solvabilité: ${stats.solvabilite}%
             - Liquidité: ${stats.liquidite}%
-            Donne une analyse très brève (max 15 mots) et un conseil direct.`,
-          config: {
-            systemInstruction: "Tu es un expert en réglementation bancaire SFD/UMOA. Ton ton est institutionnel, bref et précis."
-          }
-        });
-        setAiAnalysis(response.text || "Analyse indisponible.");
+            Donne une analyse très brève (max 15 mots) et un conseil direct.`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        setAiAnalysis(response.text() || "Analyse indisponible.");
       } catch (error) {
         setAiAnalysis("Erreur lors de la génération de l'analyse.");
       } finally {

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { recordAuditLog } from '../utils/audit';
 import { 
   Search, 
@@ -2245,7 +2246,9 @@ const Members: React.FC = () => {
 
   useEffect(() => {
     window.addEventListener('storage', reloadClients);
+    window.addEventListener('microfox_storage' as any, reloadClients);
     return () => window.removeEventListener('storage', reloadClients);
+      window.removeEventListener('microfox_storage' as any, reloadClients);
   }, []);
 
   useEffect(() => {
@@ -3055,7 +3058,7 @@ const Members: React.FC = () => {
     }
 
     alert("Membre enregistré avec succès !");
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const handleUpdateProfile = (updatedClient: ClientAccount) => {
@@ -3218,7 +3221,7 @@ const Members: React.FC = () => {
 
     setShowOpenEpargneModal(false);
     alert("Compte épargne ouvert avec succès.");
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const handleSaveOperation = (op: Omit<Transaction, 'id' | 'date'>, validatedRequestIds?: string[]) => {

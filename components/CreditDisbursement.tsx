@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   CreditCard, 
   Search, 
@@ -58,7 +59,9 @@ const CreditDisbursement: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   const pendingRequests = members.filter(m => 
@@ -181,7 +184,7 @@ const CreditDisbursement: React.FC = () => {
         
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         loadData();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         setStatusMessage({ 
@@ -269,7 +272,7 @@ const CreditDisbursement: React.FC = () => {
 
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         loadData();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         showAlert("Succès", "Décaissement annulé. Le crédit est de nouveau en attente de déblocage.", "success");
@@ -313,7 +316,7 @@ const CreditDisbursement: React.FC = () => {
 
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         loadData();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         showAlert("Succès", "Demande de crédit annulée avec succès.", "success");
@@ -359,6 +362,12 @@ const CreditDisbursement: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-black text-white uppercase">{m.name}</h3>
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{m.code}</p>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[10px] font-bold text-blue-400 uppercase tracking-tight">Épargne: {m.epargneAccountNumber || '---'}</p>
+                      <p className="text-[10px] font-bold text-amber-400 uppercase tracking-tight">
+                        Tontine: {m.tontineAccounts?.length > 0 ? m.tontineAccounts.map((t: any) => t.number).join(', ') : '---'}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -454,6 +463,10 @@ const CreditDisbursement: React.FC = () => {
                     <td className="px-6 py-4">
                       <p className="text-sm font-black text-white uppercase">{m.name}</p>
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{m.code}</p>
+                      <div className="mt-1 space-y-0.5">
+                        <p className="text-[8px] font-bold text-blue-400 uppercase">Ép: {m.epargneAccountNumber || '---'}</p>
+                        <p className="text-[8px] font-bold text-amber-400 uppercase">Ton: {m.tontineAccounts?.length > 0 ? m.tontineAccounts.map((t: any) => t.number).join(', ') : '---'}</p>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-1">

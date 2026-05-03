@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   Search, 
   CheckCircle,
@@ -56,7 +57,9 @@ const CreditValidation: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   const pendingRequests = members.filter(m => 
@@ -118,7 +121,7 @@ const CreditValidation: React.FC = () => {
 
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         loadData();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         showAlert("Succès", "Demande de crédit validée avec succès.", "success");
@@ -157,7 +160,7 @@ const CreditValidation: React.FC = () => {
 
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         loadData();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         showAlert("Succès", "Demande de crédit annulée avec succès.", "success");

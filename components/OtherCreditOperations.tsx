@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   Search, 
   AlertCircle, 
@@ -40,6 +41,7 @@ const OtherCreditOperations: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -50,6 +52,7 @@ const OtherCreditOperations: React.FC = () => {
 
     return () => {
       window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
@@ -121,7 +124,7 @@ const OtherCreditOperations: React.FC = () => {
 
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
     localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     
     alert("Pénalité appliquée avec succès.");
     setPenaltyAmount('');
@@ -225,7 +228,7 @@ const OtherCreditOperations: React.FC = () => {
 
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
     localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     
     alert("Ristourne appliquée avec succès.");
     setRebateAmount('');
@@ -310,7 +313,7 @@ const OtherCreditOperations: React.FC = () => {
 
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
     localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     
     alert("Opération annulée avec succès.");
     loadData();
@@ -346,7 +349,7 @@ const OtherCreditOperations: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Rechercher un membre (Crédit actif ou soldé)</label>
+                <label className="text-[11px] font-black text-gray-600 uppercase tracking-widest">Rechercher un membre (Crédit en cours ou soldé)</label>
                 <div className="relative" ref={dropdownRef}>
                   <div 
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}

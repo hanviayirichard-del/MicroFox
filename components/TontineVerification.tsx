@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   Search, 
   ShieldCheck, 
@@ -448,7 +449,9 @@ const TontineVerification: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   const handleApprove = (request: any) => {
@@ -611,7 +614,7 @@ const TontineVerification: React.FC = () => {
     // They will be updated by the cashier during the final disbursement (decaissement).
 
     localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     setErrorModal(`Demande de ${finalAmount} F validée par le contrôle.`);
   };
 
@@ -934,6 +937,11 @@ const TontineVerification: React.FC = () => {
                               <p className="text-[9px] lg:text-[10px] font-bold text-gray-600 uppercase">
                                 {request.tontineAccountNumber ? `Compte: ${request.tontineAccountNumber}` : request.clientCode}
                               </p>
+                              {request.userName && (
+                                <span className="text-[8px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 uppercase mt-1 inline-block">
+                                  Par: {request.userName}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1343,6 +1351,7 @@ const TontineVerification: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] font-bold text-gray-600 uppercase">
                           {new Date(item.validationDate).toLocaleDateString()} • {item.tontineAccountNumber || item.clientCode} • Demandé: {item.originalAmount?.toLocaleString() || item.amount.toLocaleString()} F • Livret: {item.observedBalance?.toLocaleString() || 0} F • Validé: {item.amount.toLocaleString()} F • {item.reason}
+                          {item.userName && ` • Par: ${item.userName}`}
                         </p>
                         {item.gap !== undefined && (
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${item.gap < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'} uppercase`}>

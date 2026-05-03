@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { RotateCcw, Search, Calendar, User, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
@@ -30,7 +31,9 @@ const CancelCotisation: React.FC = () => {
     if (user) setCurrentUser(JSON.parse(user));
     loadTransactions();
     window.addEventListener('storage', loadTransactions);
+    window.addEventListener('microfox_storage' as any, loadTransactions);
     return () => window.removeEventListener('storage', loadTransactions);
+      window.removeEventListener('microfox_storage' as any, loadTransactions);
   }, []);
 
   const loadTransactions = () => {
@@ -171,7 +174,7 @@ const CancelCotisation: React.FC = () => {
       
       // Force immediate UI update
       loadTransactions();
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
     } catch (error) {
       setErrorMessage("Une erreur est survenue lors de l'annulation.");
       setTimeout(() => setErrorMessage(null), 5000);

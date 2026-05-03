@@ -248,9 +248,11 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
   useEffect(() => {
     loadNotifications();
     window.addEventListener('storage', loadNotifications);
+    window.addEventListener('microfox_storage' as any, loadNotifications);
     const interval = setInterval(loadNotifications, 10000);
     return () => {
       window.removeEventListener('storage', loadNotifications);
+      window.removeEventListener('microfox_storage' as any, loadNotifications);
       clearInterval(interval);
     };
   }, []);

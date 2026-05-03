@@ -19,7 +19,7 @@ import CreditRequest from './components/CreditRequest';
 import CreditValidation from './components/CreditValidation';
 import CreditDisbursement from './components/CreditDisbursement';
 import OtherCreditOperations from './components/OtherCreditOperations';
-import ActiveCredits from './components/ActiveCredits';
+import CreditGranted from './components/CreditGranted';
 import AdministrativeExpenses from './components/AdministrativeExpenses';
 import PersonnelSalaries from './components/PersonnelSalaries';
 import FraisPartsSociales from './components/FraisPartsSociales';
@@ -31,7 +31,6 @@ import Configuration from './components/Configuration';
 import UserManagement from './components/UserManagement';
 import Permissions from './components/Permissions';
 import ModificationEpargneCredit from './components/ModificationEpargneCredit';
-import AuditSecurity from './components/AuditSecurity';
 import UserActivity from './components/UserActivity';
 import FieldControl from './components/FieldControl';
 import PiecesAImprimer from './components/PiecesAImprimer';
@@ -53,107 +52,57 @@ import { recordAuditLog } from './utils/audit';
 import { Loader2, Clock, ShieldAlert } from 'lucide-react';
 import { supabase } from './src/supabase';
 
-// Capture des méthodes de stockage natives au chargement du module pour éviter les problèmes avec les surcharges
-const nativeGetItem = localStorage.getItem.bind(localStorage);
-const nativeSetItem = localStorage.setItem.bind(localStorage);
-const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
+import { dispatchStorageEvent } from './utils/events';
+
+// Capture des méthodes de stockage natives au chargement du module
+const nativeGetItem = (key: string) => Storage.prototype.getItem.call(localStorage, key);
+const nativeSetItem = (key: string, value: string) => Storage.prototype.setItem.call(localStorage, key, value);
+const nativeRemoveItem = (key: string) => Storage.prototype.removeItem.call(localStorage, key);
 
 // Variable globale pour stocker le code MF courant afin que les surcharges y aient accès immédiatement
 let globalMfCode = nativeGetItem('microfox_current_mf');
 
-// Surcharges globales du stockage
-localStorage.getItem = (key: string) => {
-  const mfCode = globalMfCode;
-  if (mfCode && key.startsWith('microfox_') && 
-      key !== 'microfox_current_mf' && 
-      key !== 'microfox_current_user' && 
-      key !== 'microfox_users' && 
-      key !== 'microfox_permissions') {
-    const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-    return nativeGetItem(prefix + key);
-  }
-  return nativeGetItem(key);
-};
+// Surcharges globales du stockage de manière sécurisée
+try {
+  (localStorage as any).getItem = (key: string) => {
+    const mfCode = globalMfCode;
+    if (mfCode && key.startsWith('microfox_') && 
+        key !== 'microfox_current_mf' && 
+        key !== 'microfox_current_user' && 
+        key !== 'microfox_users' && 
+        key !== 'microfox_permissions') {
+      const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+      return nativeGetItem(prefix + key);
+    }
+    return nativeGetItem(key);
+  };
 
-localStorage.setItem = (key: string, value: string) => {
-  const mfCode = globalMfCode;
-  const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
-  
-  if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
-    const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
-    const fullKey = isGlobal ? key : prefix + key;
-    nativeSetItem(fullKey, value);
+  (localStorage as any).setItem = (key: string, value: string) => {
+    const mfCode = globalMfCode;
+    const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
+    
+    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+      const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+      const fullKey = isGlobal ? key : prefix + key;
+      nativeSetItem(fullKey, value);
 
-    // Mark as dirty locally to avoid being overwritten by a pull before this change is pushed
-    if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
-      try {
-        const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-        if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
-          dirtyKeys.push(fullKey);
-          nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+      // Mark as dirty
+      if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+        try {
+          const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+          if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+            dirtyKeys.push(fullKey);
+            nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+          }
+        } catch (e) {
+          nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
         }
-      } catch (e) {
-        nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
       }
-    }
 
-    // Sync to Supabase in background if not in offline mode
-    if (nativeGetItem('microfox_offline_mode') !== 'true') {
-      import('./src/utils/supabaseSync').then(async m => {
-        const success = await m.syncToSupabase(fullKey, value);
-        if (success) {
-          try {
-            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-            if (Array.isArray(dirtyKeys)) {
-              const updated = dirtyKeys.filter(k => k !== fullKey);
-              if (updated.length === 0) {
-                nativeRemoveItem('microfox_dirty_keys');
-                nativeRemoveItem('microfox_pending_sync');
-              } else {
-                nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
-              }
-            }
-          } catch (e) {}
-        }
-      });
-    }
-    // Mark as pending sync for UI feedback
-    if (key !== 'microfox_pending_sync') {
-      nativeSetItem('microfox_pending_sync', 'true');
-    }
-  } else {
-    nativeSetItem(key, value);
-  }
-};
-
-localStorage.removeItem = (key: string) => {
-  const mfCode = globalMfCode;
-  const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
-
-  if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
-    const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
-    const fullKey = isGlobal ? key : prefix + key;
-    nativeRemoveItem(fullKey);
-
-    // Mark as dirty locally
-    if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
-      try {
-        const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-        if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
-          dirtyKeys.push(fullKey);
-          nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
-        }
-      } catch (e) {
-        nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
-      }
-    }
-
-    // Remove from Supabase in background if not in offline mode
-    if (nativeGetItem('microfox_offline_mode') !== 'true') {
-      import('./src/supabase').then(async m => {
-        if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-          const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
-          if (!error) {
+      if (nativeGetItem('microfox_offline_mode') !== 'true') {
+        import('./src/utils/supabaseSync').then(async m => {
+          const success = await m.syncToSupabase(fullKey, value);
+          if (success) {
             try {
               const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
               if (Array.isArray(dirtyKeys)) {
@@ -166,20 +115,69 @@ localStorage.removeItem = (key: string) => {
                 }
               }
             } catch (e) {}
-          } else {
-            console.error('Error removing from Supabase:', error);
           }
+        });
+      }
+      if (key !== 'microfox_pending_sync') {
+        nativeSetItem('microfox_pending_sync', 'true');
+      }
+    } else {
+      nativeSetItem(key, value);
+    }
+  };
+
+  (localStorage as any).removeItem = (key: string) => {
+    const mfCode = globalMfCode;
+    const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
+
+    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+      const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+      const fullKey = isGlobal ? key : prefix + key;
+      nativeRemoveItem(fullKey);
+
+      if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+        try {
+          const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+          if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+            dirtyKeys.push(fullKey);
+            nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+          }
+        } catch (e) {
+          nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
         }
-      });
+      }
+
+      if (nativeGetItem('microfox_offline_mode') !== 'true') {
+        import('./src/supabase').then(async m => {
+          if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
+            const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
+            if (!error) {
+              try {
+                const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+                if (Array.isArray(dirtyKeys)) {
+                  const updated = dirtyKeys.filter(k => k !== fullKey);
+                  if (updated.length === 0) {
+                    nativeRemoveItem('microfox_dirty_keys');
+                    nativeRemoveItem('microfox_pending_sync');
+                  } else {
+                    nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        });
+      }
+      if (key !== 'microfox_pending_sync') {
+        nativeSetItem('microfox_pending_sync', 'true');
+      }
+    } else {
+      nativeRemoveItem(key);
     }
-    // Mark as pending sync for UI feedback
-    if (key !== 'microfox_pending_sync') {
-      nativeSetItem('microfox_pending_sync', 'true');
-    }
-  } else {
-    nativeRemoveItem(key);
-  }
-};
+  };
+} catch (e) {
+  console.warn('Storage overrides could not be applied fully:', e);
+}
 
 const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -267,7 +265,7 @@ const App: React.FC = () => {
         if (globalChanged || tenantChanged) {
           setSyncVersion(v => v + 1);
           // Dispatch storage event to notify components to reload from localStorage
-          window.dispatchEvent(new Event('storage'));
+          dispatchStorageEvent();
         }
         return 'success';
       } catch (error) {
@@ -321,14 +319,34 @@ const App: React.FC = () => {
 
   // Nettoyage du stockage pour réduire la consommation de la base de données
   const cleanupStorage = useCallback(() => {
-    // 1. Audit Logs Cleanup
-    const logs = nativeGetItem('microfox_audit_logs');
+    // 1. Audit Logs Cleanup - Keep 1 month history as requested
+    const logs = localStorage.getItem('microfox_audit_logs');
     if (logs) {
       try {
         const parsed = JSON.parse(logs);
-        if (Array.isArray(parsed) && parsed.length > 1000) {
-          nativeSetItem('microfox_audit_logs', JSON.stringify(parsed.slice(0, 1000)));
-          nativeSetItem('microfox_pending_sync', 'true');
+        if (Array.isArray(parsed)) {
+          const oneMonthAgo = new Date();
+          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+          const filtered = parsed.filter((log: any) => new Date(log.timestamp) > oneMonthAgo);
+          if (filtered.length !== parsed.length) {
+            localStorage.setItem('microfox_audit_logs', JSON.stringify(filtered.slice(0, 1000)));
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 1.1 Field Control Reports Cleanup - Keep 2 months history as requested
+    const reports = localStorage.getItem('microfox_field_control_reports');
+    if (reports) {
+      try {
+        const parsed = JSON.parse(reports);
+        if (Array.isArray(parsed)) {
+          const twoMonthsAgo = new Date();
+          twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+          const filtered = parsed.filter((report: any) => new Date(report.date || report.timestamp) > twoMonthsAgo);
+          if (filtered.length !== parsed.length) {
+            localStorage.setItem('microfox_field_control_reports', JSON.stringify(filtered));
+          }
         }
       } catch (e) {}
     }
@@ -481,7 +499,7 @@ const App: React.FC = () => {
                 if (finalValue !== localValue) {
                   nativeSetItem(key, finalValue);
                   setSyncVersion(v => v + 1);
-                  window.dispatchEvent(new Event('storage'));
+                  dispatchStorageEvent();
                 }
               }
             }
@@ -511,7 +529,7 @@ const App: React.FC = () => {
           const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem, isDirty);
           if (globalChanged || tenantChanged) {
             setSyncVersion(v => v + 1);
-            window.dispatchEvent(new Event('storage'));
+            dispatchStorageEvent();
           }
         }).finally(() => {
           setIsBackgroundSyncing(false);
@@ -564,7 +582,7 @@ const App: React.FC = () => {
           );
           if (perms['agent commercial'].length !== originalLength) {
             localStorage.setItem('microfox_permissions', JSON.stringify(perms));
-            window.dispatchEvent(new Event('storage'));
+            dispatchStorageEvent();
           }
         }
       } catch (e) {}
@@ -602,10 +620,12 @@ const App: React.FC = () => {
     window.addEventListener('resize', handleResize);
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('microfox_storage' as any, handleStorageChange);
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('microfox_storage' as any, handleStorageChange);
     };
   }, []);
 
@@ -616,7 +636,7 @@ const App: React.FC = () => {
         localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '30000000');
         localStorage.setItem('microfox_vault_balance', '20000000');
         localStorage.setItem('microfox_fabes_init_v2', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
       }
     }
   }, [currentUser]);
@@ -762,8 +782,8 @@ const App: React.FC = () => {
       return <CreditDisbursement />;
     }
 
-    if (activeSection === 'Crédit actif') {
-      return <ActiveCredits />;
+    if (activeSection === 'Suivi des crédits') {
+      return <CreditGranted />;
     }
 
     if (activeSection === 'Autres opérations crédit') {
@@ -835,10 +855,6 @@ const App: React.FC = () => {
           </div>
         </div>
       );
-    }
-
-    if (activeSection === 'Audit & Accès Sécurité') {
-      return <AuditSecurity />;
     }
 
     if (activeSection === 'Suivi des Activités') {

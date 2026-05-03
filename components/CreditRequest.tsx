@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   CreditCard, 
   Search, 
@@ -101,6 +102,7 @@ const CreditRequest: React.FC = () => {
 
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -111,6 +113,7 @@ const CreditRequest: React.FC = () => {
 
     return () => {
       window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
@@ -179,7 +182,7 @@ const CreditRequest: React.FC = () => {
         localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
         setMembers(updatedClients);
         localStorage.setItem('microfox_pending_sync', 'true');
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         showAlert("Succès", "Demande de crédit annulée.", "success");
       }
@@ -255,7 +258,7 @@ const CreditRequest: React.FC = () => {
         const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
         const newTx = {
           id: `${Date.now()}_req_${Math.random().toString(36).substr(2, 5)}`,
-          type: 'deblocage',
+          type: 'demande',
           account: 'credit',
           amount: Number(amount),
           date: new Date().toISOString(),
@@ -294,7 +297,7 @@ const CreditRequest: React.FC = () => {
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
     setMembers(updatedClients);
     localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     
     const successMsg = "Demande de crédit enregistrée avec succès.";
     setStatusMessage({ text: successMsg, type: 'success' });

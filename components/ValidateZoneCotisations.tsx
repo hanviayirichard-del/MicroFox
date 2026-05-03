@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { ClipboardCheck, Search, MapPin, CheckCircle, AlertCircle, ChevronRight, Users, TrendingUp, Printer, Download, ChevronDown } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
@@ -27,9 +28,11 @@ const ValidateZoneCotisations: React.FC = () => {
   useEffect(() => {
     loadZones();
     window.addEventListener('storage', loadZones);
+    window.addEventListener('microfox_storage' as any, loadZones);
     const interval = setInterval(loadZones, 3000);
     return () => {
       window.removeEventListener('storage', loadZones);
+      window.removeEventListener('microfox_storage' as any, loadZones);
       clearInterval(interval);
     };
   }, []);
@@ -248,7 +251,7 @@ const ValidateZoneCotisations: React.FC = () => {
       loadZones();
       setTimeout(() => setSuccessMessage(null), 4000);
       
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
     } catch (error) {
       setErrorMessage("Une erreur est survenue lors de la validation.");
       setTimeout(() => setErrorMessage(null), 5000);

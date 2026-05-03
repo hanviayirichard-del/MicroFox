@@ -84,7 +84,9 @@ const UserManagement: React.FC = () => {
   useEffect(() => {
     loadUsers();
     window.addEventListener('storage', loadUsers);
+    window.addEventListener('microfox_storage' as any, loadUsers);
     return () => window.removeEventListener('storage', loadUsers);
+      window.removeEventListener('microfox_storage' as any, loadUsers);
   }, []);
 
   const handleCreateUser = (e: React.FormEvent) => {

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Vault, Landmark, ArrowRightLeft, TrendingUp, History as HistoryIcon, Send, ShieldCheck, Filter, Landmark as BankIcon, Calculator, X } from 'lucide-react';
 
 const VaultAndBank: React.FC = () => {
@@ -91,7 +92,9 @@ const VaultAndBank: React.FC = () => {
 
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   const handleTransaction = () => {
@@ -240,7 +243,7 @@ const VaultAndBank: React.FC = () => {
       '5': 0,
       'monnaie': 0
     });
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const [selectedTxForBilletage, setSelectedTxForBilletage] = useState<any>(null);

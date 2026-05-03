@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Landmark, CheckCircle, XCircle, Clock, Search, Filter, TrendingUp, Wallet, ArrowDownCircle, Send, ShieldCheck } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 import ConfirmModal from './ConfirmModal';
@@ -127,7 +128,9 @@ const MainCashier: React.FC = () => {
     
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, [selectedCaisse]);
 
   const handleAction = (paymentId: string, action: 'Validé' | 'Rejeté') => {
@@ -212,7 +215,7 @@ const MainCashier: React.FC = () => {
       localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedPayments));
       localStorage.setItem('microfox_pending_sync', 'true');
       setPayments(updatedPayments);
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
       
       setConfirmModal(prev => ({ ...prev, isOpen: false }));
       setStatusMessage({ 
@@ -370,7 +373,7 @@ const MainCashier: React.FC = () => {
       '250': 0, '200': 0, '100': 0, '50': 0, '25': 0, '10': 0, '5': 0,
       'monnaie': 0
     });
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     showAlert("Succès", `Versement de ${physicalAmount.toLocaleString()} F effectué. Écart: ${gap.toLocaleString()} F.`, "success");
   };
 

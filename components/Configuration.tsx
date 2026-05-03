@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Download, Upload, Settings, ShieldCheck, Database, Building2, Save, Plus, Trash2 } from 'lucide-react';
 import { Microfinance, UserRole, AutoDeactivationRule } from '../types';
 
@@ -132,7 +133,7 @@ const Configuration: React.FC = () => {
     setShowConfirmation(true);
     setTimeout(() => setShowConfirmation(false), 3000);
     alert("Microfinance créée avec succès !");
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const handleDeleteMf = (code: string) => {
@@ -141,7 +142,7 @@ const Configuration: React.FC = () => {
       setMicrofinances(updatedList);
       localStorage.setItem('microfox_microfinances', JSON.stringify(updatedList));
       alert("Institution supprimée.");
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
     }
   };
 
@@ -190,14 +191,14 @@ const Configuration: React.FC = () => {
     setShowSaveConfirmation(true);
     setTimeout(() => setShowSaveConfirmation(false), 3000);
     alert("Configuration de la microfinance enregistrée !");
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const toggleOfflineMode = () => {
     const newValue = !isOfflineMode;
     setIsOfflineMode(newValue);
     localStorage.setItem('microfox_offline_mode', String(newValue));
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const handleBackup = () => {
@@ -388,7 +389,7 @@ const Configuration: React.FC = () => {
         localStorage.setItem('microfox_current_user', JSON.stringify(updatedCurrentUser));
         
         alert("Empreinte digitale enregistrée avec succès !");
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
       }
     } catch (error: any) {
       console.error("Fingerprint error:", error);
@@ -426,7 +427,7 @@ const Configuration: React.FC = () => {
         localStorage.setItem('microfox_current_user', JSON.stringify(updatedCurrentUser));
         
         alert("Empreinte digitale supprimée.");
-        window.dispatchEvent(new Event('storage'));
+        dispatchStorageEvent();
       }
     }
   };

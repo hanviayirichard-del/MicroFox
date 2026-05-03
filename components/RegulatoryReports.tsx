@@ -32,6 +32,7 @@ const RegulatoryReports: React.FC = () => {
       fraisDossier: 0,
       interetsCredit: 0,
       droitAdhesion: 0,
+      partSociale: 0,
       total: 0
     },
     charges: {
@@ -44,7 +45,9 @@ const RegulatoryReports: React.FC = () => {
       ordinaires: 0,
       retraitsOrdinaires: 0,
       tontines: 0,
-      retraitsTontines: 0
+      retraitsTontines: 0,
+      garantie: 0,
+      retraitsGarantie: 0
     },
     credits: {
       accordes: 0,
@@ -75,14 +78,85 @@ const RegulatoryReports: React.FC = () => {
       end.setHours(23, 59, 59, 999);
 
       const data = {
-        produits: { carnetsTontine: 0, carnetsMembre: 0, commissionsTontine: 0, fraisDossier: 0, interetsCredit: 0, droitAdhesion: 0, total: 0 },
+        produits: { carnetsTontine: 0, carnetsMembre: 0, commissionsTontine: 0, fraisDossier: 0, interetsCredit: 0, droitAdhesion: 0, partSociale: 0, total: 0 },
         charges: { salaires: 0, depensesAdmin: 0, total: 0 },
-        depots: { ordinaires: 0, retraitsOrdinaires: 0, tontines: 0, retraitsTontines: 0 },
+        depots: { ordinaires: 0, retraitsOrdinaires: 0, tontines: 0, retraitsTontines: 0, garantie: 0, retraitsGarantie: 0 },
         credits: { accordes: 0, rembourse: 0, interets: 0 },
         marge: 0
       };
 
       allMembers.forEach((m: any) => {
+        // Calcul des commissions tontine (logique synchronisée avec Commissions.tsx)
+        const tontineAccounts = m.tontineAccounts || [];
+        tontineAccounts.forEach((acc: any) => {
+          const dailyMise = Number(acc.dailyMise) || 500;
+          if (dailyMise <= 0) return;
+
+          const tontineTxs = (m.history || [])
+            .filter((t: any) => t.account === 'tontine' && (t.type === 'cotisation' || t.type === 'depot') && (t.tontineAccountId === acc.id || !t.tontineAccountId))
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          const accountWithdrawals = (m.history || [])
+            .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && h.type === 'retrait')
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          if (tontineTxs.length === 0) return;
+
+          let currentCycleFirstDepositDate: Date | null = null;
+          let currentCycleAmount = 0;
+          let cycleIdx = 1;
+
+          for (const tx of tontineTxs) {
+            const txDate = new Date(tx.date);
+            let remainingAmount = Number(tx.amount);
+
+            while (remainingAmount > 0) {
+              if (currentCycleFirstDepositDate === null) {
+                currentCycleFirstDepositDate = txDate;
+                if (txDate >= start && txDate <= end) {
+                  if (!isCaissier || tx.userId === user.id) {
+                    data.produits.commissionsTontine += dailyMise;
+                  }
+                }
+              }
+
+              const cycleEndDateLimit = new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
+              const withdrawalDuringCycle = accountWithdrawals.find((w: any) => {
+                const wDate = new Date(w.date);
+                return wDate >= currentCycleFirstDepositDate! && wDate < txDate;
+              });
+
+              if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
+                cycleIdx++;
+                currentCycleFirstDepositDate = txDate;
+                currentCycleAmount = 0;
+                if (txDate >= start && txDate <= end) {
+                  if (!isCaissier || tx.userId === user.id) {
+                    data.produits.commissionsTontine += dailyMise;
+                  }
+                }
+                continue;
+              }
+
+              const amountToCompleteCycle = (31 * dailyMise) - currentCycleAmount;
+              if (remainingAmount >= amountToCompleteCycle) {
+                remainingAmount -= amountToCompleteCycle;
+                currentCycleAmount = 0;
+                cycleIdx++;
+                currentCycleFirstDepositDate = remainingAmount > 0 ? txDate : null;
+                if (remainingAmount > 0 && txDate >= start && txDate <= end) {
+                  if (!isCaissier || tx.userId === user.id) {
+                    data.produits.commissionsTontine += dailyMise;
+                  }
+                }
+              } else {
+                currentCycleAmount += remainingAmount;
+                remainingAmount = 0;
+              }
+            }
+          }
+        });
+
         (m.history || []).forEach((tx: any) => {
           if (isCaissier && tx.userId !== user.id) return;
           const txDate = new Date(tx.date);
@@ -90,15 +164,30 @@ const RegulatoryReports: React.FC = () => {
             const desc = (tx.description || '').toLowerCase();
             const amount = Number(tx.amount || 0);
 
-            // Produits
-            if (desc.includes('carnet tontine')) data.produits.carnetsTontine += amount;
-            else if (desc.includes('carnet membre')) data.produits.carnetsMembre += amount;
-            else if (desc.includes('commission tontine')) data.produits.commissionsTontine += amount;
-            else if (desc.includes('frais de dossier')) data.produits.fraisDossier += amount;
-            else if ((desc.includes('intérêt') || desc.includes('interet')) && tx.account !== 'credit') data.produits.interetsCredit += amount;
-            else if (desc.includes('adhésion')) data.produits.droitAdhesion += amount;
+            // Categorize by account type first, then by description
+            if (tx.account === 'partSociale') {
+              data.produits.partSociale += amount;
+            } else {
+              // Produits d'exploitation
+              if (desc.includes('livret tontine') || desc.includes('carnet tontine')) {
+                data.produits.carnetsTontine += amount;
+              } else if (desc.includes('livret épargne') || desc.includes('livret epargne') || desc.includes('carnet membre') || desc.includes('livret de compte')) {
+                data.produits.carnetsMembre += amount;
+              } else if (desc.includes('frais de dossier')) {
+                data.produits.fraisDossier += amount;
+              } else if (desc.includes('intérêt') || desc.includes('interet')) {
+                // Do not count credit capital repayments as interest
+                if (tx.account === 'credit' && tx.type === 'remboursement') {
+                   // interest is handled separately in the credit section below
+                } else if (tx.account !== 'credit') {
+                  data.produits.interetsCredit += amount;
+                }
+              } else if (desc.includes('adhésion') || desc.includes('adhesion')) {
+                data.produits.droitAdhesion += amount;
+              }
+            }
 
-            // Charges
+            // Charges (already separated by description or specific accounts)
             if (desc.includes('salaire')) data.charges.salaires += amount;
             else if (desc.includes('dépense admin') || desc.includes('depense admin')) data.charges.depensesAdmin += amount;
 
@@ -109,11 +198,14 @@ const RegulatoryReports: React.FC = () => {
             } else if (tx.account === 'tontine') {
               if (tx.type === 'cotisation' || tx.type === 'depot') data.depots.tontines += amount;
               if (tx.type === 'retrait') data.depots.retraitsTontines += amount;
+            } else if (tx.account === 'garantie' || tx.type === 'depot_garantie' || tx.type === 'retrait_garantie') {
+              if (tx.type === 'depot' || tx.type === 'depot_garantie') data.depots.garantie += amount;
+              if (tx.type === 'retrait' || tx.type === 'retrait_garantie') data.depots.retraitsGarantie += amount;
             }
 
             // État des crédits
             if (tx.account === 'credit') {
-              if (tx.type === 'deblocage') data.credits.accordes += amount;
+              if (tx.type === 'deblocage' && !desc.includes('demande de crédit enregistrée')) data.credits.accordes += amount;
               if (tx.type === 'remboursement') {
                 const cap = tx.rembCapital !== undefined ? Number(tx.rembCapital) : amount;
                 const int = tx.rembInterest !== undefined ? Number(tx.rembInterest) : 0;
@@ -137,13 +229,16 @@ const RegulatoryReports: React.FC = () => {
           const eDate = new Date(e.date);
           if (eDate >= start && eDate <= end) {
             if (isCaissier && e.recordedBy !== user.identifiant) return;
-            data.charges.depensesAdmin += e.amount;
+            if (e.category === 'Salaires') {
+              data.charges.salaires += e.amount;
+            } else {
+              data.charges.depensesAdmin += e.amount;
+            }
           }
         });
       }
 
-      data.produits.total = Object.values(data.produits).reduce((a, b) => a + b, 0) - data.produits.total; // total is 0 initially
-      // Correction: total should be sum of others
+      // Calculation: total should be sum of others
       data.produits.total = data.produits.carnetsTontine + data.produits.carnetsMembre + data.produits.commissionsTontine + data.produits.fraisDossier + data.produits.interetsCredit + data.produits.droitAdhesion;
       data.charges.total = data.charges.salaires + data.charges.depensesAdmin;
       data.marge = data.produits.total - data.charges.total;
@@ -155,7 +250,9 @@ const RegulatoryReports: React.FC = () => {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, [startDate, endDate]);
 
   const generateHTMLContent = (isForPrint = false) => {
@@ -179,20 +276,20 @@ const RegulatoryReports: React.FC = () => {
       ['', 'Total produits d\'exploitation (A)', sigData.produits.total],
       [''],
       ['61110000', 'Charges d\'exploitation (B)', sigData.charges.total],
-      ['61111000', 'Salaires', sigData.charges.salaires],
+      ['61111000', 'Salaire', sigData.charges.salaires],
       ['61200000', 'Dépenses administratives', sigData.charges.depensesAdmin],
       ['', 'Total charges d\'exploitation (B)', sigData.charges.total],
       ['13100000', 'Marge bénéficiaire (A - B)', sigData.marge],
       [''],
       ['COMPTE D\'INVESTISSEMENT', '', ''],
       ['', 'Ressource (A)', sigData.marge],
-      ['10110000', 'Capital souscrit appelé versé', 0],
+      ['10110000', 'Capital souscrit appelé versé', sigData.produits.partSociale],
       ['13100000', 'Marge bénéficiaire', sigData.marge],
       ['24000000', 'Investissement (B)', 0],
       ['', 'Investissement', 0],
       ['62000000', 'Autres charges (C)', 0],
       ['', 'Autres charges', 0],
-      ['', 'Situation du mois (A-B-C)', sigData.marge],
+      ['', 'Situation du mois (A-B-C)', sigData.marge + sigData.produits.partSociale],
       [''],
       ['ÉTAT DES DÉPÔTS', '', ''],
       ['COMPTE', 'ÉLÉMENTS', 'MONTANTS'],
@@ -202,6 +299,9 @@ const RegulatoryReports: React.FC = () => {
       ['25211000', 'Dépôts Tontines', sigData.depots.tontines],
       ['25211000', 'Retraits Tontines', sigData.depots.retraitsTontines],
       ['', 'ECART', sigData.depots.tontines - sigData.depots.retraitsTontines],
+      ['25311000', 'Dépôts Garantie', sigData.depots.garantie],
+      ['25311000', 'Retraits Garantie', sigData.depots.retraitsGarantie],
+      ['', 'ECART (GARANTIE)', sigData.depots.garantie - sigData.depots.retraitsGarantie],
       [''],
       ['ÉTAT DES CRÉDITS EN COURS', '', ''],
       ['COMPTE', 'LIBELLÉS', 'MONTANTS'],
@@ -454,7 +554,7 @@ const RegulatoryReports: React.FC = () => {
               <tr className="text-gray-500">
                 <td className="px-6 py-2 text-[10px] font-bold">10110000</td>
                 <td className="px-6 py-2 text-[10px] font-bold pl-12 italic">Capital souscrit appelé versé</td>
-                <td className="px-6 py-2 text-[10px] font-bold text-right">0</td>
+                <td className="px-6 py-2 text-[10px] font-bold text-right">{sigData.produits.partSociale.toLocaleString()}</td>
               </tr>
               <tr className="text-gray-500">
                 <td className="px-6 py-2 text-[10px] font-bold">13100000</td>
@@ -474,7 +574,7 @@ const RegulatoryReports: React.FC = () => {
               <tr className="bg-blue-900 text-white">
                 <td className="px-6 py-4 text-xs font-bold opacity-50">13100000</td>
                 <td className="px-6 py-4 text-sm font-black uppercase tracking-widest">Situation du mois (A-B-C)</td>
-                <td className="px-6 py-4 text-sm font-black text-right">{sigData.marge.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm font-black text-right">{(sigData.marge + sigData.produits.partSociale).toLocaleString()}</td>
               </tr>
  
               {/* Section Dépôts */}
@@ -510,6 +610,21 @@ const RegulatoryReports: React.FC = () => {
                 <td className="px-6 py-2 text-xs font-bold"></td>
                 <td className="px-6 py-2 text-xs font-black text-amber-700 uppercase italic">ECART (Tontine)</td>
                 <td className="px-6 py-2 text-xs font-black text-amber-700 text-right">{(sigData.depots.tontines - sigData.depots.retraitsTontines).toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">25311000</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Dépôts Garantie</td>
+                <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.depots.garantie.toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td className="px-6 py-3 text-xs font-bold text-gray-400">25311000</td>
+                <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">Retraits Garantie</td>
+                <td className="px-6 py-3 text-xs font-black text-[#121c32] text-right">{sigData.depots.retraitsGarantie.toLocaleString()}</td>
+              </tr>
+              <tr className="bg-purple-50/30">
+                <td className="px-6 py-2 text-xs font-bold"></td>
+                <td className="px-6 py-2 text-xs font-black text-purple-700 uppercase italic">ECART (Garantie)</td>
+                <td className="px-6 py-2 text-xs font-black text-purple-700 text-right">{(sigData.depots.garantie - sigData.depots.retraitsGarantie).toLocaleString()}</td>
               </tr>
  
               {/* Section Crédits */}

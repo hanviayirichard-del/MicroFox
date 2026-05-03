@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { QrCode, TrendingUp, Search, Wallet, Cloud, CheckCircle, AlertCircle } from 'lucide-react';
 
 const DailyTontine: React.FC = () => {
@@ -334,7 +335,9 @@ const DailyTontine: React.FC = () => {
   useEffect(() => {
     loadTontineClients();
     window.addEventListener('storage', loadTontineClients);
+    window.addEventListener('microfox_storage' as any, loadTontineClients);
     return () => window.removeEventListener('storage', loadTontineClients);
+      window.removeEventListener('microfox_storage' as any, loadTontineClients);
   }, []);
 
   // Mise à jour de localStorage lors des changements d'état
@@ -381,7 +384,7 @@ const DailyTontine: React.FC = () => {
       });
       localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
       localStorage.setItem('microfox_pending_sync', 'true');
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
     }
   };
 
@@ -496,7 +499,7 @@ const DailyTontine: React.FC = () => {
         localStorage.setItem(agentBalanceKey, (currentAgentBalance + amount).toString());
       }
 
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
       loadTontineClients();
     }
 

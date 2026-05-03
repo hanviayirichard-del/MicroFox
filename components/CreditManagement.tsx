@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { 
   CreditCard, 
   Search, 
@@ -123,7 +124,9 @@ export default function CreditManagement() {
   useEffect(() => {
     loadData();
     window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage' as any, loadData);
     return () => window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage' as any, loadData);
   }, []);
 
   const generateHTMLContent = (isForPrint = false) => {
@@ -259,7 +262,7 @@ export default function CreditManagement() {
 
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
     localStorage.setItem('microfox_pending_sync', 'true');
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
     loadData();
     setShowPenaltyModal(false);
     setPenaltyAmount('');

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { recordAuditLog } from '../utils/audit';
 import { 
   Search, 
@@ -80,7 +81,9 @@ const ModificationEpargneCredit: React.FC = () => {
     loadData();
     const handleStorage = () => loadData();
     window.addEventListener('storage', handleStorage);
+    window.addEventListener('microfox_storage' as any, handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('microfox_storage' as any, handleStorage);
   }, []);
 
   const handleEdit = (op: OperationWithMember) => {
@@ -169,7 +172,7 @@ const ModificationEpargneCredit: React.FC = () => {
     setSuccessMessage("Montant mis à jour avec succès.");
     setEditingOp(null);
     setTimeout(() => setSuccessMessage(null), 3000);
-    window.dispatchEvent(new Event('storage'));
+    dispatchStorageEvent();
   };
 
   const filteredOps = allOperations.filter(op => {

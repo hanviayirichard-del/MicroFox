@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { dispatchStorageEvent } from '../utils/events';
 import { Calculator, Plus, Search, Trash2, Calendar, FileText, TrendingDown, CheckCircle, X, Printer, Download } from 'lucide-react';
 
 interface Expense {
@@ -73,7 +74,9 @@ const AdministrativeExpenses: React.FC = () => {
   useEffect(() => {
     loadExpenses();
     window.addEventListener('storage', loadExpenses);
+    window.addEventListener('microfox_storage' as any, loadExpenses);
     return () => window.removeEventListener('storage', loadExpenses);
+      window.removeEventListener('microfox_storage' as any, loadExpenses);
   }, []);
 
   const handleSave = () => {
@@ -138,7 +141,7 @@ const AdministrativeExpenses: React.FC = () => {
       setPersonnelId('');
       setSalaryType('Total');
       
-      window.dispatchEvent(new Event('storage'));
+      dispatchStorageEvent();
     } catch (error) {
       alert("Échec de l'enregistrement : Erreur technique lors de l'accès au stockage local.");
     }
@@ -178,7 +181,7 @@ const AdministrativeExpenses: React.FC = () => {
         
         // Dispatch storage event to notify other components and trigger local state sync
         setTimeout(() => {
-          window.dispatchEvent(new Event('storage'));
+          dispatchStorageEvent();
         }, 50);
 
         return updatedExpenses;
