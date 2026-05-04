@@ -48,6 +48,13 @@ const DailyTontine: React.FC = () => {
       const tontiniers = filteredAllMembers
         .filter((m: any) => m.tontineAccounts && m.tontineAccounts.length > 0)
         .flatMap((m: any) => {
+          // Filtrer les comptes tontine invisibles pour les caissiers et agents
+          const accountsToProcess = (user.role === 'caissier' || user.role === 'agent commercial') 
+            ? m.tontineAccounts.filter((acc: any) => !acc.isInvisible)
+            : m.tontineAccounts;
+
+          if (accountsToProcess.length === 0) return [];
+
           // Récupération de l'historique
           const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
           let clientHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
@@ -61,7 +68,7 @@ const DailyTontine: React.FC = () => {
           
           const allRequests = [...allPending, ...allValidated];
 
-          return m.tontineAccounts.map((acc: any, index: number) => {
+          return accountsToProcess.map((acc: any, index: number) => {
             const accountId = acc.id || `${m.id}_tn_${index + 1}`;
             const todayStr = new Date().toISOString().split('T')[0];
             const isFirstAccount = index === 0;

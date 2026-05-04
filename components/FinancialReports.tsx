@@ -116,6 +116,8 @@ const FinancialReports: React.FC = () => {
     newData.livretsTontineByZone['Inconnue'] = [];
 
     const saved = localStorage.getItem('microfox_members_data');
+    const seenTxIds = new Set<string>();
+
     if (saved) {
       const allMembers = JSON.parse(saved);
       allMembers.forEach((member: any) => {
@@ -123,6 +125,9 @@ const FinancialReports: React.FC = () => {
         const memberZone = member.zone || getZoneFromCode(member.code || '');
 
         history.forEach((tx: any) => {
+          if (tx.id && seenTxIds.has(tx.id)) return;
+          if (tx.id) seenTxIds.add(tx.id);
+
           const txUser = allUsers.find((u: any) => u.id === tx.userId);
           const txCaisse = tx.caisse || txUser?.caisse || 'N/A';
           
@@ -422,6 +427,14 @@ const FinancialReports: React.FC = () => {
   
   const totalCreditRemb = totalCapitalRemb + totalInteretRemb + totalPenaliteRemb;
   
+  const totalSalaryExpenses = data.adminExpenses
+    .filter(e => e.type === 'salaire' || e.type === 'Salaire' || e.category === 'salaire' || e.category === 'Salaire')
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  
+  const totalNonSalaryAdminExpenses = data.adminExpenses
+    .filter(e => !(e.type === 'salaire' || e.type === 'Salaire' || e.category === 'salaire' || e.category === 'Salaire'))
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+
   const totalDepotGarantie = calculateTotal(data.garantieDepots);
   const totalRetraitGarantie = calculateTotal(data.garantieRetraits);
 
@@ -703,7 +716,8 @@ const FinancialReports: React.FC = () => {
           ['RETRAIT TONTINE', displayRetraitTont],
           ['RETRAIT GARANTIE', totalRetraitGarantie],
           ['CRÉDIT ACCORDÉ', totalCreditAccor],
-          ['DÉPENSES ADMINISTRATIVES', totalAdminExpenses],
+          ['DÉPENSES ADMINISTRATIVES', totalNonSalaryAdminExpenses],
+          ['SALAIRE', totalSalaryExpenses],
           ['RETRAIT PART SOCIALE', totalPartSocialeRetrait],
           ['ÉCARTS SUR RETRAIT TONTINE', totalGapTontine],
           ['VERSEMENT AU COFFRE', totalVaultOutflow],
@@ -1191,8 +1205,11 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700">CRÉDIT ACCORDÉ</div>
                 <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalCreditAccor.toLocaleString()}</div>
                 
-                <div className="bg-white p-4 text-xs font-bold text-gray-700">DÉPENSES ADMINISTRATIVES</div>
-                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalAdminExpenses.toLocaleString()}</div>
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">DÉPENSES ADMINISTRATIVES</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalNonSalaryAdminExpenses.toLocaleString()}</div>
+
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">SALAIRE</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalSalaryExpenses.toLocaleString()}</div>
                 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">RETRAIT PART SOCIALE</div>
                 <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalPartSocialeRetrait.toLocaleString()}</div>

@@ -132,6 +132,7 @@ const AdministrativeExpenses: React.FC = () => {
       const updatedExpenses = [newExpense, ...expenses];
       localStorage.setItem('microfox_admin_expenses', JSON.stringify(updatedExpenses));
       localStorage.setItem('microfox_pending_sync', 'true');
+      
       setExpenses(updatedExpenses);
       setIsModalOpen(false);
       

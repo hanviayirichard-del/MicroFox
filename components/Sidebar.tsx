@@ -93,6 +93,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         if (user.role === 'agent commercial') {
           const balance = Number(localStorage.getItem(`microfox_agent_balance_${user.id}`) || 0);
           if (balance > 0) count++;
+          
+          // Pending booklet receptions
+          const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+          if (savedStocks) {
+            const stocks = JSON.parse(savedStocks);
+            const myId = (user.identifiant || '').trim().toLowerCase();
+            const pendingReceptions = (stocks.distributions || []).filter((d: any) => 
+              (d.recipient || '').trim().toLowerCase() === myId && d.status === 'En attente'
+            );
+            if (pendingReceptions.length > 0) count += pendingReceptions.length;
+          }
         }
 
         // Pending withdrawals (Auditor/Admin)

@@ -629,12 +629,108 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Specific initialization for FABES MICROFINANCE (002FABES)
+  // Robust calibration and correction for FABES MICROFINANCE (002FABES)
   useEffect(() => {
     if (currentUser?.codeMF?.toUpperCase() === '002FABES') {
-      if (localStorage.getItem('microfox_fabes_init_v2') !== 'true') {
-        localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '30000000');
-        localStorage.setItem('microfox_vault_balance', '20000000');
+      const correctionFlag = 'microfox_fabes_correction_final_v2';
+      if (localStorage.getItem(correctionFlag) !== 'true') {
+        const initialCash = 30000000;
+        const initialVault = 20000000;
+        
+        let cashDelta = 0;
+        let vaultDelta = 0;
+
+        // 1. Members Transactions
+        const membersDataStr = localStorage.getItem('microfox_members_data');
+        const membersData = membersDataStr ? JSON.parse(membersDataStr) : [];
+        const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+        
+        membersData.forEach((m: any) => {
+          const historyStr = localStorage.getItem(`microfox_history_${m.id}`);
+          const history = historyStr ? JSON.parse(historyStr) : (m.history || []);
+          history.forEach((tx: any) => {
+            if (tx.cancelled) return;
+            const amount = Number(tx.amount || 0);
+            
+            // Resolve caisse if missing
+            let txCaisse = tx.caisse || tx.targetCaisse;
+            if (!txCaisse) {
+              const opUser = savedUsers.find((u: any) => 
+                u.id === tx.userId || 
+                u.identifiant === tx.operator || 
+                u.identifiant === tx.cashierName ||
+                u.identifiant === tx.author
+              );
+              if (opUser?.caisse) {
+                txCaisse = opUser.caisse;
+              } else if (opUser?.role === 'administrateur' || opUser?.role === 'directeur') {
+                txCaisse = 'CAISSE PRINCIPALE';
+              }
+            }
+
+            const isMainCaisse = txCaisse === 'CAISSE PRINCIPALE';
+            
+            if (isMainCaisse) {
+              const desc = (tx.description || '').toLowerCase();
+              if (['depot', 'cotisation', 'remboursement', 'versement'].includes(tx.type)) {
+                cashDelta += amount;
+              } else if (['retrait', 'deblocage'].includes(tx.type)) {
+                // Exclude manual credit penalties which are marked as 'deblocage' but don't involve cash
+                if (!desc.includes('pénalité')) {
+                  cashDelta -= amount;
+                }
+              } else if (desc.includes('adhésion') || 
+                         desc.includes('livret') || 
+                         desc.includes('part sociale')) {
+                cashDelta += amount;
+              }
+            }
+          });
+        });
+
+        // 2. Admin Expenses
+        const expensesStr = localStorage.getItem('microfox_admin_expenses');
+        const expenses = expensesStr ? JSON.parse(expensesStr) : [];
+        expenses.forEach((e: any) => {
+          if (!e.isDeleted) {
+            const recordedBy = e.recordedBy;
+            const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+            const expUser = savedUsers.find((u: any) => u.identifiant === recordedBy);
+            const caisse = e.caisse || expUser?.caisse || 'CAISSE PRINCIPALE';
+            if (caisse === 'CAISSE PRINCIPALE') {
+              cashDelta -= Number(e.amount || 0);
+            }
+          }
+        });
+
+        // 3. Vault transactions
+        const vaultTransactionsStr = localStorage.getItem('microfox_vault_transactions');
+        const vaultTransactions = vaultTransactionsStr ? JSON.parse(vaultTransactionsStr) : [];
+        vaultTransactions.forEach((t: any) => {
+          if (t.status === 'Validé') {
+            const amount = Number(t.amount || 0);
+            if (t.from === 'CAISSE PRINCIPALE') cashDelta -= amount;
+            if (t.to === 'CAISSE PRINCIPALE') cashDelta += amount;
+            if (t.from === 'Vault' || t.from === 'Coffre' || t.from === 'COFFRE') vaultDelta -= amount;
+            if (t.to === 'Vault' || t.to === 'Coffre' || t.to === 'COFFRE') vaultDelta += amount;
+          }
+        });
+
+        // 4. Agent Payments
+        const agentPaymentsStr = localStorage.getItem('microfox_agent_payments');
+        const agentPayments = agentPaymentsStr ? JSON.parse(agentPaymentsStr) : [];
+        agentPayments.forEach((p: any) => {
+          if (p.status === 'Validé') {
+            const caisse = p.targetCaisse || p.caisse || 'CAISSE PRINCIPALE';
+            if (caisse === 'CAISSE PRINCIPALE') {
+              cashDelta += Number(p.observedAmount || p.totalAmount || 0);
+            }
+          }
+        });
+
+        localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', (initialCash + cashDelta).toString());
+        localStorage.setItem('microfox_vault_balance', (initialVault + vaultDelta).toString());
+        localStorage.setItem(correctionFlag, 'true');
         localStorage.setItem('microfox_fabes_init_v2', 'true');
         dispatchStorageEvent();
       }

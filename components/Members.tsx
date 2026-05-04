@@ -3898,8 +3898,10 @@ const Members: React.FC = () => {
             onSave={handleSaveOperation}
             clientId={selectedClient?.id || ''}
             clientName={selectedClient?.name || ''}
-            epargneAccountNumber={selectedClient?.epargneAccountNumber}
-            tontineAccounts={selectedClient?.tontineAccounts || []}
+            epargneAccountNumber={selectedClient?.isEpargneInvisible && (currentUser?.role === 'caissier' || currentUser?.role === 'agent commercial') ? undefined : selectedClient?.epargneAccountNumber}
+            tontineAccounts={(selectedClient?.tontineAccounts || []).filter(acc => 
+              !(currentUser?.role === 'caissier' || currentUser?.role === 'agent commercial') || !acc.isInvisible
+            )}
             initialTontineId={selectedTontineId || undefined}
             isEpargneBlockedByAdmin={selectedClient?.isEpargneBlocked}
             partSocialeBalance={selectedClient?.balances.partSociale}

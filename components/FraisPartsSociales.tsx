@@ -136,6 +136,17 @@ const FraisPartsSociales: React.FC = () => {
 
         localStorage.setItem('microfox_members_data', JSON.stringify(allMembers));
         localStorage.setItem('microfox_pending_sync', 'true');
+        
+        // Update cash balance
+        const userStr = localStorage.getItem('microfox_current_user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const targetCaisse = user?.role === 'agent commercial' ? null : (user?.caisse || (user?.role === 'administrateur' || user?.role === 'directeur' ? 'CAISSE PRINCIPALE' : null));
+        if (targetCaisse && amount > 0) {
+          const cashKey = `microfox_cash_balance_${targetCaisse}`;
+          const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
+          localStorage.setItem(cashKey, (currentCashBalance + amount).toString());
+        }
+
         dispatchStorageEvent();
         
         setSelectedMember(null);
@@ -214,10 +225,14 @@ const FraisPartsSociales: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const filteredMembers = stats.members.filter(m => 
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = stats.members.filter(m => {
+    // Check if invisible for cashiers
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+    if (currentUser.role === 'caissier' && (m.isEpargneInvisible || m.tontineAccounts?.every((acc: any) => acc.isInvisible))) return false;
+
+    return m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           m.code.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">

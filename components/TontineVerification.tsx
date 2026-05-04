@@ -598,6 +598,38 @@ const TontineVerification: React.FC = () => {
     const updatedPending = allPending.map((r: any) => r.id === request.id ? { ...r, isDeleted: true } : r);
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updatedPending));
     
+    // Mise à jour de l'historique du membre pour le Journal Global
+    const savedMembers = localStorage.getItem('microfox_members_data');
+    if (savedMembers) {
+      const allMembers = JSON.parse(savedMembers);
+      const updatedMembers = allMembers.map((m: any) => {
+        if (m.id === request.clientId) {
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          let fullHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+          
+          const historyEntry = {
+            id: `val_tn_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            type: 'validation',
+            account: 'tontine',
+            amount: finalAmount,
+            date: new Date().toISOString(),
+            description: `Demande de retrait Tontine validée par ${currentUser.identifiant || 'Inconnu'}${gap !== 0 ? ' (avec écart)' : ''}`,
+            operator: currentUser.identifiant || 'Inconnu',
+            cashierName: currentUser.identifiant || 'Inconnu',
+            tontineAccountId: activeTontineAccount?.id,
+            tontineAccountNumber: tontineNumber,
+            userId: currentUser.id
+          };
+          
+          const newHistory = [historyEntry, ...fullHistory];
+          localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+          return { ...m, history: newHistory };
+        }
+        return m;
+      });
+      localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
+    }
+    
     // Update local state (filtering out deleted and applying zone filter)
     setPendingRequests(updatedPending.filter((r: any) => {
       if (r.isDeleted) return false;

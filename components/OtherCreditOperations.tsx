@@ -59,6 +59,11 @@ const OtherCreditOperations: React.FC = () => {
 
   const filteredMembers = members.filter(m => {
     if (!m.epargneAccountNumber) return false;
+    
+    // Check if invisible for cashiers
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+    if (currentUser.role === 'caissier' && m.isEpargneInvisible) return false;
+
     const search = searchTerm.toLowerCase();
     // Un crédit en cours (balance > 0) OU un crédit soldé (a eu une demande de crédit)
     const hasCredit = (m.balances?.credit || 0) > 0 || m.lastCreditRequest !== undefined;

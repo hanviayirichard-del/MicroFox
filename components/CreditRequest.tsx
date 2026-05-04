@@ -120,6 +120,11 @@ const CreditRequest: React.FC = () => {
 
   const filteredMembers = members.filter(m => {
     if (!m.epargneAccountNumber) return false;
+    
+    // Check if invisible for cashiers
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+    if (currentUser.role === 'caissier' && m.isEpargneInvisible) return false;
+
     const search = searchTerm.toLowerCase();
     return (
       m.name.toLowerCase().includes(search) ||

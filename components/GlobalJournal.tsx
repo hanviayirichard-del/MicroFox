@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History as HistoryIcon, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, X } from 'lucide-react';
+import { Search, History as HistoryIcon, ArrowDownLeft, ArrowUpRight, Cloud, Calendar, Download, Printer, CheckSquare, Square, X, FileText } from 'lucide-react';
 
 const GlobalJournal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -343,11 +343,12 @@ const GlobalJournal: React.FC = () => {
                      tx.type === 'part_sociale' || 
                      tx.type === 'vente_livret';
 
-    const isDebit = tx.type === 'retrait' || 
+    const isDebit = (tx.type === 'retrait' || 
                     tx.type === 'deblocage' || 
                     tx.type === 'dépense' ||
                     tx.type === 'transfert' ||
-                    tx.account === 'dépense';
+                    tx.account === 'dépense') && 
+                    !['demande', 'validation', 'annulation'].includes(tx.type);
 
     if (isCredit) acc.credit += tx.amount;
     else if (isDebit) acc.debit += tx.amount;
@@ -522,8 +523,14 @@ const GlobalJournal: React.FC = () => {
                     </td>
                     <td className="px-4 py-5">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${tx.type === 'annulation' ? 'bg-red-100 text-red-600' : (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}`}>
-                          {tx.type === 'annulation' ? <X size={18} /> : (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
+                        <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${
+                          ['demande', 'validation'].includes(tx.type) ? 'bg-blue-50 text-blue-600' :
+                          tx.type === 'annulation' ? 'bg-red-100 text-red-600' : 
+                          (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')
+                        }`}>
+                          {['demande', 'validation'].includes(tx.type) ? <FileText size={18} /> : 
+                           tx.type === 'annulation' ? <X size={18} /> : 
+                           (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
                         </div>
                         <div className="min-w-0">
                           <p className={`text-sm font-black uppercase ${tx.type === 'annulation' ? 'text-red-500 line-through' : 'text-[#121c32]'}`}>{tx.description}</p>
@@ -549,9 +556,15 @@ const GlobalJournal: React.FC = () => {
                       <p className="text-sm font-black text-[#121c32] uppercase whitespace-nowrap">{tx.cashierName || 'N/A'}</p>
                     </td>
                     <td className="px-4 py-5 text-right">
-                      <span className={`text-sm font-black whitespace-nowrap ${tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? '+' : '-'}{tx.amount.toLocaleString()} F
-                      </span>
+                      {['demande', 'validation', 'annulation'].includes(tx.type) ? (
+                        <span className="text-sm font-black whitespace-nowrap text-blue-500 italic">
+                          {tx.amount.toLocaleString()} F
+                        </span>
+                      ) : (
+                        <span className={`text-sm font-black whitespace-nowrap ${tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? '+' : '-'}{tx.amount.toLocaleString()} F
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))

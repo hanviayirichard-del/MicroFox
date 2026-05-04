@@ -14,8 +14,14 @@ const VenteLivrets: React.FC = () => {
   const [agentStocks, setAgentStocks] = useState<any>(null);
   const [centralStocks, setCentralStocks] = useState<any>({ epargne: 0, tontine: 0 });
   const [salesJournal, setSalesJournal] = useState<any[]>([]);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  });
   const [activeTab, setActiveTab] = useState<'vente' | 'suivi'>('vente');
   const [receivedHistory, setReceivedHistory] = useState<any[]>([]);
   const [prices, setPrices] = useState({ epargne: 300, tontine: 500 });
@@ -165,15 +171,15 @@ const VenteLivrets: React.FC = () => {
     }
     setReceivedHistory(history.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()));
 
-    // Build Sales Journal - show all sales by the current agent or all sales if admin/caissier
+    // Build Sales Journal - show all sales by the current agent or all sales if admin
     const allSales: any[] = [];
     filteredMembersData.forEach((m: any) => {
       (m.history || []).forEach((tx: any) => {
         const desc = (tx.description || '').toLowerCase();
         if (desc.includes('vente de livret')) {
-          // If agent, only show their own sales
-          if (user.role === 'agent commercial') {
-            if (!desc.includes(`- agent ${agentName.trim().toLowerCase()}`)) return;
+          // If agent or cashier, only show their own sales
+          if (user.role === 'agent commercial' || user.role === 'caissier') {
+            if (!desc.includes(`- agent ${agentName.trim().toLowerCase()}`) && tx.userId !== user.id) return;
           }
           
           allSales.push({
@@ -308,12 +314,17 @@ const VenteLivrets: React.FC = () => {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  const filteredMembers = members.filter(m => 
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.epargneAccountNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.tontineAccounts?.some((t: any) => t.number.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredMembers = members.filter(m => {
+    // Check if invisible for cashiers
+    if (currentUser?.role === 'caissier' && (m.isEpargneInvisible || m.tontineAccounts?.every((acc: any) => acc.isInvisible))) {
+      return false;
+    }
+
+    return m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           m.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           m.epargneAccountNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           m.tontineAccounts?.some((t: any) => t.number.toLowerCase().includes(searchTerm.toLowerCase()));
+  });
 
   const filteredSalesJournal = salesJournal.filter(sale => {
     if (!startDate && !endDate) return true;
@@ -505,6 +516,46 @@ const VenteLivrets: React.FC = () => {
         <div className="bg-red-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg animate-in shake duration-300">
           <AlertCircle size={24} />
           <span className="font-black uppercase tracking-widest text-sm">{errorMessage}</span>
+        </div>
+      )}
+
+      {currentUser?.role === 'agent commercial' && receivedHistory.some(h => h.status === 'En attente') && (
+        <div className="bg-amber-50 border-2 border-amber-500 p-6 rounded-[2rem] shadow-lg animate-in zoom-in duration-500 mb-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg">
+              <AlertCircle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-[#121c32] uppercase tracking-tight">Réceptions en attente</h3>
+              <p className="text-sm text-amber-700 font-bold uppercase tracking-widest italic">Vous avez des livrets envoyés que vous devez confirmer.</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {receivedHistory.filter(h => h.status === 'En attente').map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-white/60 p-4 rounded-2xl border border-amber-200">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-xl ${item.type === 'epargne' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-[#121c32] uppercase">
+                      {item.type === 'epargne' ? 'Livrets Épargne' : 'Livrets Tontine'} (x{item.quantity})
+                    </p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">
+                      Envoyé le {new Date(item.date).toLocaleDateString()} par {item.sender || 'ADMIN'}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleConfirm(item.id)}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-md flex items-center gap-2"
+                >
+                  <CheckCircle size={14} />
+                  Confirmer la Réception
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

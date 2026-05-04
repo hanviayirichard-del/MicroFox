@@ -483,7 +483,13 @@ const TontineWithdrawal: React.FC = () => {
           }
         }
 
-        m.tontineAccounts.forEach((acc: any) => {
+        const visibleTontineAccounts = (currentUser?.role === 'caissier' || currentUser?.role === 'agent commercial')
+          ? m.tontineAccounts.filter((acc: any) => !acc.isInvisible)
+          : m.tontineAccounts;
+
+        if (visibleTontineAccounts.length === 0) return;
+
+        visibleTontineAccounts.forEach((acc: any) => {
           // On passe toutes les demandes (en attente et validées) à getTontineStats pour qu'il puisse scinder les cycles
           const clientRequests = allRequests.filter(r => r.clientId === m.id && (r.tontineAccountId === acc.id || r.tontineAccountNumber === acc.number));
           const isFirstAccount = m.tontineAccounts[0]?.id === acc.id;
@@ -594,6 +600,40 @@ const TontineWithdrawal: React.FC = () => {
     const requests = savedRequests ? JSON.parse(savedRequests) : [];
     const updatedRequests = [newRequest, ...requests];
     localStorage.setItem('microfox_pending_withdrawals', JSON.stringify(updatedRequests));
+
+    // Mise à jour de l'historique du membre pour le Journal Global
+    const savedMembers = localStorage.getItem('microfox_members_data');
+    if (savedMembers) {
+      const allMembers = JSON.parse(savedMembers);
+      const clientId = selectedClient.realClientId || selectedClient.id;
+      const updatedMembers = allMembers.map((m: any) => {
+        if (m.id === clientId) {
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          let fullHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+          
+          const historyEntry = {
+            id: `req_tn_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            type: 'demande',
+            account: 'tontine',
+            amount: amount,
+            date: new Date().toISOString(),
+            description: `Demande de retrait Tontine enregistrée: ${withdrawalReason}`,
+            operator: currentUser.identifiant || 'Inconnu',
+            cashierName: currentUser.identifiant || 'Inconnu',
+            tontineAccountId: selectedClient.tontineAccountId,
+            tontineAccountNumber: selectedClient.accountNumber,
+            userId: currentUser.id
+          };
+          
+          const newHistory = [historyEntry, ...fullHistory];
+          localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
+          return { ...m, history: newHistory };
+        }
+        return m;
+      });
+      localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
+    }
+
     setPendingRequests(updatedRequests);
 
     setSuccessMessage(`Demande de retrait de ${amount} F enregistrée pour ${selectedClient.name}.`);
