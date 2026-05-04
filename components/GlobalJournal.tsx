@@ -44,9 +44,6 @@ const GlobalJournal: React.FC = () => {
       allMembers.forEach((member: any) => {
         if (member.history) {
           member.history.forEach((tx: any) => {
-            // Filter out agent operations for non-agents (they are added via agent payments)
-            if (user.role !== 'agent commercial' && agentIds.includes(tx.userId)) return;
-
             // Filter by user if caissier or agent commercial
             if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
@@ -71,31 +68,6 @@ const GlobalJournal: React.FC = () => {
 
       // Load Caisse operations for caissiers, agents, admins and directors
       if (user.role === 'caissier' || user.role === 'agent commercial' || user.role === 'administrateur' || user.role === 'directeur') {
-        const savedPayments = localStorage.getItem('microfox_agent_payments');
-        if (savedPayments) {
-          const payments = JSON.parse(savedPayments);
-          payments.forEach((p: any) => {
-            if (p.status === 'Validé') {
-              if (user.role === 'caissier' && p.validatorId !== user.id) return;
-              if (user.role === 'agent commercial' && p.agentId !== user.id) return;
-              
-              allTxs.push({
-                id: p.id,
-                date: p.date,
-                type: 'depot',
-                amount: p.observedAmount || p.totalAmount,
-                description: `Versement Agent: ${p.agentName}`,
-                memberName: 'CAISSE',
-                memberCode: p.caisse || 'N/A',
-                account: 'caisse',
-                caisse: p.caisse || 'N/A',
-                userId: p.validatorId,
-                cashierName: p.cashierName || 'N/A'
-              });
-            }
-          });
-        }
-
         const savedVault = localStorage.getItem('microfox_vault_transactions');
         const internalCaisses = Array.from(new Set([
           'CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4',

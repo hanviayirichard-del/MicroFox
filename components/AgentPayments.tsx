@@ -89,8 +89,8 @@ const AgentPayments: React.FC = () => {
             
             if (isAgentTx) {
               const desc = (tx.description || '').toLowerCase();
-              // On prend en compte les cotisations et dépôts (ventes livrets)
-              if (tx.type === 'cotisation' || tx.type === 'depot') {
+              // On prend en compte les cotisations, remboursements et dépôts (ventes livrets)
+              if (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'remboursement' || tx.type === 'complement') {
                 if (desc.includes('livret')) {
                   livrets += Number(tx.amount || 0);
                   nbLivrets += 1;
@@ -262,6 +262,34 @@ const AgentPayments: React.FC = () => {
       setIsSubmitting(false);
       setTimeout(() => setSuccessMessage(null), 4000);
     }, 1500);
+  };
+
+  const handleCancelPayment = (paymentId: string) => {
+    if (!confirm("Voulez-vous vraiment annuler ce versement ?")) return;
+
+    const saved = localStorage.getItem('microfox_agent_payments');
+    if (!saved) return;
+
+    const allPayments = JSON.parse(saved);
+    const payment = allPayments.find((p: any) => p.id === paymentId);
+
+    if (!payment || payment.status !== 'En attente') return;
+
+    // Mark as cancelled
+    payment.status = 'Annulé';
+    localStorage.setItem('microfox_agent_payments', JSON.stringify(allPayments));
+
+    // Return the exact physical totalAmount to agent balance
+    const agentBalanceKey = `microfox_agent_balance_${payment.agentId}`;
+    const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
+    const newBalance = currentAgentBalance + Number(payment.totalAmount || 0);
+    localStorage.setItem(agentBalanceKey, newBalance.toString());
+
+    // Update locally and refresh UI
+    setPaymentsHistory(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'Annulé' } : p));
+    setAgentBalance(newBalance);
+    
+    dispatchStorageEvent();
   };
 
   return (
@@ -487,18 +515,31 @@ const AgentPayments: React.FC = () => {
                         {new Date(p.date).toLocaleDateString()} - {new Date(p.date).toLocaleTimeString()}
                         {p.zone && <span className="ml-2 text-blue-600">(ZONE {p.zone})</span>}
                       </p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total: {p.totalAmount.toLocaleString()} F</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Total: {p.totalAmount.toLocaleString()} F
+                        {p.caisse && <span className="ml-2 text-[#121c32]">({p.caisse})</span>}
+                      </p>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                      p.status === 'Validé' ? 'bg-emerald-100 text-emerald-600' : 
-                      p.status === 'Annulé' || p.status === 'Rejeté' ? 'bg-red-100 text-red-600' :
-                      'bg-amber-100 text-amber-600 animate-pulse'
-                    }`}>
-                      {p.status === 'Validé' ? 'Validé' : 
-                       p.status === 'Annulé' ? 'Annulé' :
-                       p.status === 'Rejeté' ? 'Rejeté' :
-                       'En attente de validation'}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                        p.status === 'Validé' ? 'bg-emerald-100 text-emerald-600' : 
+                        p.status === 'Annulé' || p.status === 'Rejeté' ? 'bg-red-100 text-red-600' :
+                        'bg-amber-100 text-amber-600 animate-pulse'
+                      }`}>
+                        {p.status === 'Validé' ? 'Validé' : 
+                         p.status === 'Annulé' ? 'Annulé' :
+                         p.status === 'Rejeté' ? 'Rejeté' :
+                         'En attente'}
+                      </span>
+                      {p.status === 'En attente' && (
+                        <button
+                          onClick={() => handleCancelPayment(p.id)}
+                          className="text-[9px] font-black text-red-500 uppercase underline hover:text-red-700 transition-colors"
+                        >
+                          Annuler
+                        </button>
+                      )}
+                    </div>
                   </div>
                   
                   {p.billetage && (
