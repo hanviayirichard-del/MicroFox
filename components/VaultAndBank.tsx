@@ -10,7 +10,7 @@ const VaultAndBank: React.FC = () => {
   });
 
   const [bankBalance, setBankBalance] = useState(() => {
-    const saved = localStorage.getItem('microfox_bank_balance');
+    const saved = localStorage.getItem('microfox_cash_balance_CAISSE PRINCIPALE');
     return saved ? Number(saved) : 30000000;
   });
 
@@ -69,7 +69,7 @@ const VaultAndBank: React.FC = () => {
       const vBal = localStorage.getItem('microfox_vault_balance');
       if (vBal) setVaultBalance(Number(vBal));
       
-      const bBal = localStorage.getItem('microfox_bank_balance');
+      const bBal = localStorage.getItem('microfox_cash_balance_CAISSE PRINCIPALE');
       if (bBal) setBankBalance(Number(bBal));
 
       const txs = localStorage.getItem('microfox_vault_transactions');
@@ -105,34 +105,34 @@ const VaultAndBank: React.FC = () => {
     }
 
     const savedVault = localStorage.getItem('microfox_vault_balance');
-    const savedBank = localStorage.getItem('microfox_bank_balance');
+    const savedBank = localStorage.getItem('microfox_cash_balance_CAISSE PRINCIPALE');
     let newVault = savedVault ? Number(savedVault) : 20000000;
     let newBank = savedBank ? Number(savedBank) : 30000000;
     const cashKey = `microfox_cash_balance_${selectedCaisse}`;
     const savedCash = localStorage.getItem(cashKey);
-    let cashBalance = savedCash !== null ? Number(savedCash) : 0;
+    let cashBalance = savedCash !== null ? Number(savedCash) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 30000000 : 0);
     let typeLabel = "";
     let to = "";
     let from = "";
 
     if (modalType === 'INIT_BANK') {
       newBank = val;
-      typeLabel = "Initialisation Solde Banque";
+      typeLabel = "Initialisation Caisse Principale";
       from = "Système";
-      to = "Banque";
+      to = "Caisse Principale";
     } else if (modalType === 'VtoB') {
       if (val > vaultBalance) { alert("Solde coffre insuffisant."); return; }
       newVault -= val;
       newBank += val;
-      typeLabel = "Dépôt en Banque";
+      typeLabel = "Versement Caisse Principale";
       from = "Coffre";
-      to = "Banque";
+      to = "Caisse Principale";
     } else if (modalType === 'BtoV') {
-      if (val > bankBalance) { alert("Solde banque insuffisant."); return; }
+      if (val > bankBalance) { alert("Solde Caisse Principale insuffisant."); return; }
       newBank -= val;
       newVault += val;
-      typeLabel = "Retrait de Banque";
-      from = "Banque";
+      typeLabel = "Retrait Caisse Principale";
+      from = "Caisse Principale";
       to = "Coffre";
     } else if (modalType === 'VtoC') {
       if (val > vaultBalance) { alert("Solde coffre insuffisant."); return; }
@@ -156,11 +156,14 @@ const VaultAndBank: React.FC = () => {
       const isMainCaisse = selectedCaisse === 'CAISSE PRINCIPALE';
       if (isMainCaisse) {
         if (destination === 'Banque') {
-          newBank += observed;
-          to = "Banque";
+          // Already in CAISSE PRINCIPALE, no change needed if destination is self
+          newBank = cashBalance; 
+          to = "Caisse Principale";
         } else {
           newVault += observed;
           to = "Coffre";
+          // Update bankBalance immediately to reflect the change from CAISSE PRINCIPALE to Vault
+          newBank = cashBalance;
         }
       } else {
         const mainCaisseKey = 'microfox_cash_balance_CAISSE PRINCIPALE';
@@ -203,8 +206,12 @@ const VaultAndBank: React.FC = () => {
     setVaultBalance(newVault);
     setBankBalance(newBank);
     localStorage.setItem('microfox_vault_balance', newVault.toString());
-    localStorage.setItem('microfox_bank_balance', newBank.toString());
-    localStorage.setItem(cashKey, cashBalance.toString());
+    localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', newBank.toString());
+    
+    // If we're operating on a different caisse, we need to save its balance too
+    if (selectedCaisse !== 'CAISSE PRINCIPALE') {
+      localStorage.setItem(cashKey, cashBalance.toString());
+    }
 
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     const newTx = {
@@ -314,7 +321,7 @@ const VaultAndBank: React.FC = () => {
               className="flex items-center justify-center gap-2 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
             >
               <BankIcon size={16} />
-              Vers Banque
+              Vers Caisse Principale
             </button>
             <button 
               onClick={() => openModal('VtoC')}
@@ -336,7 +343,7 @@ const VaultAndBank: React.FC = () => {
                 <BankIcon size={24} className="text-blue-600" />
               </div>
               <div>
-                <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Solde Bancaire Global</h2>
+                <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Solde Caisse Principale</h2>
                 <div className="flex items-center gap-2">
                   <p className="text-3xl font-black text-[#121c32] tracking-tight">{bankBalance.toLocaleString()} F</p>
                   <button 
@@ -546,10 +553,10 @@ const VaultAndBank: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-xl font-black text-[#121c32] uppercase tracking-tight">
-                  {modalType === 'VtoB' ? 'Coffre vers Banque' : 
-                   modalType === 'BtoV' ? 'Banque vers Coffre' : 
+                  {modalType === 'VtoB' ? 'Coffre vers Caisse Principale' : 
+                   modalType === 'BtoV' ? 'Caisse Principale vers Coffre' : 
                    modalType === 'VtoC' ? 'Coffre vers Caisse' : 
-                   modalType === 'INIT_BANK' ? 'Initialisation Banque' : 'Versement Fin de Journée'}
+                   modalType === 'INIT_BANK' ? 'Initialisation Caisse Principale' : 'Versement Fin de Journée'}
                 </h2>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Transaction Interne</p>
               </div>
@@ -685,7 +692,7 @@ const VaultAndBank: React.FC = () => {
                       onClick={() => setDestination('Banque')}
                       className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${destination === 'Banque' ? 'bg-[#121c32] text-white' : 'bg-gray-100 text-gray-400'}`}
                     >
-                      Banque
+                      Caisse Principale
                     </button>
                   </div>
                 </div>

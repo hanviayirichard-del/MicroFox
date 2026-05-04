@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         'caissier': ['Accueil', 'Membres', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Stocks Livrets', 'Notification', 'Guide Pratique'],
         'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
         'auditeur': ['Accueil', 'Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification', 'Guide Pratique'],
-        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Suivi des crédits', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
+        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Suivi des crédits', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Stocks Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
         'gestionnaire de crédit': ['Accueil', 'Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Notification', 'Guide Pratique']
       };
 

@@ -282,9 +282,9 @@ const Configuration: React.FC = () => {
   const handleResetAccounts = () => {
     if (confirm("ATTENTION : Voulez-vous vraiment remettre tous les comptes à zéro et annuler les opérations en cours ? Cette action est irréversible.")) {
       // Reset main balances
-      localStorage.setItem('microfox_vault_balance', '0');
+      localStorage.setItem('microfox_vault_balance', '20000000');
       localStorage.setItem('microfox_bank_balance', '0');
-      localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '0');
+      localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', '30000000');
       localStorage.setItem('microfox_cash_balance_CAISSE 1', '0');
       localStorage.setItem('microfox_cash_balance_CAISSE 2', '0');
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { dispatchStorageEvent } from '../utils/events';
-import { Package, Plus, Send, History as HistoryIcon, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download, Search } from 'lucide-react';
+import { Package, Plus, Send, History as HistoryIcon, ArrowDownCircle, ArrowUpCircle, User as UserIcon, Download, Search, AlertCircle } from 'lucide-react';
 import { User } from '../types';
 import * as XLSX from 'xlsx';
 
@@ -254,6 +254,25 @@ const StocksLivrets: React.FC = () => {
     saveStocks(newStocks);
   };
 
+  const handleCancel = (id: string, mType: 'RÉPARTITION' | 'RETOUR') => {
+    const newStocks = { ...stocks };
+    
+    if (mType === 'RÉPARTITION') {
+      const distrib = stocks.distributions.find(d => d.id === id);
+      if (distrib && distrib.sender === 'ADMIN') {
+        newStocks.central = {
+          ...newStocks.central,
+          [distrib.type]: newStocks.central[distrib.type] + distrib.quantity
+        };
+      }
+      newStocks.distributions = stocks.distributions.filter(d => d.id !== id);
+    } else {
+      newStocks.returns = (stocks.returns || []).filter(r => r.id !== id);
+    }
+
+    saveStocks(newStocks);
+  };
+
   // Calculate current stock per user
   const getAgentStocks = () => {
     const userStocks: Record<string, { epargne: number, tontine: number }> = {};
@@ -361,6 +380,23 @@ const StocksLivrets: React.FC = () => {
           <p className="text-gray-400 font-medium">Suivi des approvisionnements, répartitions et ventes.</p>
         </div>
       </div>
+
+      {/* Validation Banner for Cashiers */}
+      {currentUser.role === 'caissier' && stocks.distributions.some(d => 
+        (d.recipient || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim() && d.status === 'En attente'
+      ) && (
+        <div className="bg-amber-50 border-2 border-amber-500 p-6 rounded-[2rem] shadow-xl animate-in zoom-in duration-500 mb-8 ring-4 ring-amber-500/20">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg animate-pulse">
+              <AlertCircle size={32} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-[#121c32] uppercase tracking-tight">Réceptions de livrets en attente</h3>
+              <p className="text-sm text-amber-700 font-bold uppercase tracking-widest italic">Action requise : Veuillez valider les livrets reçus dans le tableau "Historique des Mouvements" (colonne ACTION).</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -755,10 +791,10 @@ const StocksLivrets: React.FC = () => {
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .map((m: any, idx: number) => {
                   const isPositive = (() => {
-                    const myId = currentUser.identifiant.toLowerCase();
+                    const myId = (currentUser.identifiant || "").toLowerCase().trim();
                     if (m.mType === 'ACHAT') return true;
-                    if (m.mType === 'RÉPARTITION') return m.recipient.toLowerCase() === myId || (currentUser.role !== 'agent commercial' && m.sender === 'ADMIN');
-                    if (m.mType === 'RETOUR') return m.to.toLowerCase() === myId || (currentUser.role !== 'agent commercial' && m.to === 'ADMIN');
+                    if (m.mType === 'RÉPARTITION') return (m.recipient || "").toLowerCase().trim() === myId || (currentUser.role !== 'agent commercial' && m.sender === 'ADMIN');
+                    if (m.mType === 'RETOUR') return (m.to || "").toLowerCase().trim() === myId || (currentUser.role !== 'agent commercial' && m.to === 'ADMIN');
                     if (m.mType === 'VENTE') return false;
                     return false;
                   })();
@@ -801,20 +837,37 @@ const StocksLivrets: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {m.mType !== 'ACHAT' && m.mType !== 'VENTE' && m.status === 'En attente' && (
-                          (m.mType === 'RÉPARTITION' && (m.recipient || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim()) ||
-                          (m.mType === 'RETOUR' && (
-                            (m.to === 'ADMIN' && (currentUser.role === 'administrateur' || currentUser.role === 'directeur')) ||
-                            ((m.to || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim())
-                          ))
-                        ) && (
-                          <button 
-                            onClick={() => handleConfirm(m.id, m.mType)}
-                            className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-lg border-2 border-emerald-400/30"
-                          >
-                            Confirmer
-                          </button>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {m.mType !== 'ACHAT' && m.mType !== 'VENTE' && m.status === 'En attente' && (
+                            (m.mType === 'RÉPARTITION' && (m.recipient || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim()) ||
+                            (m.mType === 'RETOUR' && (
+                              (m.to === 'ADMIN' && (currentUser.role === 'administrateur' || currentUser.role === 'directeur')) ||
+                              ((m.to || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim())
+                            ))
+                          ) && (
+                            <button 
+                              onClick={() => handleConfirm(m.id, m.mType)}
+                              className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-lg border-2 border-emerald-400/30 whitespace-nowrap"
+                            >
+                              Confirmer
+                            </button>
+                          )}
+                          
+                          {m.mType !== 'ACHAT' && m.mType !== 'VENTE' && m.status === 'En attente' && (
+                            (m.mType === 'RÉPARTITION' && (
+                              (m.sender === 'ADMIN' && (currentUser.role === 'administrateur' || currentUser.role === 'directeur')) ||
+                              ((m.sender || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim())
+                            )) ||
+                            (m.mType === 'RETOUR' && (m.from || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim())
+                          ) && (
+                            <button 
+                              onClick={() => handleCancel(m.id, m.mType)}
+                              className="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all active:scale-95 shadow-lg border-2 border-rose-400/30 whitespace-nowrap"
+                            >
+                              Annuler
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

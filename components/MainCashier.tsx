@@ -75,7 +75,7 @@ const MainCashier: React.FC = () => {
       }
     }
     const saved = localStorage.getItem(`microfox_cash_balance_${initialCaisse}`);
-    return saved !== null ? Number(saved) : 0;
+    return saved !== null ? Number(saved) : (initialCaisse === 'CAISSE PRINCIPALE' ? 30000000 : 0);
   });
   const [denominations, setDenominations] = useState<any>({
     '10000': 0,
@@ -123,7 +123,7 @@ const MainCashier: React.FC = () => {
       if (savedPayments) setPayments(JSON.parse(savedPayments));
       
       const savedBalance = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-      setCashBalance(savedBalance !== null ? Number(savedBalance) : 0);
+      setCashBalance(savedBalance !== null ? Number(savedBalance) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 30000000 : 0));
     };
     
     loadData();
