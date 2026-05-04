@@ -305,6 +305,24 @@ const VenteLivrets: React.FC = () => {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
+  const handleConfirmAll = () => {
+    const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+    if (!savedStocks) return;
+    
+    const stocks = JSON.parse(savedStocks);
+    const pendingIds = receivedHistory.filter(h => h.status === 'En attente').map(h => h.id);
+    
+    stocks.distributions = stocks.distributions.map((d: any) => 
+      pendingIds.includes(d.id) ? { ...d, status: 'Validé' } : d
+    );
+    
+    localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+    dispatchStorageEvent();
+    loadData();
+    setSuccessMessage("Toutes les réceptions ont été confirmées !");
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
   const handleUpdatePrice = () => {
     const newPrices = { epargne: tempPriceEpargne, tontine: tempPriceTontine };
     setPrices(newPrices);
@@ -450,6 +468,15 @@ const VenteLivrets: React.FC = () => {
                 <p className="text-3xl font-black text-white leading-none mt-1">{agentStocks?.tontine || 0}</p>
               </div>
             </div>
+            {receivedHistory.some(h => h.status === 'En attente') && (
+              <button 
+                onClick={handleConfirmAll}
+                className="w-full mt-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              >
+                <CheckCircle size={14} />
+                Confirmer les livrets en attente
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -519,7 +546,7 @@ const VenteLivrets: React.FC = () => {
         </div>
       )}
 
-      {currentUser?.role === 'agent commercial' && receivedHistory.some(h => h.status === 'En attente') && (
+      {(currentUser?.role === 'agent commercial' || currentUser?.role === 'caissier') && receivedHistory.some(h => h.status === 'En attente') && (
         <div className="bg-amber-50 border-2 border-amber-500 p-6 rounded-[2rem] shadow-lg animate-in zoom-in duration-500 mb-6">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg">

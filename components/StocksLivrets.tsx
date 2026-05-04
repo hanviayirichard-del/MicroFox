@@ -66,9 +66,13 @@ const StocksLivrets: React.FC = () => {
   });
   const [salesData, setSalesData] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+  const [currentUser, setCurrentUser] = useState<any>(() => JSON.parse(localStorage.getItem('microfox_current_user') || '{}'));
 
   const loadData = () => {
+    const savedUser = localStorage.getItem('microfox_current_user');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+    }
     const savedStocks = localStorage.getItem('microfox_livrets_stocks');
     if (savedStocks) {
       setStocks(JSON.parse(savedStocks));
@@ -721,11 +725,11 @@ const StocksLivrets: React.FC = () => {
                   }
 
                   const matchesRole = (() => {
-                    if (currentUser.role !== 'agent commercial') return true;
-                    const myId = currentUser.identifiant.toLowerCase();
+                    const myId = (currentUser.identifiant || "").toLowerCase().trim();
+                    if (currentUser.role === 'administrateur' || currentUser.role === 'directeur') return true;
                     if (m.mType === 'ACHAT') return false;
-                    if (m.mType === 'RÉPARTITION') return m.recipient.toLowerCase() === myId || (m.sender && m.sender.toLowerCase() === myId);
-                    if (m.mType === 'RETOUR') return m.from.toLowerCase() === myId || m.to.toLowerCase() === myId;
+                    if (m.mType === 'RÉPARTITION') return (m.recipient || "").toLowerCase().trim() === myId || (m.sender && m.sender.toLowerCase().trim() === myId);
+                    if (m.mType === 'RETOUR') return (m.from || "").toLowerCase().trim() === myId || (m.to || "").toLowerCase().trim() === myId;
                     if (m.mType === 'VENTE') {
                       const agentName = (m.description.split(/ - Agent /i)[1] || "").trim().toLowerCase();
                       return agentName === myId;
@@ -798,15 +802,15 @@ const StocksLivrets: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         {m.mType !== 'ACHAT' && m.mType !== 'VENTE' && m.status === 'En attente' && (
-                          (m.mType === 'RÉPARTITION' && m.recipient.toLowerCase() === currentUser.identifiant.toLowerCase()) ||
+                          (m.mType === 'RÉPARTITION' && (m.recipient || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim()) ||
                           (m.mType === 'RETOUR' && (
                             (m.to === 'ADMIN' && (currentUser.role === 'administrateur' || currentUser.role === 'directeur')) ||
-                            (m.to.toLowerCase() === currentUser.identifiant.toLowerCase())
+                            ((m.to || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim())
                           ))
                         ) && (
                           <button 
                             onClick={() => handleConfirm(m.id, m.mType)}
-                            className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                            className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-lg border-2 border-emerald-400/30"
                           >
                             Confirmer
                           </button>
