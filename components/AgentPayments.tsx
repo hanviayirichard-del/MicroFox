@@ -9,6 +9,8 @@ const AgentPayments: React.FC = () => {
   const [totalLivrets, setTotalLivrets] = useState(0);
   const [totalNbLivrets, setTotalNbLivrets] = useState(0);
   const [agentBalance, setAgentBalance] = useState(0);
+  const [todayCollected, setTodayCollected] = useState(0);
+  const [todayTransactions, setTodayTransactions] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,6 +76,9 @@ const AgentPayments: React.FC = () => {
       let cotisations = 0;
       let livrets = 0;
       let nbLivrets = 0;
+      let todayTotal = 0;
+      let todayTxs: any[] = [];
+      const todayStr = new Date().toISOString().split('T')[0];
 
       if (savedMembers) {
         const allMembers = JSON.parse(savedMembers);
@@ -88,20 +93,28 @@ const AgentPayments: React.FC = () => {
                              (tx.cashierName === user.identifiant);
             
             if (isAgentTx) {
+              const amount = Number(tx.amount || 0);
               const desc = (tx.description || '').toLowerCase();
-              // On prend en compte les cotisations, remboursements et dépôts (ventes livrets)
-              if (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'remboursement' || tx.type === 'complement') {
+              const isValidType = tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'remboursement' || tx.type === 'complement';
+              
+              if (isValidType && tx.date.startsWith(todayStr)) {
+                // Pour le détail et le solde du jour, on filtre par date
+                todayTotal += amount;
+                todayTxs.push({ ...tx, clientName: m.name, clientCode: m.code });
+                
                 if (desc.includes('livret')) {
-                  livrets += Number(tx.amount || 0);
+                  livrets += amount;
                   nbLivrets += 1;
                 } else {
-                  cotisations += Number(tx.amount || 0);
+                  cotisations += amount;
                 }
               }
             }
           });
         });
       }
+      setTodayCollected(todayTotal);
+      setTodayTransactions(todayTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       const savedPayments = localStorage.getItem('microfox_agent_payments');
       let paidCotisations = 0;
       let paidLivrets = 0;
@@ -109,9 +122,8 @@ const AgentPayments: React.FC = () => {
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
-          // Soustraire tous les versements déjà soumis ou validés pour cet agent
-          // Ne pas soustraire les versements annulés ou rejetés car l'argent est retourné au solde agent
-          if (String(p.agentId) === String(user.id) && p.status !== 'Annulé' && p.status !== 'Rejeté') {
+          // Soustraire tous les versements déjà soumis ou validés pour cet agent aujourd'hui
+          if (String(p.agentId) === String(user.id) && p.status !== 'Annulé' && p.status !== 'Rejeté' && p.date.startsWith(todayStr)) {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
             paidNbLivrets += Number(p.nbLivrets || 0);
@@ -119,29 +131,26 @@ const AgentPayments: React.FC = () => {
         });
       }
 
-      // Le montant à verser doit correspondre au solde réel de l'agent
+      // Le montant à verser correspond maintenant aux collectes du jour non encore versées
       const calculatedCotisations = Math.max(0, cotisations - paidCotisations);
       const calculatedLivrets = Math.max(0, livrets - paidLivrets);
       const calculatedNbLivrets = Math.max(0, nbLivrets - paidNbLivrets);
-      
-      // Le montant à verser doit être strictement plafonné par le solde réel de l'agent (currentAgentBalance)
-      // pour éviter que des montants déjà versés ne réapparaissent à cause d'écarts de calcul avec l'historique.
-      if (currentAgentBalance <= 0) {
-        setTotalCotisations(0);
-        setTotalLivrets(0);
-        setTotalNbLivrets(0);
-      } else {
-        // On répartit le solde réel en priorité sur les livrets, puis le reste en cotisations
-        const cappedLivrets = Math.min(calculatedLivrets, currentAgentBalance);
-        setTotalLivrets(cappedLivrets);
-        setTotalCotisations(currentAgentBalance - cappedLivrets);
-        // Pour les livrets, le nombre est calculé strictement en divisant le montant par le prix unitaire
-        const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{}');
-        const prixLivret = mfConfig.prixLivretTontine || 500;
-        const estimatedNb = cappedLivrets > 0 ? Math.floor(cappedLivrets / prixLivret) : 0;
-        
-        setTotalNbLivrets(estimatedNb);
+      const auditBalance = calculatedCotisations + calculatedLivrets;
+
+      // Synchroniser le solde agent du jour
+      if (auditBalance !== currentAgentBalance) {
+        localStorage.setItem(agentBalanceKey, auditBalance.toString());
+        setAgentBalance(auditBalance);
       }
+
+      setTotalCotisations(calculatedCotisations);
+      setTotalLivrets(calculatedLivrets);
+      
+      // Pour les livrets, le nombre est calculé strictement en divisant le montant par le prix unitaire
+      const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{}');
+      const prixLivret = mfConfig.prixLivretTontine || 500;
+      const estimatedNb = calculatedLivrets > 0 ? Math.floor(calculatedLivrets / prixLivret) : 0;
+      setTotalNbLivrets(estimatedNb);
     };
 
     const loadHistory = () => {
@@ -320,11 +329,24 @@ const AgentPayments: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Solde Agent à Verser</h2>
-            <span className="text-2xl font-black text-emerald-600">{theoreticalTotal.toLocaleString()} FCFA</span>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center pb-4 border-b border-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <TrendingUp size={16} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Collecté ce Jour</p>
+                  <p className="text-sm font-black text-indigo-600">{todayCollected.toLocaleString()} FCFA</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Solde en main</p>
+                <p className="text-lg font-black text-emerald-600">{theoreticalTotal.toLocaleString()} FCFA</p>
+              </div>
+            </div>
           </div>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Choisir la Caisse de versement</label>
@@ -478,6 +500,30 @@ const AgentPayments: React.FC = () => {
             <p className="mt-2 text-[10px] font-black text-gray-400 text-center uppercase tracking-tight">
               Validation impossible : aucun montant à verser aujourd'hui.
             </p>
+          )}
+
+          {/* New Section: Today's Collections Details */}
+          {todayTransactions.length > 0 && (
+            <div className="mt-8 pt-8 border-t border-gray-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Détail des Collectes du jour</h3>
+                  <p className="text-[9px] font-bold text-indigo-600 uppercase">Total: {todayCollected.toLocaleString()} F</p>
+                </div>
+                <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{todayTransactions.length}</span>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                {todayTransactions.map((tx, i) => (
+                  <div key={i} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between group hover:bg-white transition-all">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-[#121c32] uppercase">{tx.clientName}</span>
+                      <span className="text-[9px] font-bold text-gray-400">{new Date(tx.date).toLocaleTimeString()} • {tx.description}</span>
+                    </div>
+                    <span className="text-xs font-black text-emerald-600">{tx.amount.toLocaleString()} F</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
