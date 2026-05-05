@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dispatchStorageEvent } from '../utils/events';
-import { RotateCcw, Search, Calendar, User, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
+import { RotateCcw, Search, Calendar, User, AlertCircle, CheckCircle, Trash2, Download, Printer } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
 interface TontineTransaction {
@@ -21,6 +21,8 @@ interface TontineTransaction {
 
 const CancelCotisation: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [transactions, setTransactions] = useState<TontineTransaction[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -181,17 +183,52 @@ const CancelCotisation: React.FC = () => {
     }
   };
 
-  const filteredTransactions = transactions.filter(tx => 
-    tx.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tx.clientCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (tx.tontineAccountNumber && tx.tontineAccountNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    tx.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTransactions = transactions.filter(tx => {
+    const txDateString = new Date(tx.date).toISOString().split('T')[0];
+    const matchesSearch = tx.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.clientCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.tontineAccountNumber && tx.tontineAccountNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      tx.description.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesDate = txDateString >= startDate && txDateString <= endDate;
+    
+    return matchesSearch && matchesDate;
+  });
+
+  const totalFilteredAmount = filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleExport = () => {
+    if (filteredTransactions.length === 0) return;
+    
+    const headers = ["Date", "Client", "Code", "Description", "Montant", "Statut"];
+    const rows = filteredTransactions.map(tx => [
+      new Date(tx.date).toLocaleDateString(),
+      tx.clientName,
+      tx.clientCode,
+      tx.description.replace(/,/g, ' '),
+      tx.amount.toString(),
+      tx.isValidated ? "Versé" : "En attente"
+    ]);
+    
+    const csvContent = "\ufeff" + [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `annulations_cotisations_${startDate}_au_${endDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-start gap-3">
           <div className="mt-1 text-red-500">
             <RotateCcw size={24} />
@@ -203,34 +240,97 @@ const CancelCotisation: React.FC = () => {
             <p className="text-gray-500 font-medium text-sm mt-1">Gérer les erreurs de saisie avant versement</p>
           </div>
         </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto print:hidden">
+          <button 
+            onClick={handlePrint}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
+          >
+            <Printer size={16} />
+            Imprimer
+          </button>
+          <button 
+            onClick={handleExport}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#121c32] text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-[#121c32]/90 transition-all active:scale-95 shadow-lg shadow-[#121c32]/10"
+          >
+            <Download size={16} />
+            Exporter
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
-      {successMessage && (
-        <div className="bg-emerald-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
-          <CheckCircle size={20} />
-          <span className="font-black uppercase tracking-tight text-sm text-center">{successMessage}</span>
+      {(successMessage || errorMessage) && (
+        <div className="print:hidden space-y-4">
+          {successMessage && (
+            <div className="bg-emerald-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+              <CheckCircle size={20} />
+              <span className="font-black uppercase tracking-tight text-sm text-center">{successMessage}</span>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="bg-red-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+              <AlertCircle size={20} />
+              <span className="font-black uppercase tracking-tight text-sm text-center">{errorMessage}</span>
+            </div>
+          )}
         </div>
       )}
 
-      {errorMessage && (
-        <div className="bg-red-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
-          <AlertCircle size={20} />
-          <span className="font-black uppercase tracking-tight text-sm text-center">{errorMessage}</span>
+      {/* Search & Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input 
+              type="text" 
+              placeholder="Rechercher par client ou description..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 text-[#121c32] rounded-2xl font-medium outline-none placeholder:text-gray-400 border border-gray-100 focus:border-red-500 transition-all"
+            />
+          </div>
         </div>
-      )}
 
-      {/* Search Bar */}
-      <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Rechercher par client ou description..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-gray-50 text-[#121c32] rounded-2xl font-medium outline-none placeholder:text-gray-400 border border-gray-100 focus:border-red-500 transition-all"
-          />
+        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Du</label>
+              <input 
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 text-[#121c32] rounded-xl font-bold outline-none border border-gray-100 focus:border-red-500 transition-all text-sm"
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Au</label>
+              <input 
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 text-[#121c32] rounded-xl font-bold outline-none border border-gray-100 focus:border-red-500 transition-all text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary Stat */}
+      <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-500">
+            <Calendar size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total des cotisations filtrées</p>
+            <p className="text-2xl font-black text-[#121c32]">{totalFilteredAmount.toLocaleString()} FCFA</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transactions</p>
+          <p className="text-lg font-bold text-[#121c32]">{filteredTransactions.length}</p>
         </div>
       </div>
 
@@ -245,7 +345,7 @@ const CancelCotisation: React.FC = () => {
                 <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Montant</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Statut</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Action</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right print:hidden">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -282,7 +382,7 @@ const CancelCotisation: React.FC = () => {
                         <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black uppercase tracking-tight">En attente</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right print:hidden">
                       {!tx.isValidated ? (
                         <button 
                           onClick={() => handleCancel(tx)}
