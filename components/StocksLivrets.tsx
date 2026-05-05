@@ -497,9 +497,12 @@ const StocksLivrets: React.FC = () => {
                 >
                   <option value="">-- Sélectionner un bénéficiaire --</option>
                   {users
-                    .filter(u => !u.isBlocked && (
-                      (currentUser.role === 'caissier' ? u.role === 'agent commercial' : (u.role === 'agent commercial' || u.role === 'caissier'))
-                    ) && u.identifiant !== currentUser.identifiant)
+                    .filter(u => {
+                      const isNotDeleted = !u.isDeleted;
+                      const isVisible = !u.isHiddenForDistribution || currentUser.role === 'administrateur';
+                      const allowedRole = currentUser.role === 'caissier' ? u.role === 'agent commercial' : (u.role === 'agent commercial' || u.role === 'caissier');
+                      return isNotDeleted && !u.isBlocked && isVisible && allowedRole && u.identifiant !== currentUser.identifiant;
+                    })
                     .map(u => (
                       <option key={u.id} value={u.identifiant}>
                         {u.identifiant} ({u.role === 'caissier' ? u.caisse || 'Caisse' : `Zone ${u.zoneCollecte || 'N/A'}`})

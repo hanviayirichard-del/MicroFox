@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Shield, Building2, Lock, User as UserIcon, Trash2, Search, Ban, CheckCircle, Fingerprint, ShieldCheck } from 'lucide-react';
+import { UserPlus, Shield, Building2, Lock, User as UserIcon, Trash2, Search, Ban, CheckCircle, Fingerprint, ShieldCheck, Eye, EyeOff, Pencil } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { recordAuditLog } from '../utils/audit';
+import { dispatchStorageEvent } from '../utils/events';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   
   const [formData, setFormData] = useState({
     identifiant: '',
@@ -85,30 +87,88 @@ const UserManagement: React.FC = () => {
     loadUsers();
     window.addEventListener('storage', loadUsers);
     window.addEventListener('microfox_storage' as any, loadUsers);
-    return () => window.removeEventListener('storage', loadUsers);
+    return () => {
+      window.removeEventListener('storage', loadUsers);
       window.removeEventListener('microfox_storage' as any, loadUsers);
+    };
   }, []);
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleOpenCreateModal = () => {
+    setEditingUser(null);
+    setFormData({
+      identifiant: '',
+      role: 'agent commercial',
+      microfinance: '',
+      codeMF: '',
+      motDePasse: '',
+      zoneCollecte: '',
+      zonesCollecte: [],
+      caisse: '',
+      fingerprintCredential: undefined
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormData({
+      identifiant: user.identifiant,
+      role: user.role,
+      microfinance: user.microfinance,
+      codeMF: user.codeMF,
+      motDePasse: user.motDePasse,
+      zoneCollecte: user.zoneCollecte,
+      zonesCollecte: user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []),
+      caisse: user.caisse || '',
+      fingerprintCredential: user.fingerprintCredential
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newUser: User = {
-      id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      identifiant: formData.identifiant.trim(),
-      role: formData.role,
-      microfinance: formData.microfinance.trim(),
-      codeMF: formData.codeMF.trim().toUpperCase(),
-      motDePasse: formData.motDePasse,
-      zoneCollecte: formData.zonesCollecte.length > 0 ? formData.zonesCollecte[0] : '',
-      zonesCollecte: formData.zonesCollecte,
-      caisse: formData.caisse,
-      isBlocked: false,
-      fingerprintCredential: formData.fingerprintCredential
-    };
+    if (editingUser) {
+      const updatedUser: User = {
+        ...editingUser,
+        identifiant: formData.identifiant.trim(),
+        role: formData.role,
+        microfinance: formData.microfinance.trim(),
+        codeMF: formData.codeMF.trim().toUpperCase(),
+        motDePasse: formData.motDePasse,
+        zoneCollecte: formData.zonesCollecte.length > 0 ? formData.zonesCollecte[0] : '',
+        zonesCollecte: formData.zonesCollecte,
+        caisse: formData.caisse,
+        fingerprintCredential: formData.fingerprintCredential
+      };
+      
+      const updatedUsers = users.map(u => u.id === editingUser.id ? updatedUser : u);
+      setUsers(updatedUsers);
+      localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+      dispatchStorageEvent();
+      recordAuditLog('MODIFICATION', 'UTILISATEURS', `Modification de l'utilisateur ${updatedUser.identifiant}`);
+    } else {
+      const newUser: User = {
+        id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        identifiant: formData.identifiant.trim(),
+        role: formData.role,
+        microfinance: formData.microfinance.trim(),
+        codeMF: formData.codeMF.trim().toUpperCase(),
+        motDePasse: formData.motDePasse,
+        zoneCollecte: formData.zonesCollecte.length > 0 ? formData.zonesCollecte[0] : '',
+        zonesCollecte: formData.zonesCollecte,
+        caisse: formData.caisse,
+        isBlocked: false,
+        isHiddenForDistribution: false,
+        fingerprintCredential: formData.fingerprintCredential
+      };
+      
+      const updatedUsers = [...users, newUser];
+      setUsers(updatedUsers);
+      localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+      dispatchStorageEvent();
+      recordAuditLog('CREATION', 'UTILISATEURS', `Création de l'utilisateur ${newUser.identifiant} (${newUser.role})`);
+    }
     
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
-    recordAuditLog('CREATION', 'UTILISATEURS', `Création de l'utilisateur ${newUser.identifiant} (${newUser.role})`);
     setIsModalOpen(false);
     setFormData({
       identifiant: '',
@@ -134,6 +194,7 @@ const UserManagement: React.FC = () => {
     const updatedUsers = users.map(u => u.id === id ? { ...u, isDeleted: true } : u);
     setUsers(updatedUsers);
     localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+    dispatchStorageEvent();
     recordAuditLog('SUPPRESSION', 'UTILISATEURS', `Suppression de l'utilisateur ${userToDelete.identifiant}`);
   };
 
@@ -147,7 +208,23 @@ const UserManagement: React.FC = () => {
     );
     setUsers(updatedUsers);
     localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+    dispatchStorageEvent();
     recordAuditLog('MODIFICATION', 'UTILISATEURS', `${action} de l'utilisateur ${user.identifiant}`);
+  };
+
+  const handleToggleVisibility = (id: string) => {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    
+    const isHidden = !user.isHiddenForDistribution;
+    const action = isHidden ? 'MASQUAGE' : 'AFFICHAGE';
+    const updatedUsers = users.map(u => 
+      u.id === id ? { ...u, isHiddenForDistribution: isHidden } : u
+    );
+    setUsers(updatedUsers);
+    localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+    dispatchStorageEvent();
+    recordAuditLog('MODIFICATION', 'UTILISATEURS', `${action} de l'agent commercial ${user.identifiant} pour la répartition des livrets`);
   };
 
   const handleDeleteFingerprint = (userId: string) => {
@@ -159,6 +236,7 @@ const UserManagement: React.FC = () => {
       );
       setUsers(updatedUsers);
       localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+      dispatchStorageEvent();
       recordAuditLog('MODIFICATION', 'UTILISATEURS', `Suppression de l'empreinte digitale de l'utilisateur ${user.identifiant}`);
       alert("Empreinte digitale supprimée.");
     }
@@ -184,7 +262,7 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenCreateModal}
           className="flex items-center gap-2 px-6 py-3 bg-[#121c32] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#121c32]/20 transition-all active:scale-95"
         >
           <UserPlus size={20} />
@@ -271,12 +349,28 @@ const UserManagement: React.FC = () => {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button 
+                        onClick={() => handleOpenEditModal(user)}
+                        className="p-2 text-blue-500 bg-blue-50 rounded-lg transition-all active:scale-90"
+                        title="Modifier"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button 
                         onClick={() => handleToggleBlock(user.id)}
                         className={`p-2 rounded-lg transition-all active:scale-90 ${user.isBlocked ? 'text-emerald-500 bg-emerald-50' : 'text-amber-500 bg-amber-50'}`}
                         title={user.isBlocked ? "Débloquer" : "Bloquer"}
                       >
                         {user.isBlocked ? <CheckCircle size={16} /> : <Ban size={16} />}
                       </button>
+                      {(user.role === 'agent commercial' || user.role === 'caissier') && (
+                        <button 
+                          onClick={() => handleToggleVisibility(user.id)}
+                          className={`p-2 rounded-lg transition-all active:scale-90 ${user.isHiddenForDistribution ? 'text-gray-400 bg-gray-50' : 'text-indigo-500 bg-indigo-50'}`}
+                          title={user.isHiddenForDistribution ? "Rendre visible pour la répartition" : "Rendre invisible pour la répartition"}
+                        >
+                          {user.isHiddenForDistribution ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      )}
                       {user.fingerprintCredential && (
                         <button 
                           onClick={() => handleDeleteFingerprint(user.id)}
@@ -314,12 +408,14 @@ const UserManagement: React.FC = () => {
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200 my-4 sm:my-8">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <UserPlus size={20} />
+                {editingUser ? <Pencil size={20} /> : <UserPlus size={20} />}
               </div>
-              <h3 className="text-lg font-black uppercase tracking-tight text-[#121c32]">Créer un utilisateur</h3>
+              <h3 className="text-lg font-black uppercase tracking-tight text-[#121c32]">
+                {editingUser ? 'Modifier l\'utilisateur' : 'Créer un utilisateur'}
+              </h3>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Identifiant</label>
                 <input 
@@ -468,7 +564,7 @@ const UserManagement: React.FC = () => {
                   type="submit"
                   className="flex-1 py-4 bg-[#121c32] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#121c32]/20 transition-all active:scale-95"
                 >
-                  Créer
+                  {editingUser ? 'Enregistrer' : 'Créer'}
                 </button>
               </div>
             </form>

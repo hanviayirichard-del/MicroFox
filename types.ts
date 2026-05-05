@@ -32,6 +32,7 @@ export interface User {
   caisse?: string;
   isBlocked?: boolean;
   isDeleted?: boolean;
+  isHiddenForDistribution?: boolean;
   latitude?: number | null;
   longitude?: number | null;
   lastUpdate?: string;
