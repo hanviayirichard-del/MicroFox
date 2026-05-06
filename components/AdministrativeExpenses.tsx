@@ -104,12 +104,25 @@ const AdministrativeExpenses: React.FC = () => {
       if (targetCaisse) {
         const cashKey = `microfox_cash_balance_${targetCaisse}`;
         const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
-        if (currentCashBalance <= 0) {
-          alert(`Opération impossible : Le solde de la ${targetCaisse} est de 0 F. Veuillez approvisionner la caisse.`);
-          return;
-        }
+        
         // Mise à jour du solde de la caisse
         localStorage.setItem(cashKey, (currentCashBalance - Number(amount)).toString());
+
+        // Enregistrer la transaction dans l'historique général pour cohérence
+        const txsSaved = localStorage.getItem('microfox_vault_transactions');
+        const allTxs = txsSaved ? JSON.parse(txsSaved) : [];
+        const newTx = {
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_exp`,
+          type: 'Dépense administrative',
+          from: targetCaisse,
+          to: category.toUpperCase(),
+          amount: Number(amount),
+          date: new Date().toISOString(),
+          userId: user.id || 'system',
+          cashierName: user.identifiant || 'Admin',
+          observation: description
+        };
+        localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...allTxs]));
       }
       
       const selectedPersonnel = personnelList.find(p => p.id === personnelId);

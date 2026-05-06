@@ -6,17 +6,17 @@ import { Vault, Landmark, ArrowRightLeft, TrendingUp, History as HistoryIcon, Se
 const VaultAndBank: React.FC = () => {
   const [vaultBalance, setVaultBalance] = useState(() => {
     const saved = localStorage.getItem('microfox_vault_balance');
-    return saved ? Number(saved) : 20000000;
+    return saved ? Number(saved) : 0;
   });
 
   const [bankBalance, setBankBalance] = useState(() => {
     const saved = localStorage.getItem('microfox_cash_balance_CAISSE PRINCIPALE');
-    return saved ? Number(saved) : 30000000;
+    return saved ? Number(saved) : 0;
   });
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'VtoB' | 'BtoV' | 'VtoC' | 'CtoV' | 'INIT_BANK'>('VtoB');
+  const [modalType, setModalType] = useState<'VtoB' | 'BtoV' | 'VtoC' | 'CtoV' | 'INIT_BANK' | 'INIT_VAULT'>('VtoB');
   const [amount, setAmount] = useState('');
   const [observedAmount, setObservedAmount] = useState('');
   const [observation, setObservation] = useState('');
@@ -106,11 +106,11 @@ const VaultAndBank: React.FC = () => {
 
     const savedVault = localStorage.getItem('microfox_vault_balance');
     const savedBank = localStorage.getItem('microfox_cash_balance_CAISSE PRINCIPALE');
-    let newVault = savedVault ? Number(savedVault) : 20000000;
-    let newBank = savedBank ? Number(savedBank) : 30000000;
+    let newVault = savedVault ? Number(savedVault) : 0;
+    let newBank = savedBank ? Number(savedBank) : 0;
     const cashKey = `microfox_cash_balance_${selectedCaisse}`;
     const savedCash = localStorage.getItem(cashKey);
-    let cashBalance = savedCash !== null ? Number(savedCash) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 30000000 : 0);
+    let cashBalance = savedCash !== null ? Number(savedCash) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 0 : 0);
     let typeLabel = "";
     let to = "";
     let from = "";
@@ -120,22 +120,24 @@ const VaultAndBank: React.FC = () => {
       typeLabel = "Initialisation Caisse Principale";
       from = "Système";
       to = "Caisse Principale";
+    } else if (modalType === 'INIT_VAULT') {
+      newVault = val;
+      typeLabel = "Initialisation Coffre Fort";
+      from = "Système";
+      to = "Coffre Fort";
     } else if (modalType === 'VtoB') {
-      if (val > vaultBalance) { alert("Solde coffre insuffisant."); return; }
       newVault -= val;
       newBank += val;
       typeLabel = "Versement Caisse Principale";
       from = "Coffre";
       to = "Caisse Principale";
     } else if (modalType === 'BtoV') {
-      if (val > bankBalance) { alert("Solde Caisse Principale insuffisant."); return; }
       newBank -= val;
       newVault += val;
       typeLabel = "Retrait Caisse Principale";
       from = "Caisse Principale";
       to = "Coffre";
     } else if (modalType === 'VtoC') {
-      if (val > vaultBalance) { alert("Solde coffre insuffisant."); return; }
       newVault -= val;
       cashBalance += val;
       typeLabel = "Approvisionnement Caisse";
@@ -145,12 +147,6 @@ const VaultAndBank: React.FC = () => {
       const observed = observedAmount ? Number(observedAmount) : val;
       const gap = val - observed;
       
-      if (cashBalance === 0) {
-        alert(`Opération impossible : Le solde de la ${selectedCaisse} est à zéro.`);
-        return;
-      }
-
-      if (val > cashBalance) { alert("Solde caisse insuffisant."); return; }
       cashBalance -= val;
       
       const isMainCaisse = selectedCaisse === 'CAISSE PRINCIPALE';
@@ -168,7 +164,8 @@ const VaultAndBank: React.FC = () => {
       } else {
         const mainCaisseKey = 'microfox_cash_balance_CAISSE PRINCIPALE';
         const mainCaisseBalance = Number(localStorage.getItem(mainCaisseKey) || 0);
-        localStorage.setItem(mainCaisseKey, (mainCaisseBalance + observed).toString());
+        newBank = mainCaisseBalance + observed;
+        localStorage.setItem(mainCaisseKey, newBank.toString());
         to = "CAISSE PRINCIPALE";
       }
       
@@ -310,7 +307,16 @@ const VaultAndBank: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">Solde Coffre Fort</h2>
-                <p className="text-3xl font-black tracking-tight">{vaultBalance.toLocaleString()} F</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-black tracking-tight text-white">{vaultBalance.toLocaleString()} F</p>
+                  <button 
+                    onClick={() => openModal('INIT_VAULT')}
+                    className="p-1 text-white/30 hover:text-white transition-colors"
+                    title="Initialiser le solde"
+                  >
+                    <ArrowRightLeft size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -556,7 +562,8 @@ const VaultAndBank: React.FC = () => {
                   {modalType === 'VtoB' ? 'Coffre vers Caisse Principale' : 
                    modalType === 'BtoV' ? 'Caisse Principale vers Coffre' : 
                    modalType === 'VtoC' ? 'Coffre vers Caisse' : 
-                   modalType === 'INIT_BANK' ? 'Initialisation Caisse Principale' : 'Versement Fin de Journée'}
+                   modalType === 'INIT_BANK' ? 'Initialisation Caisse Principale' :
+                   modalType === 'INIT_VAULT' ? 'Initialisation Coffre Fort' : 'Versement Fin de Journée'}
                 </h2>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Transaction Interne</p>
               </div>

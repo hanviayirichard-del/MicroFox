@@ -122,8 +122,8 @@ const AgentPayments: React.FC = () => {
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
-          // Soustraire tous les versements déjà soumis ou validés pour cet agent aujourd'hui
-          if (String(p.agentId) === String(user.id) && p.status !== 'Annulé' && p.status !== 'Rejeté' && p.date.startsWith(todayStr)) {
+          // Soustraire les versements Validés OU En attente pour cet agent aujourd'hui
+          if (String(p.agentId) === String(user.id) && (p.status === 'Validé' || p.status === 'En attente') && p.date.startsWith(todayStr)) {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
             paidNbLivrets += Number(p.nbLivrets || 0);

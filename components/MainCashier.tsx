@@ -75,7 +75,7 @@ const MainCashier: React.FC = () => {
       }
     }
     const saved = localStorage.getItem(`microfox_cash_balance_${initialCaisse}`);
-    return saved !== null ? Number(saved) : (initialCaisse === 'CAISSE PRINCIPALE' ? 30000000 : 0);
+    return saved !== null ? Number(saved) : 0;
   });
   const [denominations, setDenominations] = useState<any>({
     '10000': 0,
@@ -123,7 +123,7 @@ const MainCashier: React.FC = () => {
       if (savedPayments) setPayments(JSON.parse(savedPayments));
       
       const savedBalance = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-      setCashBalance(savedBalance !== null ? Number(savedBalance) : (selectedCaisse === 'CAISSE PRINCIPALE' ? 30000000 : 0));
+      setCashBalance(savedBalance !== null ? Number(savedBalance) : 0);
     };
     
     loadData();
@@ -160,6 +160,22 @@ const MainCashier: React.FC = () => {
             localStorage.setItem(balanceKey, newBal.toString());
             
             setCashBalance(newBal);
+
+            // Record in general history
+            const txsSaved = localStorage.getItem('microfox_vault_transactions');
+            const allTxs = txsSaved ? JSON.parse(txsSaved) : [];
+            const newTx = {
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_pay`,
+              type: 'Versement Agent',
+              from: p.agentName,
+              to: targetCaisse,
+              amount: finalAmount,
+              date: new Date().toISOString(),
+              userId: p.agentId,
+              cashierName: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').identifiant,
+              observation: `Versement ${p.type} - ${p.agentName}`
+            };
+            localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...allTxs]));
             
             if (gap !== 0) {
               const savedGaps = localStorage.getItem('microfox_all_gaps');
@@ -240,18 +256,8 @@ const MainCashier: React.FC = () => {
     const theoreticalAmount = transferType === 'total' ? cashBalance : physicalAmount;
     const gap = physicalAmount - theoreticalAmount;
 
-    if (cashBalance === 0) {
-      showAlert("Opération impossible", `Le solde de la ${selectedCaisse} est à zéro.`, "error");
-      return;
-    }
-
     if (theoreticalAmount <= 0) {
       showAlert("Montant invalide", "Le montant à verser doit être supérieur à 0.", "error");
-      return;
-    }
-
-    if (theoreticalAmount > cashBalance) {
-      showAlert("Solde insuffisant", "Le montant à verser ne peut pas être supérieur au solde de la caisse.", "error");
       return;
     }
 

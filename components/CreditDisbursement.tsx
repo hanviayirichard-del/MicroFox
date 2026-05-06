@@ -106,12 +106,25 @@ const CreditDisbursement: React.FC = () => {
         if (targetCaisse) {
           const cashKey = `microfox_cash_balance_${targetCaisse}`;
           const currentCashBalance = Number(localStorage.getItem(cashKey) || 0);
-          if (currentCashBalance < capital) {
-            showAlert("Solde insuffisant", `Opération impossible : Le solde de la ${targetCaisse} est de ${currentCashBalance.toLocaleString()} F. Solde insuffisant pour décaisser ${capital.toLocaleString()} F.`, "error");
-            return;
-          }
+          
           // Mise à jour du solde de la caisse : on décaisse le capital et on encaisse les frais
           localStorage.setItem(cashKey, (currentCashBalance - capital + fees).toString());
+
+          // Enregistrer dans l'historique général
+          const txsSaved = localStorage.getItem('microfox_vault_transactions');
+          const allTxs = txsSaved ? JSON.parse(txsSaved) : [];
+          const newVaultTx = {
+            id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_disb`,
+            type: 'Déblocage Crédit',
+            from: targetCaisse,
+            to: client.name.toUpperCase(),
+            amount: capital - fees,
+            date: new Date().toISOString(),
+            userId: currentUser.id || 'system',
+            cashierName: currentUser.identifiant || 'Admin',
+            observation: `Déblocage Crédit - ${client.name}`
+          };
+          localStorage.setItem('microfox_vault_transactions', JSON.stringify([newVaultTx, ...allTxs]));
         } else if (currentUser.role === 'agent commercial') {
           const agentBalanceKey = `microfox_agent_balance_${currentUser.id}`;
           const currentAgentBalance = Number(localStorage.getItem(agentBalanceKey) || 0);
