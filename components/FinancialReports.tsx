@@ -138,8 +138,18 @@ const FinancialReports: React.FC = () => {
         const memberZone = member.zone || getZoneFromCode(member.code || '');
 
         history.forEach((tx: any) => {
-          if (tx.id && seenTxIds.has(tx.id)) return;
-          if (tx.id) seenTxIds.add(tx.id);
+          // Déduplication robuste des transactions
+          const txKey = tx.id || `${tx.date}_${tx.type}_${tx.amount}_${member.id}_${tx.description}`;
+          if (seenTxIds.has(txKey)) return;
+
+          // Déduplication supplémentaire spécifique pour les déblocages de crédit (double-clic ou erreur d'enregistrement)
+          if (tx.type === 'deblocage') {
+            const deblocageKey = `debloc_strict_${tx.date.split('T')[0]}_${Math.round(tx.amount)}_${member.id}`;
+            if (seenTxIds.has(deblocageKey)) return;
+            seenTxIds.add(deblocageKey);
+          }
+
+          seenTxIds.add(txKey);
 
           const txUser = allUsers.find((u: any) => u.id === tx.userId);
           const txAgent = allUsers.find((u: any) => u.role === 'agent commercial' && (u.id === tx.userId || u.identifiant === tx.cashierName));
@@ -978,8 +988,8 @@ const FinancialReports: React.FC = () => {
 
   const renderSection = (title: string, list: any[], icon: React.ReactNode, color: string, id: string) => (
     <div key={id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
-      <div className={`p-4 sm:p-6 flex items-center justify-between border-b border-gray-50 bg-${color}-50/30`}>
-        <div className="flex items-center gap-3">
+      <div className={`p-3 sm:p-6 flex items-center justify-between border-b border-gray-50 bg-${color}-50/30`}>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
           <button 
             onClick={() => toggleReport(id)}
             className={`p-1 rounded-md transition-colors ${checkedReports.includes(id) ? 'text-blue-600' : 'text-gray-300'}`}
@@ -990,44 +1000,44 @@ const FinancialReports: React.FC = () => {
             {icon}
           </div>
           <div className="min-w-0">
-            <h3 className="text-xs sm:text-sm font-black text-[#121c32] uppercase tracking-tight truncate">{title}</h3>
-            <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest">{list.length} opérations</p>
+            <h3 className="text-[10px] sm:text-sm font-black text-[#121c32] uppercase tracking-tight truncate">{title}</h3>
+            <p className="text-[8px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest">{list.length} opérations</p>
           </div>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</p>
-          <p className={`text-sm sm:text-xl font-black text-${color}-600`}>{calculateTotal(list).toLocaleString()} F</p>
+          <p className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</p>
+          <p className={`text-xs sm:text-xl font-black text-${color}-600 whitespace-nowrap`}>{calculateTotal(list).toLocaleString()} F</p>
         </div>
       </div>
       <div className="max-h-[300px] overflow-y-auto custom-scrollbar overflow-x-auto">
-        <table className="w-full text-left min-w-[450px]">
+        <table className="w-full text-left min-w-[400px]">
           <thead className="sticky top-0 bg-white shadow-sm z-10">
             <tr>
-              <th className="px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Date</th>
-              <th className="px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Client</th>
-              <th className="px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">N° Compte Tontine</th>
-              <th className="px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Montant</th>
+              <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Date</th>
+              <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Client</th>
+              <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">N° Compte Tontine</th>
+              <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Montant</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {list.map((tx, idx) => (
               <tr key={`${tx.id}-${idx}`} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{new Date(tx.date).toLocaleDateString()}</td>
-                <td className="px-4 py-4">
+                <td className="px-2 sm:px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{new Date(tx.date).toLocaleDateString()}</td>
+                <td className="px-2 sm:px-4 py-4">
                   <p className="text-[10px] sm:text-xs font-black text-[#121c32] uppercase">{tx.memberName}</p>
                   <p className="text-[8px] sm:text-[9px] font-bold text-gray-400">{tx.memberCode}</p>
                   {tx.agentName && (
                     <p className="text-[8px] font-black text-blue-600 uppercase mt-0.5">Agent: {tx.agentName}</p>
                   )}
                 </td>
-                <td className="px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{tx.tontineAccountNumber || '-'}</td>
-                <td className="px-4 py-4 text-right text-[10px] sm:text-xs font-black text-[#121c32] whitespace-nowrap">{tx.amount.toLocaleString()} F</td>
+                <td className="px-2 sm:px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{tx.tontineAccountNumber || '-'}</td>
+                <td className="px-2 sm:px-4 py-4 text-right text-[10px] sm:text-xs font-black text-[#121c32] whitespace-nowrap">{tx.amount.toLocaleString()} F</td>
               </tr>
             ))}
             {list.length > 0 && (
               <tr className="bg-gray-50 font-black">
-                <td colSpan={3} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-gray-500">Total</td>
-                <td className="px-4 py-3 text-right text-[10px] sm:text-xs text-[#121c32]">{calculateTotal(list).toLocaleString()} F</td>
+                <td colSpan={3} className="px-2 sm:px-4 py-3 text-right text-[10px] uppercase tracking-widest text-gray-500">Total</td>
+                <td className="px-2 sm:px-4 py-3 text-right text-[10px] sm:text-xs text-[#121c32]">{calculateTotal(list).toLocaleString()} F</td>
               </tr>
             )}
             {list.length === 0 && (
