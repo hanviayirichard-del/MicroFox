@@ -254,7 +254,7 @@ const VaultAndBank: React.FC = () => {
 
   const [destination, setDestination] = useState<'Coffre' | 'Banque'>('Coffre');
 
-  const openModal = (type: 'VtoB' | 'BtoV' | 'VtoC' | 'CtoV' | 'INIT_BANK', defaultDest?: 'Coffre' | 'Banque') => {
+  const openModal = (type: 'VtoB' | 'BtoV' | 'VtoC' | 'CtoV' | 'INIT_BANK' | 'INIT_VAULT', defaultDest?: 'Coffre' | 'Banque') => {
     setModalType(type);
     if (type === 'CtoV') {
       setSelectedCaisse('CAISSE PRINCIPALE');

@@ -68,11 +68,24 @@ const FinancialReports: React.FC = () => {
 
   const getZoneFromCode = (code: string) => {
     if (!code) return 'Inconnue';
-    for (const zone of zones) {
-      if (code.includes(`-${zone}`) || code.includes(` ${zone}`) || code.endsWith(zone) || code.startsWith(zone)) {
-        return zone;
-      }
+    // Trier les zones par longueur décroissante pour matcher les plus spécifiques (01A) avant les générales (01)
+    const sortedZones = [...zones].sort((a, b) => b.length - a.length);
+    
+    // Priorité 1: Début du code (Pattern standard des comptes tontine)
+    for (const zone of sortedZones) {
+      if (code.startsWith(zone)) return zone;
     }
+    
+    // Priorité 2: Délimiteurs explicites
+    for (const zone of sortedZones) {
+      if (code.includes(`-${zone}`) || code.includes(` ${zone}`)) return zone;
+    }
+    
+    // Priorité 3: Fin du code (Dernier recours)
+    for (const zone of sortedZones) {
+      if (code.endsWith(zone)) return zone;
+    }
+    
     return 'Inconnue';
   };
 
