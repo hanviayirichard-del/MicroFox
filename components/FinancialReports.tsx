@@ -129,6 +129,8 @@ const FinancialReports: React.FC = () => {
           if (tx.id) seenTxIds.add(tx.id);
 
           const txUser = allUsers.find((u: any) => u.id === tx.userId);
+          const txAgent = allUsers.find((u: any) => u.role === 'agent commercial' && (u.id === tx.userId || u.identifiant === tx.cashierName));
+          const agentName = txAgent ? (txAgent.nom || txAgent.identifiant) : '';
           const txCaisse = tx.caisse || txUser?.caisse || 'N/A';
           
           if (isCaissier) {
@@ -153,7 +155,7 @@ const FinancialReports: React.FC = () => {
             const acc = member.tontineAccounts?.find((a: any) => a.id === tx.tontineAccountId);
             if (acc) tontineAccountNumber = acc.number;
           }
-          const txWithMember = { ...tx, memberName: member.name, memberCode: member.code, tontineAccountNumber };
+          const txWithMember = { ...tx, memberName: member.name, memberCode: member.code, tontineAccountNumber, agentName };
 
           // Épargne & Frais & Part Sociale
           if (tx.account === 'epargne' || tx.account === 'frais' || tx.account === 'partSociale') {
@@ -885,7 +887,10 @@ const FinancialReports: React.FC = () => {
                 ${listToExport.map(tx => `
                   <tr>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${new Date(tx.date).toLocaleDateString()}</td>
-                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.memberName || tx.label || ''}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">
+                      ${tx.memberName || tx.label || ''}
+                      ${tx.agentName ? `<br/><small style="color: #2563eb; font-weight: bold; font-size: 8px;">AGENT: ${tx.agentName}</small>` : ''}
+                    </td>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.memberCode || ''}</td>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.tontineAccountNumber || ''}</td>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${Number(tx.amount).toLocaleString()}</td>
@@ -998,6 +1003,9 @@ const FinancialReports: React.FC = () => {
                 <td className="px-4 py-4">
                   <p className="text-[10px] sm:text-xs font-black text-[#121c32] uppercase">{tx.memberName}</p>
                   <p className="text-[8px] sm:text-[9px] font-bold text-gray-400">{tx.memberCode}</p>
+                  {tx.agentName && (
+                    <p className="text-[8px] font-black text-blue-600 uppercase mt-0.5">Agent: {tx.agentName}</p>
+                  )}
                 </td>
                 <td className="px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{tx.tontineAccountNumber || '-'}</td>
                 <td className="px-4 py-4 text-right text-[10px] sm:text-xs font-black text-[#121c32] whitespace-nowrap">{tx.amount.toLocaleString()} F</td>
