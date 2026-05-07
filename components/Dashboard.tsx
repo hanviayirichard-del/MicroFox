@@ -250,7 +250,8 @@ const Dashboard: React.FC = () => {
         seenIds.add(tx.id);
         const txDate = new Date(tx.date);
         if (txDate > targetDate) return sum;
-        if (tx.account === 'credit' && tx.type === 'deblocage') {
+        const desc = (tx.description || '').toLowerCase();
+        if (tx.account === 'credit' && tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite')) {
           return sum + tx.amount;
         }
         return sum;
@@ -428,7 +429,8 @@ const Dashboard: React.FC = () => {
         seenIds.add(tx.id);
         const txDate = new Date(tx.date);
         if (txDate > targetDate) return sum;
-        if (tx.account === 'credit' && tx.type === 'deblocage') {
+        const desc = (tx.description || '').toLowerCase();
+        if (tx.account === 'credit' && tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite')) {
           return sum + tx.amount;
         }
         return sum;

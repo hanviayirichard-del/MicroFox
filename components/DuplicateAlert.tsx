@@ -6,17 +6,21 @@ const DuplicateAlert: React.FC = () => {
   const [duplicates, setDuplicates] = useState<{
     type: 'Épargne' | 'Tontine' | 'Nom';
     number: string;
-    clients: { id: string; name: string; code: string; author?: string }[];
+    clients: { id: string; name: string; code: string; author?: string; date?: string }[];
   }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    const userStr = localStorage.getItem('microfox_current_user');
+    if (userStr) setUser(JSON.parse(userStr));
+
     const savedMembers = localStorage.getItem('microfox_members_data');
     if (savedMembers) {
       const members: ClientAccount[] = JSON.parse(savedMembers);
       
       const epargneMap: { [key: string]: ClientAccount[] } = {};
-      const tontineMap: { [key: string]: ClientAccount[] } = {};
+      const tontineMap: { [key: string]: { clients: ClientAccount[], zones: string[] } } = {};
       const nameMap: { [key: string]: ClientAccount[] } = {};
 
       members.forEach(member => {
@@ -27,8 +31,9 @@ const DuplicateAlert: React.FC = () => {
         }
         member.tontineAccounts.forEach(acc => {
           const tnNum = acc.number.trim().toUpperCase();
-          if (!tontineMap[tnNum]) tontineMap[tnNum] = [];
-          tontineMap[tnNum].push(member);
+          if (!tontineMap[tnNum]) tontineMap[tnNum] = { clients: [], zones: [] };
+          tontineMap[tnNum].clients.push(member);
+          if (acc.zone) tontineMap[tnNum].zones.push(acc.zone);
         });
         
         // Robust normalization: remove multiple spaces, trim, uppercase
@@ -40,49 +45,89 @@ const DuplicateAlert: React.FC = () => {
       });
 
       const foundDuplicates: any[] = [];
+      const currentUser = userStr ? JSON.parse(userStr) : null;
+      const userRole = currentUser?.role;
+      const userZones = currentUser?.zonesCollecte || (currentUser?.zoneCollecte ? [currentUser.zoneCollecte] : []);
 
+      const isClientInUserZone = (c: ClientAccount) => {
+        if (userRole === 'administrateur' || userRole === 'directeur' || userRole === 'auditeur' || userRole === 'contrôleur') return true;
+        if (!userZones.length) return true;
+        return userZones.includes(c.zone || '');
+      };
+
+      const mapClientData = (c: any) => {
+        const historyData = c.history?.length > 0 ? c.history : JSON.parse(localStorage.getItem(`microfox_history_${c.id}`) || '[]').slice();
+        const sortedHistory = historyData.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          
+        const firstOp = sortedHistory[0]; 
+        // Force checking all possible author fields, prioritizing creator
+        const author = c.createdBy || firstOp?.cashierName || firstOp?.operator || 'Système';
+        const date = c.createdAt || firstOp?.date;
+
+        return { 
+          id: c.id, 
+          name: c.name, 
+          code: c.code,
+          author,
+          date
+        };
+      };
+
+      // Filtering logic based on role
       Object.entries(epargneMap).forEach(([num, clients]) => {
         if (clients.length > 1) {
-          foundDuplicates.push({
-            type: 'Épargne',
-            number: num,
-            clients: clients.map(c => ({ 
-              id: c.id, 
-              name: c.name, 
-              code: c.code,
-              author: c.history?.[0]?.cashierName || 'Système'
-            }))
-          });
+          // Cashier rule: see epargne duplicates
+          // Agent rule: see duplicates if any client is in their zone
+          const showForRole = userRole === 'caissier' || (userRole === 'agent commercial' ? clients.some(isClientInUserZone) : true);
+          
+          if (showForRole) {
+            foundDuplicates.push({
+              type: 'Épargne',
+              number: num,
+              clients: clients.map(mapClientData)
+            });
+          }
         }
       });
 
-      Object.entries(tontineMap).forEach(([num, clients]) => {
-        if (clients.length > 1) {
-          foundDuplicates.push({
-            type: 'Tontine',
-            number: num,
-            clients: clients.map(c => ({ 
-              id: c.id, 
-              name: c.name, 
-              code: c.code,
-              author: c.history?.[0]?.cashierName || 'Système'
-            }))
-          });
+      Object.entries(tontineMap).forEach(([num, data]) => {
+        if (data.clients.length > 1) {
+          // Cashier rule: only see epargne (Skip Tontine)
+          if (userRole === 'caissier') return;
+
+          // Agent rule: see if any client is in their zone
+          const showForRole = userRole === 'agent commercial' 
+            ? data.clients.some(isClientInUserZone)
+            : true;
+
+          if (showForRole) {
+            foundDuplicates.push({
+              type: 'Tontine',
+              number: num,
+              clients: data.clients.map(mapClientData)
+            });
+          }
         }
       });
 
       Object.entries(nameMap).forEach(([name, clients]) => {
         if (clients.length > 1) {
-          foundDuplicates.push({
-            type: 'Nom',
-            number: name,
-            clients: clients.map(c => ({ 
-              id: c.id, 
-              name: c.name, 
-              code: c.code,
-              author: c.history?.[0]?.cashierName || 'Système'
-            }))
-          });
+          // Cashier rule: only see epargne (Skip Name conflicts if not epargne?)
+          // The request says: "Les caissiers verrons les doublons qui concerne des comptes d'épargne."
+          // So if it's a NAME duplicate, but they are epargne accounts, should they see it?
+          // Usually Name duplicates are for cross-checking. I'll hide it for cashiers if they are not epargne.
+          if (userRole === 'caissier') return;
+
+          // Agent rule: see if any client is in their zone
+          const showForRole = userRole === 'agent commercial' ? clients.some(isClientInUserZone) : true;
+
+          if (showForRole) {
+            foundDuplicates.push({
+              type: 'Nom',
+              number: name,
+              clients: clients.map(mapClientData)
+            });
+          }
         }
       });
 
@@ -151,7 +196,14 @@ const DuplicateAlert: React.FC = () => {
                       <User size={20} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-white truncate uppercase">{client.name}</p>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <p className="text-sm font-bold text-white truncate uppercase">{client.name}</p>
+                        {client.date && (
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">
+                            {new Date(client.date).toLocaleDateString('fr-FR')}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[10px] font-bold text-gray-500 uppercase">{client.code}</p>
                         {client.author && (

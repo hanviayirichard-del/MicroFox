@@ -191,7 +191,8 @@ const CreditDisbursement: React.FC = () => {
                 status: 'Débloqué',
                 disbursedBy: currentUser.identifiant || 'Inconnu',
                 disbursementDate: new Date().toISOString()
-              }
+              },
+              updatedAt: new Date().toISOString()
             };
           }
           return c;
@@ -279,7 +280,8 @@ const CreditDisbursement: React.FC = () => {
                 status: 'Validé',
                 disbursedBy: null,
                 disbursementDate: null
-              }
+              },
+              updatedAt: new Date().toISOString()
             };
           }
           return c;
@@ -323,7 +325,8 @@ const CreditDisbursement: React.FC = () => {
                 status: 'Annulé',
                 cancelledBy: currentUser.identifiant || 'Inconnu',
                 cancelledAt: new Date().toISOString()
-              }
+              },
+              updatedAt: new Date().toISOString()
             };
           }
           return c;

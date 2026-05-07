@@ -121,7 +121,8 @@ const OtherCreditOperations: React.FC = () => {
           balances: { ...m.balances, credit: newTotal },
           lastCreditRequest: updatedRequest,
           lastCreditDetails: updatedDetails,
-          history: newHistory
+          history: newHistory,
+          updatedAt: new Date().toISOString()
         };
       }
       return m;
@@ -225,7 +226,8 @@ const OtherCreditOperations: React.FC = () => {
           },
           lastCreditRequest: updatedRequest,
           lastCreditDetails: updatedDetails,
-          history: newHistory
+          history: newHistory,
+          updatedAt: new Date().toISOString()
         };
       }
       return m;

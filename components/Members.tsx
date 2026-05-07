@@ -1147,7 +1147,11 @@ const RegistrationForm: React.FC<{
       signature: capturedSignature,
       latitude,
       longitude,
-      zone
+      zone,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: currentUser?.nom || currentUser?.identifiant || 'Système',
+      isDeleted: false
     };
     onRegister(newClient);
     onClose();
@@ -2506,6 +2510,9 @@ const Members: React.FC = () => {
   }, [selectedClientId, selectedClient, currentUser]);
 
   const filteredClients = clients.filter(c => {
+    // Ne pas afficher les clients supprimés
+    if (c.isDeleted) return false;
+
     // Restriction pour les agents commerciaux
     if (currentUser?.role === 'agent commercial') {
       const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
@@ -2971,11 +2978,6 @@ const Members: React.FC = () => {
   }, [selectedClient, selectedTontineId]);
 
   useEffect(() => {
-    localStorage.setItem('microfox_members_data', JSON.stringify(clients));
-    localStorage.setItem('microfox_pending_sync', 'true');
-  }, [clients]);
-
-  useEffect(() => {
     const syncBalances = () => {
       const savedMembers = localStorage.getItem('microfox_members_data');
       if (savedMembers) {
@@ -2997,23 +2999,29 @@ const Members: React.FC = () => {
           return { ...c, tontineAccounts: updatedTontineAccounts };
         });
 
-        if (JSON.stringify(withHistory) !== JSON.stringify(clients)) {
-          setClients(withHistory);
-        }
+        setClients(withHistory);
       }
     };
 
     window.addEventListener('storage', syncBalances);
     syncBalances();
     return () => window.removeEventListener('storage', syncBalances);
-  }, [clients]);
+  }, []);
 
   const handleRegister = (newClient: ClientAccount) => {
-    const updatedClients = [newClient, ...clients];
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
+    const updatedClients = [newClient, ...allMembers];
     setClients(updatedClients);
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
     localStorage.setItem('microfox_pending_sync', 'true');
     recordAuditLog('CREATION', 'MEMBRES', `Création du nouveau membre: ${newClient.name} (Code: ${newClient.code})`);
+    
+    // Add updatedAt if not present
+    if (!newClient.updatedAt) {
+      newClient.updatedAt = new Date().toISOString();
+    }
+    
     setSelectedClientId(newClient.id);
     setIsSidebarCollapsed(true);
     localStorage.setItem(`microfox_history_${newClient.id}`, JSON.stringify(newClient.history));
@@ -3062,17 +3070,27 @@ const Members: React.FC = () => {
   };
 
   const handleUpdateProfile = (updatedClient: ClientAccount) => {
-    const updatedClients = clients.map(c => c.id === updatedClient.id ? updatedClient : c);
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
+    
+    // Set updatedAt to ensure sync prefers this version
+    const now = new Date().toISOString();
+    const finalClient = { ...updatedClient, updatedAt: now };
+
+    const updatedClients = allMembers.map((c: any) => c.id === updatedClient.id ? finalClient : c);
     setClients(updatedClients);
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
     localStorage.setItem('microfox_pending_sync', 'true');
     recordAuditLog('MODIFICATION', 'MEMBRES', `Mise à jour du profil de ${updatedClient.name} (Code: ${updatedClient.code})`);
     alert("Dossier client mis à jour avec succès.");
+    dispatchStorageEvent();
   };
 
   const handleAddNewTontine = (info: { number: string; mise: number; zone: string }) => {
     if (!selectedClientId) return;
-    const updated = clients.map(c => {
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
+    const updated = allMembers.map((c: any) => {
       if (c.id === selectedClientId) {
         const newAcc: TontineAccount = {
           id: `${c.id}_tn_${c.tontineAccounts.length + 1}`,
@@ -3081,7 +3099,11 @@ const Members: React.FC = () => {
           balance: 0,
           zone: info.zone
         };
-        return { ...c, tontineAccounts: [...c.tontineAccounts, newAcc] };
+        return { 
+          ...c, 
+          tontineAccounts: [...c.tontineAccounts, newAcc],
+          updatedAt: new Date().toISOString()
+        };
       }
       return c;
     });
@@ -3093,15 +3115,21 @@ const Members: React.FC = () => {
 
   const handleUpdateTontine = (info: { number: string; zone: string }) => {
     if (!selectedClientId || !selectedTontineId) return;
-    const updated = clients.map(c => {
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
+    const updated = allMembers.map((c: any) => {
       if (c.id === selectedClientId) {
-        const updatedTontineAccounts = c.tontineAccounts.map(acc => {
+        const updatedTontineAccounts = c.tontineAccounts.map((acc: any) => {
           if (acc.id === selectedTontineId) {
             return { ...acc, number: info.number, zone: info.zone };
           }
           return acc;
         });
-        return { ...c, tontineAccounts: updatedTontineAccounts };
+        return { 
+          ...c, 
+          tontineAccounts: updatedTontineAccounts,
+          updatedAt: new Date().toISOString()
+        };
       }
       return c;
     });
@@ -3114,7 +3142,9 @@ const Members: React.FC = () => {
 
   const handleOpenEpargne = (info: { number: string; adhesion: number; livret: number; partSociale: number; depot: number }) => {
     if (!selectedClientId) return;
-    const updated = clients.map(c => {
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
+    const updated = allMembers.map((c: any) => {
       if (c.id === selectedClientId) {
         const history = [...c.history];
         const now = new Date().toISOString();
@@ -3182,7 +3212,8 @@ const Members: React.FC = () => {
             epargne: c.balances.epargne + info.depot,
             partSociale: c.balances.partSociale + info.partSociale
           },
-          history
+          history,
+          updatedAt: new Date().toISOString()
         };
       }
       return c;
@@ -3268,8 +3299,10 @@ const Members: React.FC = () => {
       }
     }
     
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
     let success = false;
-    const updated = clients.map(c => {
+    const updated = allMembers.map((c: any) => {
       if (c.id === selectedClientId) {
         const newBalances = { ...c.balances };
         const newTontineAccounts = [...c.tontineAccounts];
@@ -3478,7 +3511,8 @@ const Members: React.FC = () => {
           ...c,
           balances: newBalances,
           tontineAccounts: newTontineAccounts,
-          history: newHistory
+          history: newHistory,
+          updatedAt: new Date().toISOString()
         };
       }
       return c;
@@ -3585,7 +3619,9 @@ const Members: React.FC = () => {
 
   const handleSaveCreditInfo = () => {
     if (!selectedClientId) return;
-    const updated = clients.map(c => c.id === selectedClientId ? { ...c, ...creditFormData } : c);
+    const saved = localStorage.getItem('microfox_members_data');
+    const allMembers = saved ? JSON.parse(saved) : clients;
+    const updated = allMembers.map((c: any) => c.id === selectedClientId ? { ...c, ...creditFormData } : c);
     setClients(updated);
     localStorage.setItem('microfox_members_data', JSON.stringify(updated));
     setIsEditingCredit(false);
@@ -3597,10 +3633,17 @@ const Members: React.FC = () => {
       "Suppression de client",
       `Êtes-vous sûr de vouloir supprimer définitivement le client ${clientName} ? Cette action est irréversible.`,
       () => {
-        const updated = clients.filter(c => c.id !== clientId);
+        const saved = localStorage.getItem('microfox_members_data');
+        const allMembers = saved ? JSON.parse(saved) : clients;
+        
+        // Use soft delete (isDeleted) so sync doesn't bring it back
+        const now = new Date().toISOString();
+        const updated = allMembers.map((c: any) => 
+          c.id === clientId ? { ...c, isDeleted: true, updatedAt: now } : c
+        );
+        
         setClients(updated);
         localStorage.setItem('microfox_members_data', JSON.stringify(updated));
-        localStorage.removeItem(`microfox_history_${clientId}`);
         localStorage.setItem('microfox_pending_sync', 'true');
         
         if (selectedClientId === clientId) {
@@ -3610,6 +3653,7 @@ const Members: React.FC = () => {
         recordAuditLog('SUPPRESSION', 'MEMBRES', `Suppression du compte client ${clientName} (${clientId})`);
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         showAlert("Succès", "Client supprimé avec succès.", "success");
+        dispatchStorageEvent();
       }
     );
   };

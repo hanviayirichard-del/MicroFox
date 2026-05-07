@@ -114,8 +114,9 @@ const FinancialReports: React.FC = () => {
     };
 
     const getCaisseDelta = (tx: any) => {
+      const desc = (tx.description || '').toLowerCase();
       if (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement') return tx.amount;
-      if (tx.type === 'retrait' || tx.type === 'deblocage') return -tx.amount;
+      if (tx.type === 'retrait' || (tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite'))) return -tx.amount;
       return 0;
     };
 
@@ -199,7 +200,7 @@ const FinancialReports: React.FC = () => {
 
           // Crédit
           if (tx.account === 'credit') {
-            if (tx.type === 'deblocage') newData.creditsAccordes.push(txWithMember);
+            if (tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite')) newData.creditsAccordes.push(txWithMember);
             if (tx.type === 'remboursement') newData.remboursements.push(txWithMember);
           }
 

@@ -127,6 +127,7 @@ const UserManagement: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const now = new Date().toISOString();
     if (editingUser) {
       const updatedUser: User = {
         ...editingUser,
@@ -138,7 +139,8 @@ const UserManagement: React.FC = () => {
         zoneCollecte: formData.zonesCollecte.length > 0 ? formData.zonesCollecte[0] : '',
         zonesCollecte: formData.zonesCollecte,
         caisse: formData.caisse,
-        fingerprintCredential: formData.fingerprintCredential
+        fingerprintCredential: formData.fingerprintCredential,
+        updatedAt: now
       };
       
       const updatedUsers = users.map(u => u.id === editingUser.id ? updatedUser : u);
@@ -159,7 +161,8 @@ const UserManagement: React.FC = () => {
         caisse: formData.caisse,
         isBlocked: false,
         isHiddenForDistribution: false,
-        fingerprintCredential: formData.fingerprintCredential
+        fingerprintCredential: formData.fingerprintCredential,
+        updatedAt: now
       };
       
       const updatedUsers = [...users, newUser];
@@ -191,7 +194,8 @@ const UserManagement: React.FC = () => {
       return;
     }
 
-    const updatedUsers = users.map(u => u.id === id ? { ...u, isDeleted: true } : u);
+    const now = new Date().toISOString();
+    const updatedUsers = users.map(u => u.id === id ? { ...u, isDeleted: true, updatedAt: now } : u);
     setUsers(updatedUsers);
     localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
     dispatchStorageEvent();

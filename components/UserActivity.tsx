@@ -24,6 +24,9 @@ const UserActivity: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAction, setFilterAction] = useState<string>('all');
+  const [filterUser, setFilterUser] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [view, setView] = useState<'live' | 'history'>('live');
 
   const loadData = () => {
@@ -78,7 +81,13 @@ const UserActivity: React.FC = () => {
       log.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.details.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesAction = filterAction === 'all' || log.action === filterAction;
-    return matchesSearch && matchesAction;
+    const matchesUser = filterUser === 'all' || log.userName === filterUser;
+    
+    const logDate = new Date(log.timestamp).toISOString().split('T')[0];
+    const matchesStartDate = !startDate || logDate >= startDate;
+    const matchesEndDate = !endDate || logDate <= endDate;
+    
+    return matchesSearch && matchesAction && matchesUser && matchesStartDate && matchesEndDate;
   });
 
   const onlineUsers = users.filter(u => {
@@ -211,12 +220,12 @@ const UserActivity: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input 
                 type="text" 
-                placeholder="Rechercher un utilisateur ou une action..." 
+                placeholder="Rechercher..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:border-emerald-200 rounded-2xl outline-none text-sm font-medium transition-all"
@@ -237,6 +246,34 @@ const UserActivity: React.FC = () => {
                 <option value="SUPPRESSION">Suppressions</option>
                 <option value="CREATION">Créations</option>
               </select>
+            </div>
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <select 
+                value={filterUser}
+                onChange={(e) => setFilterUser(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:border-emerald-200 rounded-2xl outline-none text-sm font-bold text-[#121c32] appearance-none"
+              >
+                <option value="all">Tous les utilisateurs</option>
+                {Array.from(new Set(logs.map(l => l.userName))).map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="flex-1 p-3 bg-gray-50 border border-transparent focus:border-emerald-200 rounded-2xl outline-none text-[10px] font-black text-[#121c32]"
+              />
+              <span className="text-gray-400 font-bold">à</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="flex-1 p-3 bg-gray-50 border border-transparent focus:border-emerald-200 rounded-2xl outline-none text-[10px] font-black text-[#121c32]"
+              />
             </div>
           </div>
 
