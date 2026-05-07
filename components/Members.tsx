@@ -52,10 +52,11 @@ const suggestNextAccountNumber = (type: 'epargne' | 'tontine' | 'client', curren
   const mfConfig = JSON.parse(localStorage.getItem('microfox_mf_config') || '{"nom": "MicroFoX", "adresse": "", "code": "00001"}');
   const instCode = (mfConfig.code || '00001').padStart(5, '0').substring(0, 5);
   const agencyCode = '00001'; // Default agency code
+  const activeMembers = currentMembers.filter(m => !m.isDeleted);
 
   if (type === 'client') {
     const collectiveAccount = '41110'; // Compte collectif Clients (BCEAO)
-    const codes = currentMembers
+    const codes = activeMembers
       .map(m => m.code)
       .filter(c => c && c.startsWith(collectiveAccount) && c.length === 12)
       .map(c => {
@@ -88,7 +89,7 @@ const suggestNextAccountNumber = (type: 'epargne' | 'tontine' | 'client', curren
   }
 
   if (type === 'epargne') {
-    const numbers = currentMembers
+    const numbers = activeMembers
       .map(m => m.epargneAccountNumber)
       .filter((n): n is string => !!n && n.length >= 21)
       .map(n => {
@@ -106,7 +107,7 @@ const suggestNextAccountNumber = (type: 'epargne' | 'tontine' | 'client', curren
   } else {
     // Tontine zone-based: e.g., 02A1, 02A2
     const prefix = (zone && zone !== '---') ? zone : '01';
-    const numbers = currentMembers
+    const numbers = activeMembers
       .flatMap(m => m.tontineAccounts)
       .map(acc => acc.number)
       .filter(n => n.startsWith(prefix))
@@ -1008,7 +1009,7 @@ const RegistrationForm: React.FC<{
     const savedMembers = localStorage.getItem('microfox_members_data');
     const members: ClientAccount[] = savedMembers ? JSON.parse(savedMembers) : [];
 
-    if (isTontineSelected && members.some(m => m.tontineAccounts.some(acc => acc.number === tontineNumber))) {
+    if (isTontineSelected && members.some(m => !m.isDeleted && m.tontineAccounts.some(acc => acc.number === tontineNumber))) {
       const next = suggestNextAccountNumber('tontine', members, zone);
       alert(`Échec de l'enregistrement : Ce numéro de compte tontine est déjà utilisé. Suggestion : ${next}`);
       return;
@@ -1020,7 +1021,7 @@ const RegistrationForm: React.FC<{
         return;
       }
       
-      if (members.some(m => m.epargneAccountNumber === epargneNumber)) {
+      if (members.some(m => !m.isDeleted && m.epargneAccountNumber === epargneNumber)) {
         const next = suggestNextAccountNumber('epargne', members);
         alert(`Échec de l'enregistrement : Ce numéro de compte épargne est déjà utilisé. Suggestion : ${next}`);
         return;
@@ -1955,7 +1956,7 @@ const AddTontineModal: React.FC<{
               const savedMembers = localStorage.getItem('microfox_members_data');
               const members: ClientAccount[] = savedMembers ? JSON.parse(savedMembers) : [];
               
-              if (members.some(m => m.tontineAccounts.some(acc => acc.number === number))) {
+              if (members.some(m => !m.isDeleted && m.tontineAccounts.some(acc => acc.number === number))) {
                 const next = suggestNextAccountNumber('tontine', members, zone);
                 alert(`Ce numéro de compte tontine est déjà utilisé. Suggestion : ${next}`);
                 return;
@@ -2029,7 +2030,7 @@ const EditTontineModal: React.FC<{
                 const savedMembers = localStorage.getItem('microfox_members_data');
                 const members: ClientAccount[] = savedMembers ? JSON.parse(savedMembers) : [];
                 
-                if (members.some(m => m.tontineAccounts.some(acc => acc.number === number))) {
+                if (members.some(m => !m.isDeleted && m.tontineAccounts.some(acc => acc.number === number))) {
                   const next = suggestNextAccountNumber('tontine', members, zone);
                   alert(`Ce numéro de compte tontine est déjà utilisé. Suggestion : ${next}`);
                   return;
@@ -2127,7 +2128,7 @@ const OpenEpargneModal: React.FC<{
               const savedMembers = localStorage.getItem('microfox_members_data');
               const members: ClientAccount[] = savedMembers ? JSON.parse(savedMembers) : [];
               
-              if (members.some(m => m.epargneAccountNumber === number)) {
+              if (members.some(m => !m.isDeleted && m.epargneAccountNumber === number)) {
                 const next = suggestNextAccountNumber('epargne', members);
                 alert(`Ce numéro de compte épargne est déjà utilisé. Suggestion : ${next}`);
                 return;
