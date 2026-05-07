@@ -12,19 +12,22 @@ const DuplicateAlert: React.FC = () => {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const userStr = localStorage.getItem('microfox_current_user');
-    if (userStr) setUser(JSON.parse(userStr));
+    const loadData = () => {
+      const userStr = localStorage.getItem('microfox_current_user');
+      if (userStr) setUser(JSON.parse(userStr));
 
-    const savedMembers = localStorage.getItem('microfox_members_data');
-    if (savedMembers) {
-      const members: ClientAccount[] = JSON.parse(savedMembers);
-      
-      const epargneMap: { [key: string]: ClientAccount[] } = {};
-      const tontineMap: { [key: string]: { clients: ClientAccount[], zones: string[] } } = {};
-      const nameMap: { [key: string]: ClientAccount[] } = {};
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      if (savedMembers) {
+        const members: ClientAccount[] = JSON.parse(savedMembers);
+        
+        const epargneMap: { [key: string]: ClientAccount[] } = {};
+        const tontineMap: { [key: string]: { clients: ClientAccount[], zones: string[] } } = {};
+        const nameMap: { [key: string]: ClientAccount[] } = {};
 
-      members.forEach(member => {
-        if (member.epargneAccountNumber) {
+        members.forEach(member => {
+          if (member.isDeleted) return;
+          
+          if (member.epargneAccountNumber) {
           const epNum = member.epargneAccountNumber.trim().toUpperCase();
           if (!epargneMap[epNum]) epargneMap[epNum] = [];
           epargneMap[epNum].push(member);
@@ -132,7 +135,17 @@ const DuplicateAlert: React.FC = () => {
       });
 
       setDuplicates(foundDuplicates);
-    }
+      }
+    };
+
+    loadData();
+    window.addEventListener('storage', loadData);
+    window.addEventListener('microfox_storage_update', loadData);
+
+    return () => {
+      window.removeEventListener('storage', loadData);
+      window.removeEventListener('microfox_storage_update', loadData);
+    };
   }, []);
 
   const filteredDuplicates = duplicates.filter(d => 
