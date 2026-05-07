@@ -821,6 +821,8 @@ const FinancialReports: React.FC = () => {
                 date: p.date,
                 label: p.agentName,
                 amount: p.observedAmount || p.totalAmount,
+                cotisation: p.amountCotisations || 0,
+                livretVendu: p.amountLivrets || 0,
                 description: `Versement Validé - ${p.caisse}`
               }));
               reportName = "Versement des Agents Commerciaux";
@@ -903,6 +905,10 @@ const FinancialReports: React.FC = () => {
                   <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Client</th>
                   <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Code</th>
                   <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">N° Compte Tontine</th>
+                  ${listToExport.length > 0 && listToExport[0].cotisation !== undefined ? `
+                    <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Cotisation (F)</th>
+                    <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Livret Vendu (F)</th>
+                  ` : ''}
                   <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Montant (F)</th>
                   <th style="border: 1px solid #ddd; padding: 12px; text-align: center; background-color: #f8f9fa; font-weight: bold;">Description</th>
                 </tr>
@@ -917,6 +923,10 @@ const FinancialReports: React.FC = () => {
                     </td>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.memberCode || ''}</td>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.tontineAccountNumber || ''}</td>
+                    ${tx.cotisation !== undefined ? `
+                      <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${Number(tx.cotisation).toLocaleString()}</td>
+                      <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${Number(tx.livretVendu).toLocaleString()}</td>
+                    ` : ''}
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${Number(tx.amount).toLocaleString()}</td>
                     <td style="border: 1px solid #ddd; padding: 12px; text-align: center;">${tx.description || ''}</td>
                   </tr>
@@ -925,6 +935,10 @@ const FinancialReports: React.FC = () => {
               <tfoot>
                 <tr>
                   <td colspan="4" style="border: 1px solid #ddd; padding: 12px; text-align: right; font-weight: bold; background-color: #f8f9fa;">TOTAL</td>
+                  ${listToExport.length > 0 && listToExport[0].cotisation !== undefined ? `
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-weight: bold; background-color: #f8f9fa;">${listToExport.reduce((acc, curr) => acc + (curr.cotisation || 0), 0).toLocaleString()}</td>
+                    <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-weight: bold; background-color: #f8f9fa;">${listToExport.reduce((acc, curr) => acc + (curr.livretVendu || 0), 0).toLocaleString()}</td>
+                  ` : ''}
                   <td style="border: 1px solid #ddd; padding: 12px; text-align: right; font-weight: bold; background-color: #f8f9fa;">${calculateTotal(listToExport).toLocaleString()}</td>
                   <td style="border: 1px solid #ddd; padding: 12px; background-color: #f8f9fa;"></td>
                 </tr>
@@ -987,7 +1001,9 @@ const FinancialReports: React.FC = () => {
     }
   };
 
-  const renderSection = (title: string, list: any[], icon: React.ReactNode, color: string, id: string) => (
+  const renderSection = (title: string, list: any[], icon: React.ReactNode, color: string, id: string) => {
+    const hasDetails = list.length > 0 && list[0].cotisation !== undefined;
+    return (
     <div key={id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className={`p-3 sm:p-6 flex items-center justify-between border-b border-gray-50 bg-${color}-50/30`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
@@ -1017,6 +1033,12 @@ const FinancialReports: React.FC = () => {
               <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Date</th>
               <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Client</th>
               <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">N° Compte Tontine</th>
+              {hasDetails && (
+                <>
+                  <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Cotisation</th>
+                  <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Livret Vendu</th>
+                </>
+              )}
               <th className="px-2 sm:px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Montant</th>
             </tr>
           </thead>
@@ -1032,18 +1054,30 @@ const FinancialReports: React.FC = () => {
                   )}
                 </td>
                 <td className="px-2 sm:px-4 py-4 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{tx.tontineAccountNumber || '-'}</td>
+                {hasDetails && (
+                  <>
+                    <td className="px-2 sm:px-4 py-4 text-right text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{(tx.cotisation || 0).toLocaleString()} F</td>
+                    <td className="px-2 sm:px-4 py-4 text-right text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap">{(tx.livretVendu || 0).toLocaleString()} F</td>
+                  </>
+                )}
                 <td className="px-2 sm:px-4 py-4 text-right text-[10px] sm:text-xs font-black text-[#121c32] whitespace-nowrap">{tx.amount.toLocaleString()} F</td>
               </tr>
             ))}
             {list.length > 0 && (
               <tr className="bg-gray-50 font-black">
                 <td colSpan={3} className="px-2 sm:px-4 py-3 text-right text-[10px] uppercase tracking-widest text-gray-500">Total</td>
+                {hasDetails && (
+                  <>
+                    <td className="px-2 sm:px-4 py-3 text-right text-[10px] sm:text-xs text-[#121c32]">{list.reduce((acc, curr) => acc + (curr.cotisation || 0), 0).toLocaleString()} F</td>
+                    <td className="px-2 sm:px-4 py-3 text-right text-[10px] sm:text-xs text-[#121c32]">{list.reduce((acc, curr) => acc + (curr.livretVendu || 0), 0).toLocaleString()} F</td>
+                  </>
+                )}
                 <td className="px-2 sm:px-4 py-3 text-right text-[10px] sm:text-xs text-[#121c32]">{calculateTotal(list).toLocaleString()} F</td>
               </tr>
             )}
             {list.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-[10px] font-bold text-gray-300 uppercase tracking-widest italic">Aucune donnée</td>
+                <td colSpan={hasDetails ? 6 : 4} className="px-6 py-10 text-center text-[10px] font-bold text-gray-300 uppercase tracking-widest italic">Aucune donnée</td>
               </tr>
             )}
           </tbody>
@@ -1051,6 +1085,7 @@ const FinancialReports: React.FC = () => {
       </div>
     </div>
   );
+};
 
   return (
     <div className="space-y-8 pb-20">
@@ -1381,6 +1416,8 @@ const FinancialReports: React.FC = () => {
               date: p.date,
               memberName: p.agentName,
               amount: p.observedAmount || p.totalAmount,
+              cotisation: p.amountCotisations || 0,
+              livretVendu: p.amountLivrets || 0,
               description: `Versement Validé - ${p.caisse}`
             })), <Wallet size={20} />, "emerald", "versement_agents")}
           </div>

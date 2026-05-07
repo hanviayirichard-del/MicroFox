@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, Search, BarChart3, Calendar, Coins, TrendingUp, User, ChevronDown, Download, Printer, Navigation } from 'lucide-react';
+import { Cloud, Search, BarChart3, Calendar, Coins, TrendingUp, User, ChevronDown, Download, Printer, Navigation, Trash2 } from 'lucide-react';
 
 const Commissions: React.FC = () => {
   // Initialisation des dates sur le mois en cours pour assurer l'affichage immédiat des données
@@ -22,6 +22,7 @@ const Commissions: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
   const [selectedZone, setSelectedZone] = useState(currentUser?.role === 'agent commercial' ? (currentUser?.zonesCollecte?.[0] || currentUser?.zoneCollecte || '') : '');
+  const [filterDeleted, setFilterDeleted] = useState<'all' | 'active' | 'deleted'>('all');
   
   const agentZones = currentUser?.zonesCollecte || (currentUser?.zoneCollecte ? [currentUser.zoneCollecte] : []);
   const zones = currentUser?.role === 'agent commercial' ? agentZones : ['01','01A','02','02A','03','03A','04','04A','05','05A','06','06A','07','07A','08','08A','09','09A'];
@@ -82,7 +83,8 @@ const Commissions: React.FC = () => {
                 amount: dailyMise,
                 mise: dailyMise,
                 agent: agentName,
-                zone: acc.zone || member.zone || 'N/A'
+                zone: acc.zone || member.zone || 'N/A',
+                isDeleted: member.isDeleted
               });
             }
           };
@@ -253,8 +255,12 @@ const Commissions: React.FC = () => {
       const matchesZone = currentUser?.role === 'agent commercial' 
         ? (selectedZone !== '' && item.zone === selectedZone)
         : (selectedZone === '' || item.zone === selectedZone);
+
+      const matchesDeleted = filterDeleted === 'all' 
+        ? true 
+        : filterDeleted === 'deleted' ? item.isDeleted : !item.isDeleted;
       
-      return matchesSearch && matchesZone;
+      return matchesSearch && matchesZone && matchesDeleted;
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -301,20 +307,39 @@ const Commissions: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-1 sm:space-y-2">
-        <label className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Zone de collecte</label>
-        <div className="relative group">
-          <select 
-            value={selectedZone} 
-            onChange={(e) => setSelectedZone(e.target.value)}
-            disabled={currentUser?.role === 'agent commercial'}
-            className={`w-full pl-9 sm:pl-12 pr-6 sm:pr-10 py-3 sm:py-4 bg-white border border-gray-100 rounded-[1.2rem] sm:rounded-[1.5rem] text-xs sm:text-sm font-bold text-[#121c32] outline-none shadow-sm appearance-none cursor-pointer ${currentUser?.role === 'agent commercial' ? 'opacity-70 cursor-not-allowed' : ''}`}
-          >
-            <option value="">Toutes les zones</option>
-            {zones.map(z => <option key={z} value={z}>{z}</option>)}
-          </select>
-          <Navigation className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-blue-500" size={16} />
-          <ChevronDown className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="space-y-1 sm:space-y-2">
+          <label className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Zone de collecte</label>
+          <div className="relative group">
+            <select 
+              value={selectedZone} 
+              onChange={(e) => setSelectedZone(e.target.value)}
+              disabled={currentUser?.role === 'agent commercial'}
+              className={`w-full pl-9 sm:pl-12 pr-6 sm:pr-10 py-3 sm:py-4 bg-white border border-gray-100 rounded-[1.2rem] sm:rounded-[1.5rem] text-xs sm:text-sm font-bold text-[#121c32] outline-none shadow-sm appearance-none cursor-pointer ${currentUser?.role === 'agent commercial' ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              <option value="">Toutes les zones</option>
+              {zones.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+            <Navigation className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-blue-500" size={16} />
+            <ChevronDown className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+          </div>
+        </div>
+
+        <div className="space-y-1 sm:space-y-2">
+          <label className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">État des comptes</label>
+          <div className="relative group">
+            <select 
+              value={filterDeleted} 
+              onChange={(e) => setFilterDeleted(e.target.value as any)}
+              className="w-full pl-9 sm:pl-12 pr-6 sm:pr-10 py-3 sm:py-4 bg-white border border-gray-100 rounded-[1.2rem] sm:rounded-[1.5rem] text-xs sm:text-sm font-bold text-[#121c32] outline-none shadow-sm appearance-none cursor-pointer"
+            >
+              <option value="all">Tous les comptes</option>
+              <option value="active">Comptes Actifs</option>
+              <option value="deleted">Comptes Supprimés</option>
+            </select>
+            <User className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-[#121c32]" size={16} />
+            <ChevronDown className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+          </div>
         </div>
       </div>
 
@@ -375,7 +400,14 @@ const Commissions: React.FC = () => {
                     {item.name.split(' ').map((n: string) => n[0]).join('')}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm sm:text-base font-black text-[#121c32] uppercase truncate">{item.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm sm:text-base font-black text-[#121c32] uppercase">{item.name}</p>
+                      {item.isDeleted && (
+                        <span className="text-[8px] sm:text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded flex items-center gap-1 border border-red-200">
+                          <Trash2 size={8} /> COMPTE SUPPRIMÉ
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.date}</span>
                        <span className="text-[8px] sm:text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-emerald-100/50 uppercase">
