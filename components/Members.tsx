@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Navigation,
   Trash2,
+  Edit3,
   Users as UsersIcon,
   LayoutGrid,
   Printer,
@@ -3848,16 +3849,30 @@ const Members: React.FC = () => {
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <p className={`text-sm font-black uppercase truncate ${selectedClientId === client.id ? 'text-white' : 'text-gray-200'}`}>{client.name}</p>
                       {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClient(client.id, client.name);
-                          }}
-                          className={`shrink-0 p-1 rounded-md transition-all ${selectedClientId === client.id ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-red-500 hover:bg-red-500/10'}`}
-                          title="Supprimer le client"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedClientId(client.id);
+                              setActiveTab('profile');
+                              if (window.innerWidth < 1024) setIsSidebarCollapsed(true);
+                            }}
+                            className={`shrink-0 p-1.5 rounded-md transition-all ${selectedClientId === client.id ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-blue-500 hover:bg-blue-500/10'}`}
+                            title="Modifier le client"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteClient(client.id, client.name);
+                            }}
+                            className={`shrink-0 p-1.5 rounded-md transition-all ${selectedClientId === client.id ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-red-500 hover:bg-red-500/10'}`}
+                            title="Supprimer le client"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       )}
                     </div>
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ${selectedClientId === client.id ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-500'}`}>

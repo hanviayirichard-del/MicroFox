@@ -6,6 +6,7 @@ import GeographicMap from './components/GeographicMap';
 import Members from './components/Members';
 import DailyTontine from './components/DailyTontine';
 import ValidateZoneCotisations from './components/ValidateZoneCotisations';
+import ValidatePreviousCotisations from './components/ValidatePreviousCotisations';
 import CancelCotisation from './components/CancelCotisation';
 import Commissions from './components/Commissions';
 import CreditManagement from './components/CreditManagement';
@@ -640,6 +641,64 @@ const App: React.FC = () => {
         let cashDelta = 0;
         let vaultDelta = 0;
 
+        // Ensure agent 'koko' is removed if exists
+        const savedUsersStr = localStorage.getItem('microfox_users');
+        if (savedUsersStr) {
+          try {
+            const users = JSON.parse(savedUsersStr);
+            const updatedUsers = users.map((u: any) => 
+              u.identifiant.toLowerCase() === 'koko' ? { ...u, isDeleted: true, updatedAt: new Date().toISOString() } : u
+            );
+            if (JSON.stringify(updatedUsers) !== savedUsersStr) {
+              localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+            }
+          } catch (e) {
+            console.error("Error cleaning up koko:", e);
+          }
+        }
+
+        // Correct transactions: Replace KOKO with KAO NAKOUTCHA for Zone 02
+        const tontineDataStr = localStorage.getItem('microfox_tontine_data');
+        if (tontineDataStr) {
+          try {
+            const tontine = JSON.parse(tontineDataStr);
+            let tontineChanged = false;
+            const updatedTontine = tontine.map((tx: any) => {
+              if (tx.zone === '02' && (tx.cashierName || '').toLowerCase() === 'koko') {
+                tontineChanged = true;
+                return { ...tx, cashierName: 'KAO NAKOUTCHA' };
+              }
+              return tx;
+            });
+            if (tontineChanged) {
+              localStorage.setItem('microfox_tontine_data', JSON.stringify(updatedTontine));
+            }
+          } catch (e) {
+            console.error("Error correcting koko transactions:", e);
+          }
+        }
+
+        // Correct Agent Payments
+        const agentPaymentsStrFix = localStorage.getItem('microfox_agent_payments');
+        if (agentPaymentsStrFix) {
+          try {
+            const payments = JSON.parse(agentPaymentsStrFix);
+            let paymentsChanged = false;
+            const updatedPayments = payments.map((p: any) => {
+              if (p.zone === '02' && (p.agentName || '').toLowerCase() === 'koko') {
+                paymentsChanged = true;
+                return { ...p, agentName: 'KAO NAKOUTCHA', cashierName: 'KAO NAKOUTCHA' };
+              }
+              return p;
+            });
+            if (paymentsChanged) {
+              localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedPayments));
+            }
+          } catch (e) {
+            console.error("Error correcting koko payments:", e);
+          }
+        }
+
         // 1. Members Transactions
         const membersDataStr = localStorage.getItem('microfox_members_data');
         const membersData = membersDataStr ? JSON.parse(membersDataStr) : [];
@@ -848,6 +907,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Validation Cotisations Zone') {
       return <ValidateZoneCotisations />;
+    }
+
+    if (activeSection === 'Validation Cotisations Antérieures') {
+      return <ValidatePreviousCotisations />;
     }
 
     if (activeSection === 'Annulation Cotisation') {
