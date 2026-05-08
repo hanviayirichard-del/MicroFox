@@ -15,8 +15,9 @@ const TontineWithdrawal: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
 
   // Logique de calcul du solde net (Disponible = Cotisé - Commission)
-  const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
-    if (dailyMise <= 0) dailyMise = 500;
+  const getTontineStats = (grossBalance: number, dailyMiseInput: any, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
+    let dailyMise = Number(dailyMiseInput);
+    if (isNaN(dailyMise) || dailyMise <= 0) dailyMise = 500;
     
     const accountHistory = (history || [])
       .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (
@@ -116,7 +117,9 @@ const TontineWithdrawal: React.FC = () => {
     let specificWithdrawal;
     const usedWithdrawalIds = new Set<string>();
 
+    let totalSafety = 0;
     for (const tx of accountHistory) {
+      if (totalSafety > 20000) break;
       const txDate = new Date(tx.date);
       // Activer les retraits arrivés jusqu'à cette date
       allWithdrawals.forEach(w => {
@@ -127,11 +130,13 @@ const TontineWithdrawal: React.FC = () => {
       });
       let remainingAmount = Number(tx.amount);
 
-      while (remainingAmount > 0) {
+      while (remainingAmount > 0 && totalSafety < 20000) {
+        totalSafety++;
         if (currentCycleFirstDepositDate === null) {
           // Gérer les retraits qui ont eu lieu AVANT ce dépôt et qui doivent clôturer les cycles précédents
           let priorWithdrawal;
-          while (priorWithdrawal = allWithdrawals.find(w => {
+          let priorSafety = 0;
+          while (priorSafety < 100 && (priorWithdrawal = allWithdrawals.find(w => {
             if (usedWithdrawalIds.has(w.id)) {
               const matches = w.description.match(/Cycles: ([\d, ]+)/);
               if (matches) {
@@ -152,7 +157,8 @@ const TontineWithdrawal: React.FC = () => {
               return indices.includes(cycleIdx);
             }
             return true;
-          })) {
+          }))) {
+            priorSafety++;
             usedWithdrawalIds.add(priorWithdrawal.id);
             if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
               remainingWithdrawals += priorWithdrawal.amount;
@@ -188,11 +194,15 @@ const TontineWithdrawal: React.FC = () => {
           currentCycleFirstDepositDate = txDate;
         }
 
-        const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+        let amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+        if (amountToCompleteCycle <= 0) {
+          currentCycleCases = 31;
+          amountToCompleteCycle = 0;
+        }
         const oldCases = currentCycleCases;
 
         // On traite d'abord l'ajout du montant au cycle en cours
-        if (remainingAmount >= amountToCompleteCycle) {
+        if (amountToCompleteCycle > 0 && remainingAmount >= amountToCompleteCycle) {
           currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;
           currentCycleCases = 31;
           const casesAdded = 31 - oldCases;
@@ -200,7 +210,7 @@ const TontineWithdrawal: React.FC = () => {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
           }
           remainingAmount -= amountToCompleteCycle;
-        } else {
+        } else if (remainingAmount > 0 && amountToCompleteCycle > 0) {
           currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
           const newCases = Math.floor(currentCycleAmount / Number(dailyMise));
           const casesAdded = newCases - oldCases;
@@ -208,6 +218,11 @@ const TontineWithdrawal: React.FC = () => {
             currentCycleDates.push(new Date(tx.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'}));
           }
           currentCycleCases = newCases;
+          remainingAmount = 0;
+        } else if (amountToCompleteCycle <= 0) {
+          // Si le cycle est déjà plein, on ne consomme pas remainingAmount ici.
+          // On laisse la logique de clôture ci-dessous s'en charger avant l'itération suivante.
+        } else {
           remainingAmount = 0;
         }
 
@@ -401,7 +416,9 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     // Gérer les retraits restants qui n'ont pas de dépôts associés
-    while (remainingWithdrawals > 0 || allWithdrawals.some(w => !usedWithdrawalIds.has(w.id))) {
+    let finalSafety = 0;
+    while (finalSafety < 500 && (remainingWithdrawals > 0 || allWithdrawals.some(w => !usedWithdrawalIds.has(w.id)))) {
+      finalSafety++;
       const nextW = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id));
       if (!nextW && remainingWithdrawals <= 0) break;
       
@@ -442,21 +459,31 @@ const TontineWithdrawal: React.FC = () => {
 
   const loadData = () => {
     let saved = localStorage.getItem('microfox_members_data');
-    let allMembers = [];
+    let allMembers: any[] = [];
     
     if (saved) {
-      allMembers = JSON.parse(saved).map((m: any) => {
-        const updatedTontineAccounts = (m.tontineAccounts || []).map((acc: any, index: number) => ({
-          ...acc,
-          id: acc.id || `${m.id}_tn_${index + 1}`
-        }));
+      try {
+        const parsed = JSON.parse(saved);
+        allMembers = Array.isArray(parsed) ? parsed.map((m: any) => {
+          const updatedTontineAccounts = (m.tontineAccounts || []).map((acc: any, index: number) => ({
+            ...acc,
+            id: acc.id || `${m.id}_tn_${index + 1}`
+          }));
 
-        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-        if (savedHistory) {
-          return { ...m, tontineAccounts: updatedTontineAccounts, history: JSON.parse(savedHistory) };
-        }
-        return { ...m, tontineAccounts: updatedTontineAccounts };
-      });
+          const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+          if (savedHistory) {
+            try {
+              const history = JSON.parse(savedHistory);
+              return { ...m, tontineAccounts: updatedTontineAccounts, history: Array.isArray(history) ? history : [] };
+            } catch (e) {
+              return { ...m, tontineAccounts: updatedTontineAccounts, history: [] };
+            }
+          }
+          return { ...m, tontineAccounts: updatedTontineAccounts };
+        }) : [];
+      } catch (e) {
+        allMembers = [];
+      }
     } else {
       allMembers = [
         {
@@ -477,7 +504,15 @@ const TontineWithdrawal: React.FC = () => {
 
     // Récupération des demandes en attente et validées pour filtrer les cycles déjà demandés
     const savedPending = localStorage.getItem('microfox_pending_withdrawals');
-    let pending = savedPending ? JSON.parse(savedPending).filter((r: any) => !r.isDeleted) : [];
+    let pending: any[] = [];
+    if (savedPending) {
+      try {
+        const parsed = JSON.parse(savedPending);
+        pending = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted) : [];
+      } catch (e) {
+        pending = [];
+      }
+    }
     
     // Filtrage des demandes en attente par zone pour l'agent commercial
     if (currentUser?.role === 'agent commercial') {
@@ -491,78 +526,87 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
-    const validated = savedValidated ? JSON.parse(savedValidated).filter((r: any) => !r.isDeleted) : [];
+    let validated: any[] = [];
+    if (savedValidated) {
+      try {
+        const parsed = JSON.parse(savedValidated);
+        validated = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted) : [];
+      } catch (e) {
+        validated = [];
+      }
+    }
     const allRequests = [...pending, ...validated];
 
-      const tontiniers: any[] = [];
-      allMembers.forEach((m: any) => {
-        const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
-        if (!hasTontine) return;
-        
-        // Filtrage par zone pour l'agent commercial
-        if (currentUser?.role === 'agent commercial') {
-          const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
-          if (agentZones.length > 0) {
-            if (!(agentZones.includes(m.zone) || agentZones.includes(m.zoneCollecte))) return;
-          }
+    const tontiniers: any[] = [];
+    allMembers.forEach((m: any) => {
+      const hasTontine = m.tontineAccounts && m.tontineAccounts.length > 0;
+      if (!hasTontine) return;
+      
+      // Filtrage par zone pour l'agent commercial
+      if (currentUser?.role === 'agent commercial') {
+        const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);
+        if (agentZones.length > 0) {
+          if (!(agentZones.includes(m.zone) || agentZones.includes(m.zoneCollecte))) return;
         }
+      }
 
-        const visibleTontineAccounts = (currentUser?.role === 'caissier' || currentUser?.role === 'agent commercial')
-          ? m.tontineAccounts.filter((acc: any) => !acc.isInvisible)
-          : m.tontineAccounts;
+      const visibleTontineAccounts = (currentUser?.role === 'caissier' || currentUser?.role === 'agent commercial')
+        ? m.tontineAccounts.filter((acc: any) => !acc.isInvisible)
+        : m.tontineAccounts;
 
-        if (visibleTontineAccounts.length === 0) return;
+      if (visibleTontineAccounts.length === 0) return;
 
-        visibleTontineAccounts.forEach((acc: any) => {
-          // On passe toutes les demandes (en attente et validées) à getTontineStats pour qu'il puisse scinder les cycles
-          const clientRequests = allRequests.filter(r => r.clientId === m.id && (r.tontineAccountId === acc.id || r.tontineAccountNumber === acc.number));
-          const isFirstAccount = m.tontineAccounts[0]?.id === acc.id;
-          const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientRequests, isFirstAccount, acc.number);
-          
-          // Extraction des indices de cycles déjà présents dans des demandes
-          const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
-          clientRequests.forEach(r => {
+      visibleTontineAccounts.forEach((acc: any) => {
+        // On passe toutes les demandes (en attente et validées) à getTontineStats pour qu'il puisse scinder les cycles
+        const clientRequests = allRequests.filter(r => r.clientId === m.id && (r.tontineAccountId === acc.id || r.tontineAccountNumber === acc.number));
+        const isFirstAccount = m.tontineAccounts[0]?.id === acc.id;
+        const stats = getTontineStats(acc.balance, acc.dailyMise, m.history, acc.id, clientRequests, isFirstAccount, acc.number);
+        
+        // Extraction des indices de cycles déjà présents dans des demandes
+        const requestedCycleIndices: {idx: number, date: string, amount: number, status: string}[] = [];
+        clientRequests.forEach(r => {
+          if (r.reason) {
             const matches = r.reason.match(/Cycles: ([\d, ]+)/);
             if (matches) {
-              matches[1].split(',').forEach(s => {
+              matches[1].split(',').forEach((s: string) => {
                 const num = parseInt(s.trim());
                 if (!isNaN(num)) requestedCycleIndices.push({idx: num, date: r.date, amount: r.amount, status: r.status});
               });
             }
-          });
+          }
+        });
 
-          // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
-          const updatedCycleDetails = stats.cycleDetails.map(c => {
-            const request = requestedCycleIndices.find(r => r.idx === c.index);
-            // On ne bloque le cycle que s'il y a une demande EN ATTENTE ou VALIDÉE non encore en historique.
-            // Les demandes VALIDÉES déjà en historique sont gérées par getTontineStats.
-            const isPending = request?.status === 'En attente' || request?.status === 'Validé';
-            
-            return {
-              ...c,
-              isRetire: c.isRetire || isPending,
-              montantRetire: c.isRetire ? c.montantRetire : (request ? request.amount : 0),
-              dateRetrait: c.isRetire ? c.dateRetrait : (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
-            };
-          });
+        // Marquer les cycles déjà demandés comme retirés pour empêcher une nouvelle demande
+        const updatedCycleDetails = stats.cycleDetails.map(c => {
+          const request = requestedCycleIndices.find(r => r.idx === c.index);
+          // On ne bloque le cycle que s'il y a une demande EN ATTENTE ou VALIDÉE non encore en historique.
+          // Les demandes VALIDÉES déjà en historique sont gérées par getTontineStats.
+          const isPending = request?.status === 'En attente' || request?.status === 'Validé';
+          
+          return {
+            ...c,
+            isRetire: c.isRetire || isPending,
+            montantRetire: c.isRetire ? c.montantRetire : (request ? request.amount : 0),
+            dateRetrait: c.isRetire ? c.dateRetrait : (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
+          };
+        });
 
-          tontiniers.push({
-            ...m,
-            id: `${m.id}_${acc.id}`,
-            realClientId: m.id,
-            tontineAccountId: acc.id,
-            isFirstAccount: isFirstAccount,
-            availableTontine: Math.max(0, stats.netBalance),
-            cycles: stats.cycles,
-            currentCycleCases: stats.currentCycleCases,
-            currentCycleDates: stats.currentCycleDates,
-            cycleDetails: updatedCycleDetails,
-            accountNumber: acc.number
-          });
+        tontiniers.push({
+          ...m,
+          id: `${m.id}_${acc.id}`,
+          realClientId: m.id,
+          tontineAccountId: acc.id,
+          isFirstAccount: isFirstAccount,
+          availableTontine: Math.max(0, stats.netBalance),
+          cycles: stats.cycles,
+          currentCycleCases: stats.currentCycleCases,
+          currentCycleDates: stats.currentCycleDates,
+          cycleDetails: updatedCycleDetails,
+          accountNumber: acc.number
         });
       });
+    });
     setClients(tontiniers);
-
     setPendingRequests(pending);
   };
 
@@ -570,8 +614,10 @@ const TontineWithdrawal: React.FC = () => {
     loadData();
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
-    return () => window.removeEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
+    };
   }, []);
 
   useEffect(() => {

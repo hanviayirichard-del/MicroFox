@@ -909,16 +909,16 @@ const App: React.FC = () => {
       return <ValidateZoneCotisations />;
     }
 
-    if (activeSection === 'Validation Cotisation antérieures et versement non effectué') {
-      return <ValidatePreviousCotisations />;
-    }
-
     if (activeSection === 'Annulation Cotisation') {
       return <CancelCotisation />;
     }
 
     if (activeSection === 'Demande de retrait tontine') {
       return <TontineWithdrawal />;
+    }
+
+    if (activeSection === 'Validation Cotisation antérieures et versement non effectué') {
+      return <ValidatePreviousCotisations />;
     }
 
     if (activeSection === 'Vérification de retrait tontine') {
