@@ -70,7 +70,8 @@ const Dashboard: React.FC = () => {
       if (dailyMise <= 0) return acc;
 
       const accountWithdrawalsAmount = accountWithdrawals.reduce((sum, h) => sum + h.amount, 0);
-      let remainingWithdrawals = accountWithdrawalsAmount;
+      let remainingWithdrawals = 0;
+      const encounteredWithdrawalIds = new Set<string>();
       let totalDecaissable = 0;
       let totalComm = 0;
 
@@ -81,10 +82,50 @@ const Dashboard: React.FC = () => {
 
       for (const tx of accountHistory) {
         const txDate = new Date(tx.date);
+        // Activer les retraits arrivés jusqu'à cette date
+        accountWithdrawals.forEach(w => {
+          if (new Date(w.date) <= txDate && !encounteredWithdrawalIds.has(w.id)) {
+            remainingWithdrawals += w.amount;
+            encounteredWithdrawalIds.add(w.id);
+          }
+        });
         let remainingAmount = Number(tx.amount);
 
         while (remainingAmount > 0) {
           if (currentCycleFirstDepositDate === null) {
+            // Gérer les retraits qui ont eu lieu AVANT ce dépôt
+            let priorWithdrawal;
+            while (priorWithdrawal = accountWithdrawals.find((w: any) => {
+              const wDate = new Date(w.date);
+              if (wDate > txDate) return false;
+              
+              // Si c'est le même jour, on accepte le retrait comme préalable s'il cible ce cycle ou s'il est arrivé avant
+              if (wDate.toDateString() === txDate.toDateString()) {
+                if (wDate < txDate) return true;
+                const matches = (w.description || '').match(/Cycles: ([\d, ]+)/);
+                if (!matches) return false;
+                const indices = matches[1].split(',').map((s: string) => parseInt(s.trim()));
+                return indices.includes(cycleIdx);
+              }
+
+              const matches = (w.description || '').match(/Cycles: ([\d, ]+)/);
+              if (matches) {
+                const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+                return indices.includes(cycleIdx);
+              }
+              return true;
+            })) {
+              // On marque comme utilisé implicitement (dans Dashboard on ne suit pas usedWithdrawalIds de la même manière mais on doit incrémenter cycleIdx)
+              // Pour Dashboard, on simplifie car c'est juste pour le calcul du solde
+              if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
+                remainingWithdrawals += priorWithdrawal.amount;
+                encounteredWithdrawalIds.add(priorWithdrawal.id);
+              }
+              const comm = Number(dailyMise);
+              totalComm += comm;
+              remainingWithdrawals = Math.max(0, remainingWithdrawals - priorWithdrawal.amount);
+              cycleIdx++;
+            }
             currentCycleFirstDepositDate = txDate;
           }
           const cycleEndDateLimit = new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
@@ -108,7 +149,7 @@ const Dashboard: React.FC = () => {
             if (specificWithdrawal) {
               isRetire = true;
             } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-              const hasFutureWithdrawal = accountWithdrawals.some((w: any) => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate!);
+              const hasFutureWithdrawal = accountWithdrawals.some((w: any) => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate! && new Date(w.date) <= txDate);
               if (hasFutureWithdrawal) {
                 isRetire = true;
                 remainingWithdrawals -= netCycleAmount;
@@ -145,7 +186,7 @@ const Dashboard: React.FC = () => {
             if (specificWithdrawal) {
               isRetire = true;
             } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-              const hasFutureWithdrawal = accountWithdrawals.some((w: any) => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate!);
+              const hasFutureWithdrawal = accountWithdrawals.some((w: any) => !w.description.includes('Cycles:') && new Date(w.date) >= currentCycleFirstDepositDate! && new Date(w.date) <= txDate);
               if (hasFutureWithdrawal) {
                 isRetire = true;
                 remainingWithdrawals -= netCycleAmount;
@@ -167,6 +208,13 @@ const Dashboard: React.FC = () => {
       }
 
       if (currentCycleFirstDepositDate) {
+        // Activer les retraits restants
+        accountWithdrawals.forEach(w => {
+          if (!encounteredWithdrawalIds.has(w.id)) {
+            remainingWithdrawals += w.amount;
+            encounteredWithdrawalIds.add(w.id);
+          }
+        });
         const comm = currentCycleAmount > 0 ? Math.min(currentCycleAmount, dailyMise) : 0;
         const netCycleAmount = Math.max(0, currentCycleAmount - comm);
         totalComm += comm;

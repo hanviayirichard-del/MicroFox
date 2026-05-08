@@ -69,7 +69,8 @@ const TontineVerification: React.FC = () => {
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const accountWithdrawalsAmount = allWithdrawals.reduce((sum, h) => sum + h.amount, 0);
-    let remainingWithdrawals = accountWithdrawalsAmount;
+    let remainingWithdrawals = 0;
+    const encounteredWithdrawalIds = new Set<string>();
     
     const fmt = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const today = new Date();
@@ -138,6 +139,13 @@ const TontineVerification: React.FC = () => {
 
     for (const tx of accountHistory) {
       const txDate = new Date(tx.date);
+      // Activer les retraits arrivés jusqu'à cette date
+      allWithdrawals.forEach(w => {
+        if (new Date(w.date) <= txDate && !encounteredWithdrawalIds.has(w.id)) {
+          remainingWithdrawals += w.amount;
+          encounteredWithdrawalIds.add(w.id);
+        }
+      });
       let remainingAmount = Number(tx.amount);
 
       while (remainingAmount > 0) {
@@ -145,7 +153,16 @@ const TontineVerification: React.FC = () => {
           let priorWithdrawal;
           while (priorWithdrawal = allWithdrawals.find(w => {
             if (usedWithdrawalIds.has(w.id)) return false;
-            if (new Date(w.date) >= txDate) return false;
+            const wDate = new Date(w.date);
+            if (wDate > txDate) return false;
+            // Si c'est le même jour, on considère comme prioritaire s'il cible ce cycle ou s'il est arrivé avant
+            if (wDate.toDateString() === txDate.toDateString()) {
+              if (wDate < txDate) return true;
+              const matches = w.description.match(/Cycles: ([\d, ]+)/);
+              if (!matches) return false;
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              return indices.includes(cycleIdx);
+            }
             const matches = w.description.match(/Cycles: ([\d, ]+)/);
             if (matches) {
               const indices = matches[1].split(',').map(s => parseInt(s.trim()));
@@ -154,6 +171,11 @@ const TontineVerification: React.FC = () => {
             return true;
           })) {
             usedWithdrawalIds.add(priorWithdrawal.id);
+            if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
+              remainingWithdrawals += priorWithdrawal.amount;
+              encounteredWithdrawalIds.add(priorWithdrawal.id);
+            }
+            remainingWithdrawals = Math.max(0, remainingWithdrawals - priorWithdrawal.amount);
             cycleDetails.push({
               index: cycleIdx,
               amount: 0,
@@ -232,7 +254,7 @@ const TontineVerification: React.FC = () => {
             mRetire = specificWithdrawal.amount;
             remainingWithdrawals = Math.max(0, remainingWithdrawals - specificWithdrawal.amount);
           } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-            const fallbackWithdrawal = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id) && !w.description.includes('Cycles:'));
+            const fallbackWithdrawal = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id) && !w.description.includes('Cycles:') && new Date(w.date) <= txDate);
             if (fallbackWithdrawal) {
               usedWithdrawalIds.add(fallbackWithdrawal.id);
               isRetire = true;
@@ -267,6 +289,13 @@ const TontineVerification: React.FC = () => {
     }
 
     if (currentCycleFirstDepositDate) {
+      // Activer les retraits restants
+      allWithdrawals.forEach(w => {
+        if (!encounteredWithdrawalIds.has(w.id)) {
+          remainingWithdrawals += w.amount;
+          encounteredWithdrawalIds.add(w.id);
+        }
+      });
       let isRetire = false;
       let retraitDate = null;
       let mRetire = 0;

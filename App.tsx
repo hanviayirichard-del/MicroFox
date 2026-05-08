@@ -909,7 +909,7 @@ const App: React.FC = () => {
       return <ValidateZoneCotisations />;
     }
 
-    if (activeSection === 'Validation Cotisations Antérieures') {
+    if (activeSection === 'Validation Cotisation antérieures et versement non effectué') {
       return <ValidatePreviousCotisations />;
     }
 

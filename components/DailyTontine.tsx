@@ -34,24 +34,26 @@ const DailyTontine: React.FC = () => {
       const savedUser = localStorage.getItem('microfox_current_user');
       const user = savedUser ? JSON.parse(savedUser) : {};
       
-      let filteredAllMembers = allMembers;
+      let filteredAllMembers = allMembers.filter((m: any) => !m.isDeleted);
       if (user.role === 'agent commercial') {
         const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
         if (agentZones.length > 0) {
-          filteredAllMembers = allMembers.filter((m: any) => agentZones.includes(m.zone));
+          filteredAllMembers = filteredAllMembers.filter((m: any) => agentZones.includes(m.zone));
         }
       } else if (user.role === 'caissier') {
-        filteredAllMembers = allMembers.filter((m: any) => m.zone === '01');
+        filteredAllMembers = filteredAllMembers.filter((m: any) => m.zone === '01');
       }
 
       // Filtrer pour n'afficher que les membres ayant au moins un compte tontine
       const tontiniers = filteredAllMembers
         .filter((m: any) => m.tontineAccounts && m.tontineAccounts.length > 0)
         .flatMap((m: any) => {
-          // Filtrer les comptes tontine invisibles pour les caissiers et agents
+          // Filtrer les comptes tontine supprimés et invisibles
+          const activeAccounts = m.tontineAccounts.filter((acc: any) => !acc.isDeleted);
+          
           const accountsToProcess = (user.role === 'caissier' || user.role === 'agent commercial') 
-            ? m.tontineAccounts.filter((acc: any) => !acc.isInvisible)
-            : m.tontineAccounts;
+            ? activeAccounts.filter((acc: any) => !acc.isInvisible)
+            : activeAccounts;
 
           if (accountsToProcess.length === 0) return [];
 
@@ -168,12 +170,19 @@ const DailyTontine: React.FC = () => {
                 let cycleIdx = 1;
                 totalCommissionsPaid = 0;
 
-                const accountWithdrawalsAmount = accountWithdrawals.reduce((sum: number, h: any) => sum + h.amount, 0);
-                let remainingWithdrawals = accountWithdrawalsAmount;
                 const usedWithdrawalIds = new Set<string>();
+                let remainingWithdrawals = 0;
+                const encounteredWithdrawalIds = new Set<string>();
 
                 for (const tx of accountHistory) {
                   const txDate = new Date(tx.date);
+                  // Activer les retraits arrivés jusqu'à cette date
+                  accountWithdrawals.forEach(w => {
+                    if (new Date(w.date) <= txDate && !encounteredWithdrawalIds.has(w.id)) {
+                      remainingWithdrawals += w.amount;
+                      encounteredWithdrawalIds.add(w.id);
+                    }
+                  });
                   let remainingAmount = Number(tx.amount);
 
                   while (remainingAmount > 0) {
@@ -182,7 +191,16 @@ const DailyTontine: React.FC = () => {
                       let priorWithdrawal;
                       while (priorWithdrawal = accountWithdrawals.find((w: any) => {
                         if (usedWithdrawalIds.has(w.id)) return false;
-                        if (new Date(w.date) >= txDate) return false;
+                        const wDate = new Date(w.date);
+                        if (wDate > txDate) return false;
+                        // Si c'est le même jour, on accepte le retrait comme préalable s'il cible ce cycle ou s'il est arrivé avant
+                        if (wDate.toDateString() === txDate.toDateString()) {
+                          if (wDate < txDate) return true;
+                          const matches = w.description.match(/Cycles: ([\d, ]+)/);
+                          if (!matches) return false;
+                          const indices = matches[1].split(',').map((s: string) => parseInt(s.trim()));
+                          return indices.includes(cycleIdx);
+                        }
                         const matches = w.description.match(/Cycles: ([\d, ]+)/);
                         if (matches) {
                           const indices = matches[1].split(',').map((s: string) => parseInt(s.trim()));
@@ -191,6 +209,11 @@ const DailyTontine: React.FC = () => {
                         return true;
                       })) {
                         usedWithdrawalIds.add(priorWithdrawal.id);
+                        if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
+                          remainingWithdrawals += priorWithdrawal.amount;
+                          encounteredWithdrawalIds.add(priorWithdrawal.id);
+                        }
+                        remainingWithdrawals = Math.max(0, remainingWithdrawals - priorWithdrawal.amount);
                         cycleIdx++;
                       }
                       currentCycleFirstDepositDate = txDate;
@@ -240,7 +263,7 @@ const DailyTontine: React.FC = () => {
                         isRetire = true;
                         remainingWithdrawals = Math.max(0, remainingWithdrawals - specificWithdrawal.amount);
                       } else if (remainingWithdrawals >= netCycleAmount && netCycleAmount > 0) {
-                        const fallbackWithdrawal = accountWithdrawals.find(w => !usedWithdrawalIds.has(w.id) && !w.description.includes('Cycles:'));
+                        const fallbackWithdrawal = accountWithdrawals.find(w => !usedWithdrawalIds.has(w.id) && !w.description.includes('Cycles:') && new Date(w.date) <= txDate);
                         if (fallbackWithdrawal) {
                           usedWithdrawalIds.add(fallbackWithdrawal.id);
                           isRetire = true;
@@ -260,6 +283,13 @@ const DailyTontine: React.FC = () => {
                   }
                 }
                 if (currentCycleFirstDepositDate) {
+                  // Activer les retraits restants
+                  accountWithdrawals.forEach(w => {
+                    if (!encounteredWithdrawalIds.has(w.id)) {
+                      remainingWithdrawals += w.amount;
+                      encounteredWithdrawalIds.add(w.id);
+                    }
+                  });
                   const comm = currentCycleAmount > 0 ? Math.min(currentCycleAmount, dailyMise) : 0;
                   totalCommissionsPaid += comm;
                   const netCycleAmount = Math.max(0, currentCycleAmount - comm);

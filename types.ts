@@ -36,6 +36,7 @@ export interface User {
   latitude?: number | null;
   longitude?: number | null;
   lastUpdate?: string;
+  updatedAt?: string;
   fingerprintCredential?: {
     id: string;
     publicKey: string;
@@ -50,6 +51,7 @@ export interface TontineAccount {
   zone?: string;
   isBlocked?: boolean;
   isInvisible?: boolean;
+  isDeleted?: boolean;
 }
 
 export interface Transaction {
@@ -105,6 +107,10 @@ export interface ClientAccount {
   latitude?: number | null;
   longitude?: number | null;
   zone?: string;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
   // Champs de crédit
   dossierInstruitPar?: string;
   dureeCredit?: string;

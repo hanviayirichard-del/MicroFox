@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dispatchStorageEvent } from '../utils/events';
-import { Clock, Search, MapPin, CheckCircle, AlertCircle, ChevronRight, Users, TrendingUp, Printer, Download, ChevronDown } from 'lucide-react';
+import { Clock, Search, MapPin, CheckCircle, AlertCircle, ChevronRight, Users, TrendingUp, Printer, Download, ChevronDown, Wallet, Landmark, Send } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
 interface ZoneCotisation {
@@ -14,12 +14,128 @@ interface ZoneCotisation {
 const ALL_ZONES = ['01', '01A', '02', '02A', '03', '03A', '04', '04A', '05', '05A', '06', '06A', '07', '07A', '08', '08A', '09', '09A'];
 
 const ValidatePreviousCotisations: React.FC = () => {
-  const [zones] = useState<string[]>(ALL_ZONES);
+  const [user] = useState(() => JSON.parse(localStorage.getItem('microfox_current_user') || '{}'));
+  
+  const isCaissier = user.role === 'caissier';
+  const isAgentCommercial = user.role === 'agent commercial';
+  const isAdminOrDir = user.role === 'administrateur' || user.role === 'directeur';
+
+  const [zones] = useState<string[]>(() => {
+    if (isAgentCommercial) {
+      if (user.zonesCollecte && Array.isArray(user.zonesCollecte) && user.zonesCollecte.length > 0) {
+        return user.zonesCollecte;
+      }
+      if (user.zoneCollecte) {
+        return [user.zoneCollecte];
+      }
+      // Si aucune zone n'est assignée (devrait être impossible), on montre tout ou rien ?
+      // Dans le doute on suit la logique de permissions
+      return [];
+    }
+    return ALL_ZONES;
+  });
+  
   const [zoneStatuses, setZoneStatuses] = useState<Record<string, 'pending' | 'validated' | 'none'>>({});
   const [pendingCotisations, setPendingCotisations] = useState<any[]>([]);
   const [selectedZone, setSelectedZone] = useState<string>('');
   const [zoneData, setZoneData] = useState<ZoneCotisation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'validation' | 'reports'>('validation');
+
+  const [selectedDetail, setSelectedDetail] = useState<{ name: string, type: 'agent' | 'cashier', details: any[] } | null>(null);
+
+  const agentsUnfulfilled = React.useMemo(() => {
+    const members = JSON.parse(localStorage.getItem('microfox_members_data') || '[]');
+    const validatedZones = JSON.parse(localStorage.getItem('microfox_validated_zone_cotisations') || '{}');
+    const payments = JSON.parse(localStorage.getItem('microfox_agent_payments') || '[]');
+
+    const agentDebt: Record<string, { amount: number, details: any[] }> = {};
+
+    members.forEach((m: any) => {
+      const history = JSON.parse(localStorage.getItem(`microfox_history_${m.id}`) || '[]');
+      history.forEach((tx: any) => {
+        if (tx.isDeleted || tx.type !== 'cotisation' || !tx.cashierName) return;
+        
+        const day = new Date(tx.date).toISOString().split('T')[0];
+        const valKey = `${day}_${m.zone}`;
+        const val = validatedZones[valKey];
+        
+        if (val && new Date(tx.date).getTime() <= new Date(val.validatedAt).getTime()) {
+          const name = tx.cashierName.toUpperCase();
+          if (!agentDebt[name]) agentDebt[name] = { amount: 0, details: [] };
+          agentDebt[name].amount += tx.amount;
+          agentDebt[name].details.push({
+            date: tx.date,
+            client: m.name,
+            code: m.code,
+            amount: tx.amount,
+            type: 'Collecte'
+          });
+        }
+      });
+    });
+
+    payments.forEach((p: any) => {
+      if (p.status === 'Validé' && p.type !== 'CASHIER_TRANSFER') {
+        const name = p.agentName.toUpperCase();
+        if (!agentDebt[name]) agentDebt[name] = { amount: 0, details: [] };
+        agentDebt[name].amount -= (p.observedAmount || p.totalAmount);
+        agentDebt[name].details.push({
+          date: p.date,
+          client: 'VERSEMENT CAISSE',
+          code: p.caisse || 'CP',
+          amount: -(p.observedAmount || p.totalAmount),
+          type: 'Versement'
+        });
+      }
+    });
+
+    return Object.entries(agentDebt)
+      .map(([name, data]) => ({ name, amount: data.amount, details: data.details }))
+      .filter(a => {
+        if (isAgentCommercial) {
+          return a.name === user.identifiant.toUpperCase() && a.amount > 10;
+        }
+        return a.amount > 10;
+      }) 
+      .sort((a, b) => b.amount - a.amount);
+  }, [pendingCotisations]);
+
+  const cashiersUnfulfilled = React.useMemo(() => {
+    const payments = JSON.parse(localStorage.getItem('microfox_agent_payments') || '[]');
+    const cashierDebt: Record<string, { amount: number, details: any[] }> = {};
+
+    payments.forEach((p: any) => {
+      if (p.status === 'Validé') {
+        if (p.type !== 'CASHIER_TRANSFER') {
+          const caisse = p.caisse || 'CAISSE PRINCIPALE';
+          if (!cashierDebt[caisse]) cashierDebt[caisse] = { amount: 0, details: [] };
+          cashierDebt[caisse].amount += (p.observedAmount || p.totalAmount);
+          cashierDebt[caisse].details.push({
+            date: p.date,
+            source: p.agentName,
+            amount: (p.observedAmount || p.totalAmount),
+            type: 'Réception'
+          });
+        } else {
+          const sourceCaisse = p.agentName; // For CASHIER_TRANSFER, agentName is the source caisse
+          if (!cashierDebt[sourceCaisse]) cashierDebt[sourceCaisse] = { amount: 0, details: [] };
+          cashierDebt[sourceCaisse].amount -= (p.observedAmount || p.totalAmount);
+          cashierDebt[sourceCaisse].details.push({
+            date: p.date,
+            source: 'TRANSFERT VERS CP',
+            amount: -(p.observedAmount || p.totalAmount),
+            type: 'Transfert'
+          });
+        }
+      }
+    });
+
+    return Object.entries(cashierDebt)
+      .map(([name, data]) => ({ name, amount: data.amount, details: data.details }))
+      .filter(a => a.amount > 10)
+      .sort((a, b) => b.amount - a.amount);
+  }, [pendingCotisations]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mfConfig] = useState(() => {
@@ -82,6 +198,9 @@ const ValidatePreviousCotisations: React.FC = () => {
               const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
 
               if (!isTxValidated) {
+                // Filter for agent commercial
+                if (isAgentCommercial && tx.cashierName !== user.identifiant) return;
+                
                 hasAnyPendingPrevious = true;
                 allPending.push({
                    ...tx,
@@ -137,6 +256,9 @@ const ValidatePreviousCotisations: React.FC = () => {
               const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
 
               if (!isTxValidated) {
+                // Filter for agent commercial
+                if (isAgentCommercial && tx.cashierName !== user.identifiant) return;
+
                 total += tx.amount;
                 count++;
                 transactions.push({
@@ -173,6 +295,11 @@ const ValidatePreviousCotisations: React.FC = () => {
   };
 
   const handleValidate = () => {
+    if (isAgentCommercial) {
+      setErrorMessage("Action non autorisée : L'agent commercial ne peut pas valider les cotisations.");
+      setTimeout(() => setErrorMessage(null), 4000);
+      return;
+    }
     if (!zoneData || zoneData.isValidated) return;
 
     if (zoneData.transactions.length === 0) {
@@ -237,6 +364,51 @@ const ValidatePreviousCotisations: React.FC = () => {
     } catch (error) {
       setErrorMessage("Une erreur est survenue lors de la validation.");
       setTimeout(() => setErrorMessage(null), 5000);
+    }
+  };
+
+  const handleMakePayment = (data: { name: string, amount: number }) => {
+    if (!confirm(`Voulez-vous enregistrer un versement de ${data.amount.toLocaleString()} F pour cet impayé ?`)) return;
+
+    try {
+      const saved = localStorage.getItem('microfox_agent_payments');
+      const allPayments = saved ? JSON.parse(saved) : [];
+
+      const newPayment = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        agentId: user.id || 'N/A',
+        agentName: user.identifiant,
+        zone: user.zoneCollecte || 'N/A',
+        cashierName: user.identifiant,
+        amountCotisations: data.amount,
+        amountLivrets: 0,
+        nbLivrets: 0,
+        totalAmount: data.amount,
+        theoreticalAmount: data.amount,
+        physicalBalance: data.amount,
+        gap: 0,
+        billetage: null,
+        date: new Date().toISOString(),
+        status: 'En attente',
+        caisse: 'CAISSE PRINCIPALE',
+        type: 'UNFULFILLED_RECOVERY',
+        description: `Récupération versement non effectué (${data.name})`
+      };
+
+      const updatedAllPayments = [newPayment, ...allPayments];
+      localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedAllPayments));
+      
+      localStorage.setItem('microfox_pending_sync', 'true');
+      dispatchStorageEvent();
+      
+      setSuccessMessage(`Versement de ${data.amount.toLocaleString()} F soumis avec succès.`);
+      setSelectedDetail(null);
+      setTimeout(() => setSuccessMessage(null), 4000);
+      
+      loadZones();
+    } catch (error) {
+      setErrorMessage("Erreur lors de l'enregistrement du versement.");
+      setTimeout(() => setErrorMessage(null), 4000);
     }
   };
 
@@ -366,7 +538,7 @@ const ValidatePreviousCotisations: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-[#121c32] uppercase tracking-tight leading-tight">
-              Validation Cotisations<br />Jours Antérieures
+              Validation Cotisation antérieures<br />et versement non effectué
             </h1>
             <p className="text-gray-500 font-medium text-sm mt-1">Valider les collectes des jours passés non encore validées</p>
           </div>
@@ -387,6 +559,27 @@ const ValidatePreviousCotisations: React.FC = () => {
         </div>
       )}
 
+      <div className="flex bg-gray-100 p-1 rounded-2xl w-fit">
+        <button
+          onClick={() => setActiveTab('validation')}
+          className={`px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${
+            activeTab === 'validation' ? 'bg-[#121c32] text-white shadow-lg' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Validation Cotisations
+        </button>
+        <button
+          onClick={() => setActiveTab('reports')}
+          className={`px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${
+            activeTab === 'reports' ? 'bg-[#121c32] text-white shadow-lg' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Versements non effectués
+        </button>
+      </div>
+
+      {activeTab === 'validation' ? (
+        <>
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
@@ -503,7 +696,7 @@ const ValidatePreviousCotisations: React.FC = () => {
                     </button>
                   </>
                 )}
-                {!zoneData.isValidated && zoneData.transactions.length > 0 && (
+                {!zoneData.isValidated && zoneData.transactions.length > 0 && !isAgentCommercial && (
                   <button 
                     onClick={handleValidate}
                     className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-700 transition-all shadow-lg active:scale-95 flex items-center gap-2"
@@ -588,9 +781,187 @@ const ValidatePreviousCotisations: React.FC = () => {
             <p className="text-sm font-bold text-gray-400 italic">Veuillez sélectionner une zone pour voir les cotisations antérieures.</p>
           </div>
         )}
+        </div>
+        </>
+      ) : (
+        <div className="space-y-6">
+          {(isCaissier || isAdminOrDir || isAgentCommercial) && (
+            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
+                  <Wallet size={18} className="text-red-500" />
+                  Rapport des versements non effectués (Agents)
+                </h2>
+                <div className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+                  {agentsUnfulfilled.length} Agent(s) en attente
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-100/50 border-b border-gray-200">
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest">Nom de l'Agent</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Montant Non Versé</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {agentsUnfulfilled.map((agent, i) => (
+                      <tr 
+                        key={i} 
+                        className="hover:bg-white cursor-pointer transition-colors group"
+                        onClick={() => setSelectedDetail({ name: agent.name, type: 'agent', details: agent.details })}
+                      >
+                        <td className="px-6 py-4 text-xs font-black text-[#121c32] uppercase group-hover:text-blue-600 flex items-center gap-2">
+                          {agent.name}
+                          <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-black text-red-600">{agent.amount.toLocaleString()} F</td>
+                      </tr>
+                    ))}
+                    {agentsUnfulfilled.length === 0 && (
+                      <tr>
+                        <td colSpan={2} className="px-6 py-10 text-center text-gray-400 italic text-xs">
+                          Tous les agents sont à jour.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {isAdminOrDir && (
+            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black text-[#121c32] uppercase tracking-tight flex items-center gap-2">
+                  <Landmark size={18} className="text-orange-500" />
+                  Rapport des versements non effectués (Caissiers)
+                </h2>
+                <div className="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-100">
+                  {cashiersUnfulfilled.length} Caisse(s) en attente
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-100/50 border-b border-gray-200">
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest">Identifiant Caisse</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Montant Non Versé</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {cashiersUnfulfilled.map((cashier, i) => (
+                      <tr 
+                        key={i} 
+                        className="hover:bg-white cursor-pointer transition-colors group"
+                        onClick={() => setSelectedDetail({ name: cashier.name, type: 'cashier', details: cashier.details })}
+                      >
+                        <td className="px-6 py-4 text-xs font-black text-[#121c32] uppercase group-hover:text-amber-600 flex items-center gap-2">
+                          {cashier.name}
+                          <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-black text-orange-600">{cashier.amount.toLocaleString()} F</td>
+                      </tr>
+                    ))}
+                    {cashiersUnfulfilled.length === 0 && (
+                      <tr>
+                        <td colSpan={2} className="px-6 py-10 text-center text-gray-400 italic text-xs">
+                          Toutes les caisses sont à jour.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {selectedDetail && (
+            <div className="bg-[#121c32] text-white p-8 rounded-[2rem] shadow-2xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between sticky top-0 bg-[#121c32] pb-4 z-10">
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
+                    {selectedDetail.type === 'agent' ? <Wallet size={24} className="text-red-400" /> : <Landmark size={24} className="text-orange-400" />}
+                    Détails : {selectedDetail.name}
+                  </h3>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Historique des opérations non versées</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {isAgentCommercial && selectedDetail.type === 'agent' && selectedDetail.name === user.identifiant.toUpperCase() && (
+                    <button
+                      onClick={() => handleMakePayment({ name: selectedDetail.name, amount: selectedDetail.details.reduce((sum, d) => sum + d.amount, 0) })}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg flex items-center gap-2"
+                    >
+                      <Send size={14} />
+                      Verser l'impayé
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setSelectedDetail(null)}
+                    className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-all font-black"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-white/5 rounded-2xl border border-white/10 overflow-x-auto">
+                <table className="w-full text-left min-w-[500px]">
+                  <thead>
+                    <tr className="bg-white/10 border-b border-white/5">
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Type</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                        {selectedDetail.type === 'agent' ? 'Client / Caisse' : 'Source'}
+                      </th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {selectedDetail.details.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((d, i) => (
+                      <tr key={i}>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-blue-400">{new Date(d.date).toLocaleDateString()}</span>
+                            <span className="text-[9px] font-bold text-gray-500 uppercase">{new Date(d.date).toLocaleTimeString()}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${d.type === 'Collecte' || d.type === 'Réception' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {d.type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black uppercase">{selectedDetail.type === 'agent' ? d.client : d.source}</span>
+                            {selectedDetail.type === 'agent' && <span className="text-[9px] font-bold text-gray-500">{d.code}</span>}
+                          </div>
+                        </td>
+                        <td className={`px-6 py-4 text-right text-xs font-black ${d.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {d.amount.toLocaleString()} F
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-white/10 font-black">
+                      <td colSpan={3} className="px-6 py-4 text-right text-[10px] uppercase tracking-widest">Total Non Versé</td>
+                      <td className="px-6 py-4 text-right text-sm text-red-400">
+                        {selectedDetail.details.reduce((sum, d) => sum + d.amount, 0).toLocaleString()} F
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       </div>
-    </div>
-  );
+    );
 };
 
 export default ValidatePreviousCotisations;
