@@ -41,6 +41,8 @@ const ValidatePreviousCotisations: React.FC = () => {
   const [zoneData, setZoneData] = useState<ZoneCotisation | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'validation' | 'reports'>('validation');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const [selectedDetail, setSelectedDetail] = useState<{ name: string, type: 'agent' | 'cashier', details: any[] } | null>(null);
 
@@ -56,7 +58,12 @@ const ValidatePreviousCotisations: React.FC = () => {
       history.forEach((tx: any) => {
         if (tx.isDeleted || tx.type !== 'cotisation' || !tx.cashierName) return;
         
-        const day = new Date(tx.date).toISOString().split('T')[0];
+        const txDate = new Date(tx.date);
+        const day = txDate.toISOString().split('T')[0];
+
+        if (startDate && day < startDate) return;
+        if (endDate && day > endDate) return;
+        
         const valKey = `${day}_${m.zone}`;
         const val = validatedZones[valKey];
         
@@ -77,6 +84,10 @@ const ValidatePreviousCotisations: React.FC = () => {
 
     payments.forEach((p: any) => {
       if (p.status === 'Validé' && p.type !== 'CASHIER_TRANSFER') {
+        const pDay = new Date(p.date).toISOString().split('T')[0];
+        if (startDate && pDay < startDate) return;
+        if (endDate && pDay > endDate) return;
+
         const name = p.agentName.toUpperCase();
         if (!agentDebt[name]) agentDebt[name] = { amount: 0, details: [] };
         agentDebt[name].amount -= (p.observedAmount || p.totalAmount);
@@ -99,7 +110,7 @@ const ValidatePreviousCotisations: React.FC = () => {
         return a.amount > 10;
       }) 
       .sort((a, b) => b.amount - a.amount);
-  }, [pendingCotisations]);
+  }, [pendingCotisations, startDate, endDate]);
 
   const cashiersUnfulfilled = React.useMemo(() => {
     const payments = JSON.parse(localStorage.getItem('microfox_agent_payments') || '[]');
@@ -107,6 +118,10 @@ const ValidatePreviousCotisations: React.FC = () => {
 
     payments.forEach((p: any) => {
       if (p.status === 'Validé') {
+        const pDay = new Date(p.date).toISOString().split('T')[0];
+        if (startDate && pDay < startDate) return;
+        if (endDate && pDay > endDate) return;
+
         if (p.type !== 'CASHIER_TRANSFER') {
           const caisse = p.caisse || 'CAISSE PRINCIPALE';
           if (!cashierDebt[caisse]) cashierDebt[caisse] = { amount: 0, details: [] };
@@ -135,7 +150,7 @@ const ValidatePreviousCotisations: React.FC = () => {
       .map(([name, data]) => ({ name, amount: data.amount, details: data.details }))
       .filter(a => a.amount > 10)
       .sort((a, b) => b.amount - a.amount);
-  }, [pendingCotisations]);
+  }, [pendingCotisations, startDate, endDate]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mfConfig] = useState(() => {
@@ -193,6 +208,10 @@ const ValidatePreviousCotisations: React.FC = () => {
               // Only interested in previous days
               if (txDay >= today) return;
 
+              // Date filter
+              if (startDate && txDay < startDate) return;
+              if (endDate && txDay > endDate) return;
+
               const validationKey = `${txDay}_${zone}`;
               const zoneValidation = validatedZones[validationKey];
               const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
@@ -219,6 +238,10 @@ const ValidatePreviousCotisations: React.FC = () => {
       setPendingCotisations(allPending);
     }
   };
+
+  useEffect(() => {
+    loadZones();
+  }, [startDate, endDate]);
 
   const loadZoneDetails = (zoneName: string) => {
     setLoading(true);
@@ -250,6 +273,10 @@ const ValidatePreviousCotisations: React.FC = () => {
               
               // Only interested in previous days
               if (txDay >= today) return;
+
+              // Date filter
+              if (startDate && txDay < startDate) return;
+              if (endDate && txDay > endDate) return;
 
               const validationKey = `${txDay}_${zoneName}`;
               const zoneValidation = validatedZones[validationKey];
@@ -576,6 +603,35 @@ const ValidatePreviousCotisations: React.FC = () => {
         >
           Versements non effectués
         </button>
+      </div>
+
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-end gap-4">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Période du</label>
+          <input 
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:border-blue-500 font-bold text-[#121c32] text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Au</label>
+          <input 
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:border-blue-500 font-bold text-[#121c32] text-xs"
+          />
+        </div>
+        {(startDate || endDate) && (
+          <button 
+            onClick={() => { setStartDate(''); setEndDate(''); }}
+            className="px-4 py-2 text-[10px] font-black text-red-500 uppercase hover:bg-red-50 rounded-xl transition-all"
+          >
+            Effacer
+          </button>
+        )}
       </div>
 
       {activeTab === 'validation' ? (

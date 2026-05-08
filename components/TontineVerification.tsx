@@ -155,13 +155,9 @@ const TontineVerification: React.FC = () => {
             if (usedWithdrawalIds.has(w.id)) return false;
             const wDate = new Date(w.date);
             if (wDate > txDate) return false;
-            // Si c'est le même jour, on considère comme prioritaire s'il cible ce cycle ou s'il est arrivé avant
+            // Si c'est le même jour, on accepte le retrait comme préalable car un retrait clôture toujours le cycle en cours avant les nouveaux dépôts du jour
             if (wDate.toDateString() === txDate.toDateString()) {
-              if (wDate < txDate) return true;
-              const matches = w.description.match(/Cycles: ([\d, ]+)/);
-              if (!matches) return false;
-              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
-              return indices.includes(cycleIdx);
+              return true;
             }
             const matches = w.description.match(/Cycles: ([\d, ]+)/);
             if (matches) {

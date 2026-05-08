@@ -72,6 +72,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       if (savedPerms) {
         try {
           const parsed = JSON.parse(savedPerms);
+          const tabName = 'Validation Cotisation antérieures et versement non effectué';
+          
+          // Force include the new tab for relevant roles if they have a saved permission list
+          ['directeur', 'caissier', 'agent commercial', 'auditeur'].forEach(role => {
+            if (parsed[role] && !parsed[role].includes(tabName)) {
+              parsed[role] = [...parsed[role], tabName];
+            }
+          });
+
           // S'assurer que le rôle agent commercial a ses accès par défaut si manquants
           const combined = { ...defaults, ...parsed };
           setPermissions(combined);

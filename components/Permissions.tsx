@@ -87,6 +87,15 @@ const Permissions: React.FC = () => {
       // Merge with defaults to ensure all roles have keys
       const merged = { ...defaults, ...perms };
       
+      const tabName = 'Validation Cotisation antérieures et versement non effectué';
+      
+      // Force include the new tab for relevant roles if they have a saved permission list
+      ['directeur', 'caissier', 'agent commercial'].forEach(role => {
+        if (merged[role] && !merged[role].includes(tabName)) {
+          merged[role] = [...merged[role], tabName];
+        }
+      });
+      
       // Force cleanup for agent commercial (as requested previously)
       if (merged['agent commercial']) {
         merged['agent commercial'] = merged['agent commercial'].filter((p: string) => 
