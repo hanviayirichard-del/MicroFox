@@ -51,7 +51,7 @@ import CashGaps from './components/CashGaps';
 import { User, Microfinance } from './types';
 import { recordAuditLog } from './utils/audit';
 import { Loader2, Clock, ShieldAlert } from 'lucide-react';
-import { supabase } from './src/supabase';
+import { supabase } from './supabase';
 
 import { dispatchStorageEvent } from './utils/events';
 
@@ -101,7 +101,7 @@ try {
       }
 
       if (nativeGetItem('microfox_offline_mode') !== 'true') {
-        import('./src/utils/supabaseSync').then(async m => {
+        import('./utils/supabaseSync').then(async m => {
           const success = await m.syncToSupabase(fullKey, value);
           if (success) {
             try {
@@ -149,7 +149,7 @@ try {
       }
 
       if (nativeGetItem('microfox_offline_mode') !== 'true') {
-        import('./src/supabase').then(async m => {
+        import('./supabase').then(async m => {
           if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
             const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
             if (!error) {
@@ -213,7 +213,7 @@ const App: React.FC = () => {
 
     const syncPromise = (async () => {
       try {
-        const { pullFromSupabase, syncToSupabase } = await import('./src/utils/supabaseSync');
+        const { pullFromSupabase, syncToSupabase } = await import('./utils/supabaseSync');
         
         // Push local changes first to avoid overwriting them
         if (nativeGetItem('microfox_pending_sync') === 'true') {
@@ -494,7 +494,7 @@ const App: React.FC = () => {
 
                 if (isDirty()) return;
 
-                const { mergeJSON } = await import('./src/utils/supabaseSync');
+                const { mergeJSON } = await import('./utils/supabaseSync');
                 const finalValue = localValue ? mergeJSON(localValue, remoteValue) : remoteValue;
                 
                 if (finalValue !== localValue) {
@@ -525,7 +525,7 @@ const App: React.FC = () => {
           }
         };
 
-        import('./src/utils/supabaseSync').then(async (m) => {
+        import('./utils/supabaseSync').then(async (m) => {
           const globalChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty);
           const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem, isDirty);
           if (globalChanged || tenantChanged) {
@@ -560,7 +560,7 @@ const App: React.FC = () => {
       setupStorageIsolation(mfCodeOnLoad);
     } else {
       // Pull only global data if not logged in (background)
-      import('./src/utils/supabaseSync').then(m => {
+      import('./utils/supabaseSync').then(m => {
         m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
       }).catch(err => console.error('Failed to load sync module:', err));
     }
