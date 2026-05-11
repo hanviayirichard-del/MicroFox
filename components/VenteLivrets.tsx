@@ -28,6 +28,8 @@ const VenteLivrets: React.FC = () => {
   const [isEditingPrice, setIsEditingPrice] = useState(false);
   const [tempPriceEpargne, setTempPriceEpargne] = useState(300);
   const [tempPriceTontine, setTempPriceTontine] = useState(500);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
 
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -45,7 +47,20 @@ const VenteLivrets: React.FC = () => {
     if (!savedUser) return;
     const user = JSON.parse(savedUser);
     setCurrentUser(user);
-    const agentName = user.identifiant;
+
+    // Load agents for managers
+    if (user.role === 'administrateur' || user.role === 'directeur') {
+      const savedUsers = localStorage.getItem('microfox_users');
+      if (savedUsers) {
+        const usersList = JSON.parse(savedUsers);
+        setAgents(usersList.filter((u: any) => !u.isDeleted && (u.role === 'agent commercial' || u.role === 'caissier')));
+      }
+    }
+
+    const agentName = (selectedAgentId && (user.role === 'administrateur' || user.role === 'directeur')) 
+      ? selectedAgentId 
+      : user.identifiant;
+
     if (!agentName) return;
 
     if (user.role === 'agent commercial' && selectedType === 'epargne') {
@@ -199,9 +214,11 @@ const VenteLivrets: React.FC = () => {
     loadData();
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
-    return () => window.removeEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
-  }, [selectedType, currentUser?.id]);
+    };
+  }, [selectedType, currentUser?.id, selectedAgentId]);
 
   const handleVendreLivret = (member: any) => {
     if (!member) return;
@@ -830,6 +847,23 @@ const VenteLivrets: React.FC = () => {
         </>
       ) : (
         <div className="space-y-6 animate-in fade-in duration-500">
+          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1 block">Sélectionner un Agent ou Caissier pour suivre son stock</label>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm font-bold text-[#121c32]"
+              >
+                <option value="">-- Suivre mon propre stock --</option>
+                {agents.sort((a, b) => a.identifiant.localeCompare(b.identifiant)).map((agent) => (
+                  <option key={agent.id} value={agent.identifiant}>
+                    {agent.identifiant} ({agent.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex-1 min-w-[200px] space-y-1">
