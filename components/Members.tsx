@@ -1119,6 +1119,20 @@ const RegistrationForm: React.FC<{
           caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
         });
       }
+    } else if (isTontineSelected) {
+      // Pour les comptes tontine uniquement à l'enregistrement
+      const tontinePrice = prices.tontine || 500;
+      history.push({
+        id: `fl-tn-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        type: 'depot',
+        account: 'frais',
+        amount: tontinePrice,
+        date: new Date().toISOString(),
+        description: `Vente de Livret Tontine - Agent ${currentUser?.identifiant || 'Système'}`,
+        userId: currentUser?.id,
+        cashierName: currentUser?.identifiant,
+        caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
+      });
     }
 
     const newClient: ClientAccount = {
@@ -2640,7 +2654,6 @@ const Members: React.FC = () => {
       const isRetire = allWithdrawals.length > 0 || grossBalance < 0;
       const mRetire = allWithdrawals.reduce((sum, w) => sum + w.amount, 0);
       
-      // Gérer le cas où il y a plusieurs retraits sans cotisations
       if (allWithdrawals.length > 1) {
         const details = [];
         let idx = 1;
@@ -2684,13 +2697,14 @@ const Members: React.FC = () => {
           cases: 0, 
           period: `${fmt(today)} au ...`, 
           isRetire: isRetire, 
-          retraitDate: allWithdrawals[0] ? new Date(allWithdrawals[0].date).toLocaleDateString('fr-FR') : null, 
-          montantRetire: mRetire 
+          dateRetrait: allWithdrawals[0] ? new Date(allWithdrawals[0].date).toLocaleDateString('fr-FR') : null, 
+          montantRetire: mRetire,
+          dates: []
         }] 
       };
     }
 
-    let cycleDetails = [];
+    let cycleDetails: any[] = [];
     let currentCycleFirstDepositDate: Date | null = null;
     let currentCycleCases = 0;
     let currentCycleAmount = 0;
@@ -2701,24 +2715,22 @@ const Members: React.FC = () => {
 
     accountHistory.forEach((tx, txIdx) => {
       const txDate = new Date(tx.date);
-      // Activer les retraits arrivés jusqu'à cette date
       allWithdrawals.forEach(w => {
         if (new Date(w.date) <= txDate && !encounteredWithdrawalIds.has(w.id)) {
           remainingWithdrawals += w.amount;
           encounteredWithdrawalIds.add(w.id);
         }
       });
+      
       let remainingAmount = Number(tx.amount);
 
       while (remainingAmount > 0 && dailyMiseValue > 0) {
         if (currentCycleFirstDepositDate === null) {
-          // Gérer les retraits qui ont eu lieu AVANT ce dépôt et qui doivent clôturer les cycles précédents
           let priorWithdrawal;
           while (priorWithdrawal = allWithdrawals.find(w => {
             if (usedWithdrawalIds.has(w.id)) return false;
             const wDate = new Date(w.date);
-            const txDateObj = new Date(tx.date);
-            return wDate < txDateObj;
+            return wDate < txDate;
           })) {
             usedWithdrawalIds.add(priorWithdrawal.id);
             if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
@@ -2752,20 +2764,17 @@ const Members: React.FC = () => {
           currentCycleFirstDepositDate = txDate;
         }
 
-        // Vérifier si un retrait clôture le cycle en cours AVANT d'ajouter la nouvelle cotisation (uniquement pour les retraits antérieurs au jour même)
         const cycleEndDateLimit = new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
-          const withdrawalDuringCycle = allWithdrawals.find(w => {
-            const wDate = new Date(w.date);
-            const txDateObj = new Date(tx.date);
-            const isSameDay = wDate.toDateString() === txDateObj.toDateString();
-            const matches = w.description.match(/Cycles: ([\d, ]+)/);
-            if (matches) {
-              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
-              if (!indices.includes(cycleIdx)) return false;
-              return (wDate >= currentCycleFirstDepositDate! && wDate < txDateObj);
-            }
-            return !usedWithdrawalIds.has(w.id) && (wDate >= currentCycleFirstDepositDate! && wDate < txDateObj);
-          });
+        const withdrawalDuringCycle = allWithdrawals.find(w => {
+          const wDate = new Date(w.date);
+          const matches = w.description.match(/Cycles: ([\d, ]+)/);
+          if (matches) {
+            const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+            if (!indices.includes(cycleIdx)) return false;
+            return (wDate >= currentCycleFirstDepositDate! && wDate < txDate);
+          }
+          return !usedWithdrawalIds.has(w.id) && (wDate >= currentCycleFirstDepositDate! && wDate < txDate);
+        });
 
         if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
           if (withdrawalDuringCycle) usedWithdrawalIds.add(withdrawalDuringCycle.id);
@@ -2779,13 +2788,11 @@ const Members: React.FC = () => {
             if (usedWithdrawalIds.has(h.id)) return false;
             const matches = h.description.match(/Cycles: ([\d, ]+)/);
             const hDate = new Date(h.date);
-            const txDateObj = new Date(tx.date);
-            const isSameDay = hDate.toDateString() === txDateObj.toDateString();
             if (matches) {
               const indices = matches[1].split(',').map(s => parseInt(s.trim()));
               return indices.includes(cycleIdx);
             }
-            return hDate.getTime() < txDateObj.getTime();
+            return hDate < txDate;
           });
 
           if (specificWithdrawal) {
@@ -2818,7 +2825,7 @@ const Members: React.FC = () => {
             montantRetire: isRetire ? mRetire : 0,
             dates: [...currentCycleDates]
           });
-          if (currentCycleAmount > 0) totalComm += comm;
+          totalComm += comm;
           cycleIdx++;
           currentCycleCases = 0;
           currentCycleAmount = 0;
@@ -2830,7 +2837,7 @@ const Members: React.FC = () => {
         const oldCases = currentCycleCases;
 
         if (remainingAmount >= amountToCompleteCycle) {
-          currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;
+          currentCycleAmount += amountToCompleteCycle;
           currentCycleCases = 31;
           const casesAdded = 31 - oldCases;
           for (let m = 0; m < casesAdded; m++) {
@@ -2838,7 +2845,7 @@ const Members: React.FC = () => {
           }
           remainingAmount -= amountToCompleteCycle;
         } else {
-          currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
+          currentCycleAmount += remainingAmount;
           const newCases = Math.floor(currentCycleAmount / dailyMiseValue);
           const casesAdded = newCases - oldCases;
           for (let m = 0; m < casesAdded; m++) {
@@ -2849,7 +2856,6 @@ const Members: React.FC = () => {
         }
 
         if (currentCycleCases === 31) {
-          // Clôture immédiate car plein
           const comm = dailyMiseValue;
           const netCycleAmount = currentCycleAmount - comm;
           let isRetire = false;
@@ -2907,11 +2913,9 @@ const Members: React.FC = () => {
           currentCycleAmount = 0;
           currentCycleDates = [];
           currentCycleFirstDepositDate = remainingAmount > 0 ? txDate : null;
+        }
       }
-    }
 
-      // Gérer les retraits effectués le jour même de la transaction (après avoir ajouté les cotisations du jour)
-      // On n'exécute cette logique que si c'est la dernière transaction de la journée pour s'assurer d'avoir tous les dépôts du jour
       const nextTx = accountHistory[txIdx + 1];
       const isLastOfToday = !nextTx || new Date(nextTx.date).toDateString() !== txDate.toDateString();
 
@@ -2920,7 +2924,7 @@ const Members: React.FC = () => {
         while (sameDayWithdrawal = allWithdrawals.find(w => {
           const d = new Date(w.date);
           if (d.toDateString() !== txDate.toDateString()) return false;
-          if (d < txDate) return false; // Déjà géré par priorWithdrawal ou durant le cycle
+          if (d < txDate) return false;
           if (usedWithdrawalIds.has(w.id)) return false;
           const matches = w.description.match(/Cycles: ([\d, ]+)/);
           if (matches) {
@@ -2934,7 +2938,6 @@ const Members: React.FC = () => {
           const comm = currentCycleAmount > 0 ? dailyMiseValue : 0;
           const netCycleAmount = Math.max(0, currentCycleAmount - comm);
           let mRetire = 0;
-
           const matches = sameDayWithdrawal.description.match(/Cycles: ([\d, ]+)/);
           if (matches) {
             const indices = matches[1].split(',').map(s => parseInt(s.trim()));
@@ -3221,8 +3224,39 @@ const Members: React.FC = () => {
 
   const handleAddNewTontine = (info: { number: string; mise: number; zone: string }) => {
     if (!selectedClientId) return;
-    const saved = localStorage.getItem('microfox_members_data');
-    const allMembers = saved ? JSON.parse(saved) : clients;
+
+    // Vérification du stock central pour Admin/Directeur
+    const isCentral = currentUser?.role === 'administrateur' || currentUser?.role === 'directeur';
+    if (isCentral) {
+      const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+      if (savedStocks) {
+        const stocks = JSON.parse(savedStocks);
+        if (stocks.central.tontine <= 0) {
+          alert("Échec : Stock central de livrets tontine épuisé.");
+          return;
+        }
+      }
+    }
+
+    const savedMembers = localStorage.getItem('microfox_members_data');
+    const allMembers = savedMembers ? JSON.parse(savedMembers) : clients;
+
+    const savedPrices = localStorage.getItem('microfox_livret_prices');
+    const prices = savedPrices ? JSON.parse(savedPrices) : { epargne: 500, tontine: 500 };
+    
+    const tontinePrice = prices.tontine || 500;
+    const newTx: Transaction = {
+      id: `fl-tn-${selectedClientId}-${Date.now()}`,
+      type: 'depot',
+      account: 'frais',
+      amount: tontinePrice,
+      date: new Date().toISOString(),
+      description: `Vente de Livret Tontine - Agent ${currentUser?.identifiant || 'Système'}`,
+      userId: currentUser?.id,
+      cashierName: currentUser?.identifiant,
+      caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
+    };
+
     const updated = allMembers.map((c: any) => {
       if (c.id === selectedClientId) {
         const newAcc: TontineAccount = {
@@ -3235,15 +3269,44 @@ const Members: React.FC = () => {
         return { 
           ...c, 
           tontineAccounts: [...c.tontineAccounts, newAcc],
+          history: [newTx, ...(c.history || [])],
           updatedAt: new Date().toISOString()
         };
       }
       return c;
     });
+
+    // Mise à jour du stock si Admin/Directeur
+    if (isCentral) {
+      const savedStocks = localStorage.getItem('microfox_livrets_stocks');
+      if (savedStocks) {
+        const stocks = JSON.parse(savedStocks);
+        stocks.central.tontine = Math.max(0, (stocks.central.tontine || 0) - 1);
+        localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
+        dispatchStorageEvent();
+      }
+    }
+
+    // Mise à jour du solde de l'agent si ce n'est pas l'admin
+    if (currentUser?.role === 'agent commercial' || currentUser?.role === 'caissier') {
+      const savedUsers = localStorage.getItem('microfox_users');
+      if (savedUsers) {
+        const allUsers = JSON.parse(savedUsers);
+        const updatedUsers = allUsers.map((u: any) => {
+          if (u.id === currentUser.id) {
+            return { ...u, balance: (u.balance || 0) + tontinePrice };
+          }
+          return u;
+        });
+        localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
+      }
+    }
+
     setClients(updated);
     localStorage.setItem('microfox_members_data', JSON.stringify(updated));
     localStorage.setItem('microfox_pending_sync', 'true');
     setShowAddTontineModal(false);
+    alert("Nouveau compte tontine ajouté avec succès.");
   };
 
   const handleUpdateTontine = (info: { number: string; zone: string }) => {

@@ -80,7 +80,7 @@ const StocksLivrets: React.FC = () => {
 
     const savedUsers = localStorage.getItem('microfox_users');
     if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
+      setUsers(JSON.parse(savedUsers).filter((u: any) => !u.isDeleted));
     }
 
     const savedPrices = localStorage.getItem('microfox_livret_prices');

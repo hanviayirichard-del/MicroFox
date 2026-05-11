@@ -633,7 +633,7 @@ const App: React.FC = () => {
   // Robust calibration and correction for FABES MICROFINANCE (002FABES)
   useEffect(() => {
     if (currentUser?.codeMF?.toUpperCase() === '002FABES') {
-      const correctionFlag = 'microfox_fabes_correction_final_v2';
+      const correctionFlag = 'microfox_fabes_recalculation_final_v4';
       if (localStorage.getItem(correctionFlag) !== 'true') {
         const initialCash = 30000000;
         const initialVault = 20000000;
@@ -699,6 +699,7 @@ const App: React.FC = () => {
           }
         }
 
+        // --- Balance Recalculation ---
         // 1. Members Transactions
         const membersDataStr = localStorage.getItem('microfox_members_data');
         const membersData = membersDataStr ? JSON.parse(membersDataStr) : [];
@@ -711,7 +712,7 @@ const App: React.FC = () => {
             if (tx.cancelled) return;
             const amount = Number(tx.amount || 0);
             
-            // Resolve caisse if missing
+            // On ne prend que les opérations explicitement liées à la CAISSE PRINCIPALE
             let txCaisse = tx.caisse || tx.targetCaisse;
             if (!txCaisse) {
               const opUser = savedUsers.find((u: any) => 
@@ -722,8 +723,6 @@ const App: React.FC = () => {
               );
               if (opUser?.caisse) {
                 txCaisse = opUser.caisse;
-              } else if (opUser?.role === 'administrateur' || opUser?.role === 'directeur') {
-                txCaisse = 'CAISSE PRINCIPALE';
               }
             }
 
@@ -755,7 +754,7 @@ const App: React.FC = () => {
             const recordedBy = e.recordedBy;
             const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
             const expUser = savedUsers.find((u: any) => u.identifiant === recordedBy);
-            const caisse = e.caisse || expUser?.caisse || 'CAISSE PRINCIPALE';
+            const caisse = e.caisse || expUser?.caisse;
             if (caisse === 'CAISSE PRINCIPALE') {
               cashDelta -= Number(e.amount || 0);
             }
@@ -780,7 +779,7 @@ const App: React.FC = () => {
         const agentPayments = agentPaymentsStr ? JSON.parse(agentPaymentsStr) : [];
         agentPayments.forEach((p: any) => {
           if (p.status === 'Validé') {
-            const caisse = p.targetCaisse || p.caisse || 'CAISSE PRINCIPALE';
+            const caisse = p.targetCaisse || p.caisse;
             if (caisse === 'CAISSE PRINCIPALE') {
               cashDelta += Number(p.observedAmount || p.totalAmount || 0);
             }

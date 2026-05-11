@@ -223,7 +223,6 @@ const TontineWithdrawal: React.FC = () => {
         const withdrawalDuringCycle = allWithdrawals.find(w => {
           const wDate = new Date(w.date);
           const txDateObj = new Date(tx.date);
-          const isSameDay = wDate.toDateString() === txDateObj.toDateString();
           const matches = w.description.match(/Cycles: ([\d, ]+)/);
           if (matches) {
             const indices = matches[1].split(',').map(s => parseInt(s.trim()));
@@ -233,47 +232,46 @@ const TontineWithdrawal: React.FC = () => {
           return !usedWithdrawalIds.has(w.id) && (wDate >= currentCycleFirstDepositDate! && wDate < txDateObj);
         });
 
-          if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
-            if (withdrawalDuringCycle) usedWithdrawalIds.add(withdrawalDuringCycle.id);
-            let isRetire = !!withdrawalDuringCycle;
-            let retraitDate = withdrawalDuringCycle ? new Date(withdrawalDuringCycle.date).toLocaleDateString('fr-FR') : null;
-            let mRetire = 0;
-            
-            const comm = currentCycleAmount > 0 ? dailyMiseValue : 0;
-            const netCycleAmount = Math.max(0, currentCycleAmount - comm);
-            
-            specificWithdrawal = withdrawalDuringCycle || allWithdrawals.find(h => {
-               if (usedWithdrawalIds.has(h.id)) return false;
-              const matches = h.description.match(/Cycles: ([\d, ]+)/);
-              const hDate = new Date(h.date);
-              const txDateObj = new Date(tx.date);
-              const isSameDay = hDate.toDateString() === txDateObj.toDateString();
-              if (matches) {
-                const indices = matches[1].split(',').map(s => parseInt(s.trim()));
-                return indices.includes(cycleIdx);
-              }
-              return hDate.getTime() < txDateObj.getTime();
-            });
-
-            if (specificWithdrawal) {
-              usedWithdrawalIds.add(specificWithdrawal.id);
-              retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
-              
-              const matches = specificWithdrawal.description.match(/Cycles: ([\d, ]+)/);
-              if (matches) {
-                const indices = matches[1].split(',').map(s => parseInt(s.trim()));
-                const isLast = indices[indices.length - 1] === cycleIdx;
-                if (!isLast) usedWithdrawalIds.delete(specificWithdrawal.id);
-                
-                const consumed = withdrawalConsumedMap.get(specificWithdrawal.id) || 0;
-                mRetire = isLast ? (specificWithdrawal.amount - consumed) : netCycleAmount;
-                withdrawalConsumedMap.set(specificWithdrawal.id, consumed + mRetire);
-              } else {
-                mRetire = netCycleAmount;
-              }
-              
-              isRetire = true;
+        if (txDate >= cycleEndDateLimit || withdrawalDuringCycle) {
+          if (withdrawalDuringCycle) usedWithdrawalIds.add(withdrawalDuringCycle.id);
+          let isRetire = !!withdrawalDuringCycle;
+          let retraitDate = withdrawalDuringCycle ? new Date(withdrawalDuringCycle.date).toLocaleDateString('fr-FR') : null;
+          let mRetire = 0;
+          
+          const comm = currentCycleAmount > 0 ? dailyMiseValue : 0;
+          const netCycleAmount = Math.max(0, currentCycleAmount - comm);
+          
+          specificWithdrawal = withdrawalDuringCycle || allWithdrawals.find(h => {
+             if (usedWithdrawalIds.has(h.id)) return false;
+            const matches = h.description.match(/Cycles: ([\d, ]+)/);
+            const hDate = new Date(h.date);
+            const txDateObj = new Date(tx.date);
+            if (matches) {
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              return indices.includes(cycleIdx);
             }
+            return hDate.getTime() < txDateObj.getTime();
+          });
+
+          if (specificWithdrawal) {
+            usedWithdrawalIds.add(specificWithdrawal.id);
+            retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
+            
+            const matches = specificWithdrawal.description.match(/Cycles: ([\d, ]+)/);
+            if (matches) {
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              const isLast = indices[indices.length - 1] === cycleIdx;
+              if (!isLast) usedWithdrawalIds.delete(specificWithdrawal.id);
+              
+              const consumed = withdrawalConsumedMap.get(specificWithdrawal.id) || 0;
+              mRetire = isLast ? (specificWithdrawal.amount - consumed) : netCycleAmount;
+              withdrawalConsumedMap.set(specificWithdrawal.id, consumed + mRetire);
+            } else {
+              mRetire = netCycleAmount;
+            }
+            
+            isRetire = true;
+          }
 
           cycleDetails.push({
             index: cycleIdx,
