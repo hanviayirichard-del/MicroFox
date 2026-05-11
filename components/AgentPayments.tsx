@@ -97,10 +97,12 @@ const AgentPayments: React.FC = () => {
               const desc = (tx.description || '').toLowerCase();
               const isValidType = tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'remboursement' || tx.type === 'complement';
               
-              if (isValidType && tx.date.startsWith(todayStr)) {
-                // Pour le détail et le solde du jour, on filtre par date
+              if (isValidType) {
+                // Pour le détail et le solde, on ne filtre plus par date pour permettre les retours de fonds
                 todayTotal += amount;
-                todayTxs.push({ ...tx, clientName: m.name, clientCode: m.code });
+                if (tx.date.startsWith(todayStr)) {
+                  todayTxs.push({ ...tx, clientName: m.name, clientCode: m.code });
+                }
                 
                 if (desc.includes('livret')) {
                   livrets += amount;
@@ -122,8 +124,8 @@ const AgentPayments: React.FC = () => {
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
-          // Soustraire les versements Validés OU En attente pour cet agent aujourd'hui
-          if (String(p.agentId) === String(user.id) && (p.status === 'Validé' || p.status === 'En attente') && p.date.startsWith(todayStr)) {
+          // Soustraire les versements Validés OU En attente pour cet agent
+          if (String(p.agentId) === String(user.id) && (p.status === 'Validé' || p.status === 'En attente')) {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
             paidNbLivrets += Number(p.nbLivrets || 0);

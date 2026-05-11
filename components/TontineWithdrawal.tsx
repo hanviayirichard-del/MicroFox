@@ -321,15 +321,54 @@ const TontineWithdrawal: React.FC = () => {
         if (currentCycleCases === 31) {
           const comm = dailyMiseValue;
           const netCycleAmount = Math.max(0, currentCycleAmount - comm);
+
+          let isRetire = false;
+          let retraitDate = null;
+          let mRetire = 0;
+          const specificWithdrawal = allWithdrawals.find(h => {
+            if (usedWithdrawalIds.has(h.id)) return false;
+            const hDate = new Date(h.date);
+            const isSameDay = hDate.toDateString() === txDate.toDateString();
+            const matches = h.description.match(/Cycles: ([\d, ]+)/);
+            if (matches) {
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              return indices.includes(cycleIdx);
+            }
+            return isSameDay || (hDate >= currentCycleFirstDepositDate! && hDate <= txDate);
+          });
+
+          if (specificWithdrawal) {
+            usedWithdrawalIds.add(specificWithdrawal.id);
+            retraitDate = new Date(specificWithdrawal.date).toLocaleDateString('fr-FR');
+            const matches = specificWithdrawal.description.match(/Cycles: ([\d, ]+)/);
+            if (matches) {
+              const indices = matches[1].split(',').map(s => parseInt(s.trim()));
+              const isLast = indices[indices.length - 1] === cycleIdx;
+              if (!isLast) usedWithdrawalIds.delete(specificWithdrawal.id);
+              const consumed = withdrawalConsumedMap.get(specificWithdrawal.id) || 0;
+              mRetire = isLast ? (specificWithdrawal.amount - consumed) : Math.min(netCycleAmount, specificWithdrawal.amount - consumed);
+              withdrawalConsumedMap.set(specificWithdrawal.id, consumed + mRetire);
+            } else {
+              mRetire = Math.min(netCycleAmount, specificWithdrawal.amount);
+            }
+            isRetire = true;
+          } else if (remainingWithdrawals > 0 && netCycleAmount > 0) {
+            isRetire = true;
+            mRetire = Math.min(netCycleAmount, remainingWithdrawals);
+            remainingWithdrawals -= mRetire;
+          }
+
           cycleDetails.push({
             index: cycleIdx,
             amount: currentCycleAmount,
-            disponible: currentCycleAmount,
+            disponible: isRetire ? Math.max(0, netCycleAmount - mRetire) : currentCycleAmount,
             commission: comm,
-            decaissable: netCycleAmount,
+            decaissable: isRetire ? Math.max(0, netCycleAmount - mRetire) : netCycleAmount,
             cases: 31,
-            period: `${fmt(currentCycleFirstDepositDate!)} au ${fmt(txDate)}`,
-            isRetire: false,
+            period: `${fmt(currentCycleFirstDepositDate!)} au ${retraitDate ? retraitDate : fmt(txDate)}`,
+            isRetire: isRetire,
+            montantRetire: isRetire ? mRetire : 0,
+            dateRetrait: retraitDate,
             dates: [...currentCycleDates]
           });
           totalComm += comm;
@@ -495,7 +534,7 @@ const TontineWithdrawal: React.FC = () => {
       cycleIdx++;
     }
 
-    if (cycleDetails.length > 0 && (cycleDetails[cycleDetails.length - 1].isRetire || cycleDetails[cycleDetails.length - 1].isExpired)) {
+    if (cycleDetails.length > 0 && (cycleDetails[cycleDetails.length - 1].isRetire || cycleDetails[cycleDetails.length - 1].isExpired || cycleDetails[cycleDetails.length - 1].cases >= 31)) {
       cycleDetails.push({
         index: cycleIdx,
         amount: 0,
@@ -653,6 +692,7 @@ const TontineWithdrawal: React.FC = () => {
           return {
             ...c,
             isRetire: c.isRetire || isPending,
+            decaissable: (c.isRetire || isPending) ? 0 : c.decaissable,
             montantRetire: c.isRetire ? c.montantRetire : (request ? request.amount : 0),
             dateRetrait: c.isRetire ? c.dateRetrait : (request ? new Date(request.date).toLocaleDateString('fr-FR') : null)
           };
@@ -664,7 +704,7 @@ const TontineWithdrawal: React.FC = () => {
           realClientId: m.id,
           tontineAccountId: acc.id,
           isFirstAccount: isFirstAccount,
-          availableTontine: Math.max(0, stats.netBalance),
+          availableTontine: Math.max(0, updatedCycleDetails.reduce((sum, c) => sum + (c.decaissable || 0), 0)),
           dailyMise: acc.dailyMise,
           cycles: stats.cycles,
           currentCycleCases: stats.currentCycleCases,
