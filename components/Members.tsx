@@ -3195,6 +3195,7 @@ const Members: React.FC = () => {
           if (stocks.central) {
             if (soldEpargne) stocks.central.epargne = Math.max(0, (stocks.central.epargne || 0) - 1);
             if (soldTontine) stocks.central.tontine = Math.max(0, (stocks.central.tontine || 0) - 1);
+            stocks.updatedAt = new Date().toISOString();
             localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
           }
         }
@@ -3282,6 +3283,7 @@ const Members: React.FC = () => {
       if (savedStocks) {
         const stocks = JSON.parse(savedStocks);
         stocks.central.tontine = Math.max(0, (stocks.central.tontine || 0) - 1);
+        stocks.updatedAt = new Date().toISOString();
         localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
         dispatchStorageEvent();
       }
@@ -3441,6 +3443,7 @@ const Members: React.FC = () => {
         const stocks = JSON.parse(savedStocks);
         if (stocks.central) {
           stocks.central.epargne = Math.max(0, (stocks.central.epargne || 0) - 1);
+          stocks.updatedAt = new Date().toISOString();
           localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
         }
       }

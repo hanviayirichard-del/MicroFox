@@ -84,6 +84,7 @@ const VenteLivrets: React.FC = () => {
 
       // Distributions
       stocks.distributions.forEach((d: any) => {
+        if (d.isDeleted) return;
         const recipient = (d.recipient || '').trim().toLowerCase();
         const sender = (d.sender || 'ADMIN').trim().toLowerCase();
 
@@ -99,6 +100,7 @@ const VenteLivrets: React.FC = () => {
 
       // Returns
       (stocks.returns || []).forEach((r: any) => {
+        if (r.isDeleted) return;
         const from = (r.from || '').trim().toLowerCase();
         const to = (r.to || 'ADMIN').trim().toLowerCase();
 
@@ -148,7 +150,7 @@ const VenteLivrets: React.FC = () => {
     if (savedStocks) {
       const stocks = JSON.parse(savedStocks);
       const agentDistributions = stocks.distributions
-        .filter((d: any) => (d.recipient || '').trim().toLowerCase() === agentName.trim().toLowerCase())
+        .filter((d: any) => !d.isDeleted && (d.recipient || '').trim().toLowerCase() === agentName.trim().toLowerCase())
         .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
 
       let runningEpargne = 0;
@@ -277,6 +279,7 @@ const VenteLivrets: React.FC = () => {
         if (stocks.central) {
           if (selectedType === 'epargne') stocks.central.epargne = Math.max(0, (stocks.central.epargne || 0) - 1);
           else if (selectedType === 'tontine') stocks.central.tontine = Math.max(0, (stocks.central.tontine || 0) - 1);
+          stocks.updatedAt = new Date().toISOString();
           localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
         }
       }
@@ -297,7 +300,7 @@ const VenteLivrets: React.FC = () => {
     stocks.distributions = stocks.distributions.map((d: any) => 
       d.id === id ? { ...d, status: 'Validé' } : d
     );
-    
+    stocks.updatedAt = new Date().toISOString();
     localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
     dispatchStorageEvent();
     loadData();
@@ -315,7 +318,7 @@ const VenteLivrets: React.FC = () => {
     stocks.distributions = stocks.distributions.map((d: any) => 
       pendingIds.includes(d.id) ? { ...d, status: 'Validé' } : d
     );
-    
+    stocks.updatedAt = new Date().toISOString();
     localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocks));
     dispatchStorageEvent();
     loadData();

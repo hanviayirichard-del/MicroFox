@@ -451,6 +451,7 @@ const Dashboard: React.FC = () => {
     let tontine = 0;
 
     (stocks.distributions || []).forEach((d: any) => {
+      if (d.isDeleted) return;
       if ((d.recipient || '').trim().toLowerCase() === agentName.trim().toLowerCase()) {
         if (d.type === 'epargne') epargne += d.quantity;
         else tontine += d.quantity;

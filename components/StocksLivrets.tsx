@@ -118,8 +118,12 @@ const StocksLivrets: React.FC = () => {
   }, []);
 
   const saveStocks = (newStocks: LivretsStocks) => {
-    localStorage.setItem('microfox_livrets_stocks', JSON.stringify(newStocks));
-    setStocks(newStocks);
+    const stocksWithUpdate = {
+      ...newStocks,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem('microfox_livrets_stocks', JSON.stringify(stocksWithUpdate));
+    setStocks(stocksWithUpdate);
     dispatchStorageEvent();
   };
 
@@ -265,9 +269,13 @@ const StocksLivrets: React.FC = () => {
           [distrib.type]: newStocks.central[distrib.type] + distrib.quantity
         };
       }
-      newStocks.distributions = stocks.distributions.filter(d => d.id !== id);
+      newStocks.distributions = stocks.distributions.map(d => 
+        d.id === id ? { ...d, isDeleted: true, updatedAt: new Date().toISOString() } : d
+      );
     } else {
-      newStocks.returns = (stocks.returns || []).filter(r => r.id !== id);
+      newStocks.returns = (stocks.returns || []).map(r => 
+        r.id === id ? { ...r, isDeleted: true, updatedAt: new Date().toISOString() } : r
+      );
     }
 
     saveStocks(newStocks);
@@ -286,6 +294,7 @@ const StocksLivrets: React.FC = () => {
 
     // Distributions
     stocks.distributions.forEach(d => {
+      if (d.isDeleted) return;
       const recipient = (d.recipient || '').trim().toLowerCase();
       const sender = (d.sender || 'ADMIN').trim().toLowerCase();
 
@@ -301,6 +310,7 @@ const StocksLivrets: React.FC = () => {
 
     // Returns
     (stocks.returns || []).forEach(r => {
+      if (r.isDeleted) return;
       const from = (r.from || '').trim().toLowerCase();
       const to = (r.to || 'ADMIN').trim().toLowerCase();
 
@@ -335,8 +345,8 @@ const StocksLivrets: React.FC = () => {
   const handleExportHistory = () => {
     const data = [
       ...stocks.purchases.map(p => ({ ...p, mType: 'ACHAT' })), 
-      ...stocks.distributions.map(d => ({ ...d, mType: 'RÉPARTITION' })),
-      ...(stocks.returns || []).map(r => ({ ...r, mType: 'RETOUR' }))
+      ...stocks.distributions.filter(d => !d.isDeleted).map(d => ({ ...d, mType: 'RÉPARTITION' })),
+      ...(stocks.returns || []).filter(r => !r.isDeleted).map(r => ({ ...r, mType: 'RETOUR' }))
     ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .map((m: any) => ({
@@ -382,7 +392,7 @@ const StocksLivrets: React.FC = () => {
       </div>
 
       {/* Validation Banner for Cashiers */}
-      {currentUser.role === 'caissier' && stocks.distributions.some(d => 
+      {currentUser.role === 'caissier' && stocks.distributions.filter(d => !d.isDeleted).some(d => 
         (d.recipient || "").toLowerCase().trim() === (currentUser.identifiant || "").toLowerCase().trim() && d.status === 'En attente'
       ) && (
         <div className="bg-amber-50 border-2 border-amber-500 p-6 rounded-[2rem] shadow-xl animate-in zoom-in duration-500 mb-8 ring-4 ring-amber-500/20">
@@ -745,8 +755,8 @@ const StocksLivrets: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {[
                 ...stocks.purchases.map(p => ({ ...p, mType: 'ACHAT' })), 
-                ...stocks.distributions.map(d => ({ ...d, mType: 'RÉPARTITION' })),
-                ...(stocks.returns || []).map(r => ({ ...r, mType: 'RETOUR' })),
+                ...stocks.distributions.filter(d => !d.isDeleted).map(d => ({ ...d, mType: 'RÉPARTITION' })),
+                ...(stocks.returns || []).filter(r => !r.isDeleted).map(r => ({ ...r, mType: 'RETOUR' })),
                 ...salesData.map(s => ({ ...s, mType: 'VENTE', type: s.description.toLowerCase().includes('épargne') ? 'epargne' : 'tontine', quantity: 1 }))
               ]
                 .filter((m: any) => {
