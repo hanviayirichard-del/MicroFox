@@ -48,16 +48,22 @@ const VenteLivrets: React.FC = () => {
     const user = JSON.parse(savedUser);
     setCurrentUser(user);
 
-    // Load agents for managers
-    if (user.role === 'administrateur' || user.role === 'directeur') {
+    // Load agents for managers and cashiers
+    if (user.role === 'administrateur' || user.role === 'directeur' || user.role === 'caissier') {
       const savedUsers = localStorage.getItem('microfox_users');
       if (savedUsers) {
         const usersList = JSON.parse(savedUsers);
-        setAgents(usersList.filter((u: any) => !u.isDeleted && (u.role === 'agent commercial' || u.role === 'caissier')));
+        if (user.role === 'caissier') {
+          // Un caissier voit son propre stock et celui des agents commerciaux
+          setAgents(usersList.filter((u: any) => !u.isDeleted && (u.role === 'agent commercial' || u.id === user.id)));
+        } else {
+          // Administrateur/Directeur voient tout
+          setAgents(usersList.filter((u: any) => !u.isDeleted && (u.role === 'agent commercial' || u.role === 'caissier')));
+        }
       }
     }
 
-    const agentName = (selectedAgentId && (user.role === 'administrateur' || user.role === 'directeur')) 
+    const agentName = (selectedAgentId && (user.role === 'administrateur' || user.role === 'directeur' || user.role === 'caissier')) 
       ? selectedAgentId 
       : user.identifiant;
 
@@ -229,9 +235,9 @@ const VenteLivrets: React.FC = () => {
       (m.history || []).forEach((tx: any) => {
         const desc = (tx.description || '').toLowerCase();
         if (desc.includes('vente de livret')) {
-          // If agent or cashier, only show their own sales
-          if (user.role === 'agent commercial' || user.role === 'caissier') {
-            if (!desc.includes(`- agent ${agentName.trim().toLowerCase()}`) && tx.userId !== user.id) return;
+          // If tracking a specific person (selected or implicit)
+          if (selectedAgentId || user.role === 'agent commercial' || user.role === 'caissier') {
+            if (!desc.includes(`- agent ${agentName.trim().toLowerCase()}`)) return;
           }
           
           allSales.push({
@@ -512,7 +518,9 @@ const VenteLivrets: React.FC = () => {
         
         {!(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
           <div className="bg-[#121c32] p-4 rounded-2xl border border-gray-800 flex flex-col items-center min-w-[160px]">
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Votre Stock Disponible</span>
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">
+              {selectedAgentId ? `Stock de ${selectedAgentId}` : 'Votre Stock Disponible'}
+            </span>
             <div className="flex gap-6 w-full justify-center">
               <div className="text-center">
                 <p className="text-[10px] text-emerald-400 font-black uppercase tracking-tighter">Épargne</p>
@@ -882,7 +890,7 @@ const VenteLivrets: React.FC = () => {
         </>
       ) : (
         <div className="space-y-6 animate-in fade-in duration-500">
-          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
+          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' || currentUser?.role === 'caissier') && (
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
               <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1 block">Sélectionner un Agent ou Caissier pour suivre son stock</label>
               <select
