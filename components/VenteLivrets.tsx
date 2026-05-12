@@ -534,7 +534,12 @@ const VenteLivrets: React.FC = () => {
             {receivedHistory.some(h => h.status === 'En attente') && (
               <button 
                 onClick={handleConfirmAll}
-                className="w-full mt-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                disabled={!!selectedAgentId}
+                className={`w-full mt-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${
+                  !!selectedAgentId 
+                  ? 'bg-gray-400 text-white cursor-not-allowed' 
+                  : 'bg-amber-500 hover:bg-amber-600 text-white active:scale-95'
+                }`}
               >
                 <CheckCircle size={14} />
                 Confirmer les livrets en attente
@@ -609,7 +614,7 @@ const VenteLivrets: React.FC = () => {
         </div>
       )}
 
-      {(currentUser?.role === 'agent commercial' || currentUser?.role === 'caissier') && receivedHistory.some(h => h.status === 'En attente') && (
+      {receivedHistory.some(h => h.status === 'En attente') && (
         <div className="bg-amber-50 border-2 border-amber-500 p-6 rounded-[2rem] shadow-lg animate-in zoom-in duration-500 mb-6">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg">
@@ -638,7 +643,12 @@ const VenteLivrets: React.FC = () => {
                 </div>
                 <button 
                   onClick={() => handleConfirm(item.id)}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95 shadow-md flex items-center gap-2"
+                  disabled={!!selectedAgentId}
+                  className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md flex items-center gap-2 ${
+                    !!selectedAgentId 
+                    ? 'bg-gray-400 text-white cursor-not-allowed' 
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
+                  }`}
                 >
                   <CheckCircle size={14} />
                   Confirmer la Réception
@@ -1015,7 +1025,12 @@ const VenteLivrets: React.FC = () => {
                         {item.status !== 'Validé' && (
                           <button 
                             onClick={() => handleConfirm(item.id)}
-                            className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                            disabled={!!selectedAgentId}
+                            className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                              !!selectedAgentId 
+                              ? 'bg-gray-400 text-white cursor-not-allowed' 
+                              : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
+                            }`}
                           >
                             Confirmer
                           </button>
