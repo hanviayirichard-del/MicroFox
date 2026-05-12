@@ -92,8 +92,43 @@ const VenteLivrets: React.FC = () => {
 
     if (savedStocks) {
       const stocks = JSON.parse(savedStocks);
-      centralEpargne = stocks.central?.epargne || 0;
-      centralTontine = stocks.central?.tontine || 0;
+      
+      // Recalculer le stock central à partir des mouvements
+      let recalculatedCentralEpargne = 0;
+      let recalculatedCentralTontine = 0;
+      
+      (stocks.purchases || []).forEach((p: any) => {
+        if (p.type === 'epargne') recalculatedCentralEpargne += p.quantity;
+        else recalculatedCentralTontine += p.quantity;
+      });
+      
+      (stocks.distributions || []).forEach((d: any) => {
+        if (d.isDeleted) return;
+        if (d.type === 'epargne') recalculatedCentralEpargne -= d.quantity;
+        else recalculatedCentralTontine -= d.quantity;
+      });
+      
+      (stocks.returns || []).forEach((r: any) => {
+        if (r.isDeleted) return;
+        if (r.status === 'Validé') {
+          if (r.type === 'epargne') recalculatedCentralEpargne += r.quantity;
+          else recalculatedCentralTontine += r.quantity;
+        }
+      });
+
+      // Soustraire les ventes directes Admin/Directeur
+      membersData.forEach((m: any) => {
+        (m.history || []).forEach((tx: any) => {
+          const desc = (tx.description || '').toLowerCase();
+          if (desc.includes('vente de livret') && tx.caisse === 'CAISSE PRINCIPALE') {
+            if (desc.includes('épargne')) recalculatedCentralEpargne -= 1;
+            else if (desc.includes('tontine')) recalculatedCentralTontine -= 1;
+          }
+        });
+      });
+
+      centralEpargne = recalculatedCentralEpargne;
+      centralTontine = recalculatedCentralTontine;
       
       const myId = agentName.trim().toLowerCase();
 
@@ -236,7 +271,7 @@ const VenteLivrets: React.FC = () => {
     // Check stock
     const currentAvailable = isCentral ? centralStocks[selectedType] : (agentStocks?.[selectedType] || 0);
     if (currentAvailable <= 0) {
-      setErrorMessage(`Impossible de vendre : Votre stock de livrets ${selectedType === 'epargne' ? 'épargne' : 'tontine'} est épuisé (0 restant).`);
+      setErrorMessage("Vous n'avez pas de livret. Impossible de faire la vente.");
       setTimeout(() => setErrorMessage(null), 5000);
       return;
     }

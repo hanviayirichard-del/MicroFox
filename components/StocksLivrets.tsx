@@ -75,7 +75,57 @@ const StocksLivrets: React.FC = () => {
     }
     const savedStocks = localStorage.getItem('microfox_livrets_stocks');
     if (savedStocks) {
-      setStocks(JSON.parse(savedStocks));
+      const stocksData = JSON.parse(savedStocks);
+      
+      // Recalculer le stock central à partir des mouvements pour éviter les désynchronisations
+      const recalculatedCentral = { epargne: 0, tontine: 0 };
+      
+      // 1. Ajouter les achats
+      (stocksData.purchases || []).forEach((p: any) => {
+        if (p.type === 'epargne') recalculatedCentral.epargne += p.quantity;
+        else recalculatedCentral.tontine += p.quantity;
+      });
+      
+      // 2. Soustraire les distributions
+      (stocksData.distributions || []).forEach((d: any) => {
+        if (d.isDeleted) return;
+        if (d.type === 'epargne') recalculatedCentral.epargne -= d.quantity;
+        else recalculatedCentral.tontine -= d.quantity;
+      });
+      
+      // 3. Ajouter les retours validés
+      (stocksData.returns || []).forEach((r: any) => {
+        if (r.isDeleted) return;
+        if (r.status === 'Validé') {
+          if (r.type === 'epargne') recalculatedCentral.epargne += r.quantity;
+          else recalculatedCentral.tontine += r.quantity;
+        }
+      });
+
+      // 4. Soustraire les ventes directes par Admin/Directeur (car elles ne passent pas par une distribution)
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      if (savedMembers) {
+        const membersList = JSON.parse(savedMembers);
+        membersList.forEach((m: any) => {
+          (m.history || []).forEach((tx: any) => {
+            const desc = (tx.description || '').toLowerCase();
+            if (desc.includes('vente de livret')) {
+              // Vérifier si le vendeur est un Admin ou Directeur (Caisse Principale)
+              if (tx.caisse === 'CAISSE PRINCIPALE') {
+                if (desc.includes('épargne')) recalculatedCentral.epargne -= 1;
+                else if (desc.includes('tontine')) recalculatedCentral.tontine -= 1;
+              }
+            }
+          });
+        });
+      }
+
+      const verifiedStocks = {
+        ...stocksData,
+        central: recalculatedCentral
+      };
+      
+      setStocks(verifiedStocks);
     }
 
     const savedUsers = localStorage.getItem('microfox_users');

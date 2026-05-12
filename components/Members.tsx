@@ -1093,19 +1093,6 @@ const RegistrationForm: React.FC<{
           caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
         });
       }
-      if (fraisLivret > 0) {
-        history.push({
-          id: `fl-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-          type: 'depot',
-          account: 'frais',
-          amount: fraisLivret,
-          date: new Date().toISOString(),
-          description: `Vente de Livret Épargne - Agent ${currentUser?.identifiant || 'Système'}`,
-          userId: currentUser?.id,
-          cashierName: currentUser?.identifiant,
-          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
-        });
-      }
       if (depotInitialEpargne > 0) {
         history.push({
           id: `di-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -1121,18 +1108,6 @@ const RegistrationForm: React.FC<{
       }
     } else if (isTontineSelected) {
       // Pour les comptes tontine uniquement à l'enregistrement
-      const tontinePrice = prices.tontine || 500;
-      history.push({
-        id: `fl-tn-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        type: 'depot',
-        account: 'frais',
-        amount: tontinePrice,
-        date: new Date().toISOString(),
-        description: `Vente de Livret Tontine - Agent ${currentUser?.identifiant || 'Système'}`,
-        userId: currentUser?.id,
-        cashierName: currentUser?.identifiant,
-        caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
-      });
     }
 
     const newClient: ClientAccount = {

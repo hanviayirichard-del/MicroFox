@@ -438,14 +438,49 @@ const Dashboard: React.FC = () => {
     setCurrentUser(user);
     
     const savedStocks = localStorage.getItem('microfox_livrets_stocks');
-    const stocks = savedStocks ? JSON.parse(savedStocks) : { central: { epargne: 0, tontine: 0 }, distributions: [] };
-    setCentralStocks(stocks.central || { epargne: 0, tontine: 0 });
+    const stocks = savedStocks ? JSON.parse(savedStocks) : { central: { epargne: 0, tontine: 0 }, distributions: [], purchases: [], returns: [] };
+    
+    // Recalculer le stock central à partir des mouvements
+    let recalculatedCentralEpargne = 0;
+    let recalculatedCentralTontine = 0;
+    
+    (stocks.purchases || []).forEach((p: any) => {
+      if (p.type === 'epargne') recalculatedCentralEpargne += p.quantity;
+      else recalculatedCentralTontine += p.quantity;
+    });
+    
+    (stocks.distributions || []).forEach((d: any) => {
+      if (d.isDeleted) return;
+      if (d.type === 'epargne') recalculatedCentralEpargne -= d.quantity;
+      else recalculatedCentralTontine -= d.quantity;
+    });
+    
+    (stocks.returns || []).forEach((r: any) => {
+      if (r.isDeleted) return;
+      if (r.status === 'Validé') {
+        if (r.type === 'epargne') recalculatedCentralEpargne += r.quantity;
+        else recalculatedCentralTontine += r.quantity;
+      }
+    });
+
+    // Soustraire les ventes directes Admin/Directeur
+    const savedMembers = localStorage.getItem('microfox_members_data');
+    const membersData = savedMembers ? JSON.parse(savedMembers) : [];
+    membersData.forEach((m: any) => {
+      (m.history || []).forEach((tx: any) => {
+        const desc = (tx.description || '').toLowerCase();
+        if (desc.includes('vente de livret') && tx.caisse === 'CAISSE PRINCIPALE') {
+          if (desc.includes('épargne')) recalculatedCentralEpargne -= 1;
+          else if (desc.includes('tontine')) recalculatedCentralTontine -= 1;
+        }
+      });
+    });
+
+    setCentralStocks({ epargne: recalculatedCentralEpargne, tontine: recalculatedCentralTontine });
 
     if (user.role !== 'agent commercial' && user.role !== 'caissier') return;
     
     const agentName = user.identifiant || "Inconnu";
-    const savedMembers = localStorage.getItem('microfox_members_data');
-    const membersData = savedMembers ? JSON.parse(savedMembers) : [];
     
     let epargne = 0;
     let tontine = 0;
