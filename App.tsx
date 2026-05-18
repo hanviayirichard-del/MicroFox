@@ -113,7 +113,7 @@ try {
   (localStorage as any).getItem = (key: string) => {
     const mfCode = globalMfCode;
     let fullKey = key;
-    if (mfCode && key.startsWith('microfox_') && 
+    if (mfCode && typeof mfCode === 'string' && key.startsWith('microfox_') && 
         key !== 'microfox_current_mf' && 
         key !== 'microfox_current_user' && 
         key !== 'microfox_users' && 
@@ -129,18 +129,21 @@ try {
       try {
         const members = JSON.parse(value);
         if (Array.isArray(members)) {
-          const prefix = fullKey.substring(0, fullKey.lastIndexOf('microfox_members_data'));
+          const lastIdx = fullKey.lastIndexOf('microfox_members_data');
+          const prefix = lastIdx !== -1 ? fullKey.substring(0, lastIdx) : '';
           const rehydrated = members.map((m: any) => {
+            if (!m) return m;
             const historyKey = `${prefix}microfox_history_${m.id || m.code}`;
             const historyStr = nativeGetItem(historyKey);
             if (historyStr) {
               try {
-                return { ...m, history: JSON.parse(historyStr) };
+                const parsedHistory = JSON.parse(historyStr);
+                return { ...m, history: Array.isArray(parsedHistory) ? parsedHistory : [] };
               } catch (e) {
-                return m;
+                return { ...m, history: [] };
               }
             }
-            return m;
+            return { ...m, history: m.history || [] };
           });
           return JSON.stringify(rehydrated);
         }
@@ -684,7 +687,7 @@ const App: React.FC = () => {
     if (savedPerms) {
       try {
         const perms = JSON.parse(savedPerms);
-        if (perms['agent commercial']) {
+        if (perms && typeof perms === 'object' && perms['agent commercial'] && Array.isArray(perms['agent commercial'])) {
           const originalLength = perms['agent commercial'].length;
           perms['agent commercial'] = perms['agent commercial'].filter((p: string) => 
             p !== 'Analyse' && p !== 'Tableau de Bord' && p !== 'Reçu de caisse'

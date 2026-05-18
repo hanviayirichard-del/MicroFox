@@ -54,14 +54,14 @@ const ValidatePreviousCotisations: React.FC = () => {
     if (!zoneName) return 'N/A';
     const normalizedZone = zoneName.toUpperCase().replace('ZONE ', '').trim();
     const agent = users.find((u: any) => 
-      !u.isDeleted && 
+      u && !u.isDeleted && 
       u.role === 'agent commercial' && 
       (
-        (u.zoneCollecte && u.zoneCollecte.toUpperCase().replace('ZONE ', '').trim() === normalizedZone) || 
-        (u.zonesCollecte && u.zonesCollecte.some((z: string) => z.toUpperCase().replace('ZONE ', '').trim() === normalizedZone))
+        (u.zoneCollecte && typeof u.zoneCollecte === 'string' && u.zoneCollecte.toUpperCase().replace('ZONE ', '').trim() === normalizedZone) || 
+        (u.zonesCollecte && Array.isArray(u.zonesCollecte) && u.zonesCollecte.some((z: any) => typeof z === 'string' && z.toUpperCase().replace('ZONE ', '').trim() === normalizedZone))
       )
     );
-    return agent ? agent.identifiant.toUpperCase() : 'N/A';
+    return agent ? (agent.identifiant || '').toUpperCase() : 'N/A';
   }
 
   const [mfConfig] = useState(() => {
@@ -122,7 +122,8 @@ const ValidatePreviousCotisations: React.FC = () => {
         if (endDate && pDay > endDate) return;
 
         // Try to find the assigned name for the agent's zone
-        const name = (p.zone ? getAssignedAgent(p.zone) : null) || p.agentName.toUpperCase();
+        const agentName = (p.agentName || '').toUpperCase();
+        const name = (p.zone ? getAssignedAgent(p.zone) : null) || agentName;
         if (!agentDebt[name]) agentDebt[name] = { amount: 0, details: [] };
         agentDebt[name].amount -= (p.observedAmount || p.totalAmount);
         agentDebt[name].details.push({
@@ -187,14 +188,17 @@ const ValidatePreviousCotisations: React.FC = () => {
       .sort((a, b) => b.amount - a.amount);
   }, [pendingCotisations, startDate, endDate]);
   useEffect(() => {
-    loadZones();
-    loadUsers();
-    window.addEventListener('storage', () => { loadZones(); loadUsers(); });
-    window.addEventListener('microfox_storage' as any, () => { loadZones(); loadUsers(); });
-    const interval = setInterval(() => { loadZones(); loadUsers(); }, 3000);
+    const update = () => {
+      loadZones();
+      loadUsers();
+    };
+    update();
+    window.addEventListener('storage', update);
+    window.addEventListener('microfox_storage' as any, update);
+    const interval = setInterval(update, 3000);
     return () => {
-      window.removeEventListener('storage', loadZones);
-      window.removeEventListener('microfox_storage' as any, loadZones);
+      window.removeEventListener('storage', update);
+      window.removeEventListener('microfox_storage' as any, update);
       clearInterval(interval);
     };
   }, []);

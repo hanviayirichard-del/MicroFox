@@ -30,14 +30,14 @@ const ValidateZoneCotisations: React.FC = () => {
     if (!zoneName) return 'N/A';
     const normalizedZone = zoneName.toUpperCase().replace('ZONE ', '').trim();
     const agent = users.find((u: any) => 
-      !u.isDeleted && 
+      u && !u.isDeleted && 
       u.role === 'agent commercial' && 
       (
-        (u.zoneCollecte && u.zoneCollecte.toUpperCase().replace('ZONE ', '').trim() === normalizedZone) || 
-        (u.zonesCollecte && u.zonesCollecte.some((z: string) => z.toUpperCase().replace('ZONE ', '').trim() === normalizedZone))
+        (u.zoneCollecte && typeof u.zoneCollecte === 'string' && u.zoneCollecte.toUpperCase().replace('ZONE ', '').trim() === normalizedZone) || 
+        (u.zonesCollecte && Array.isArray(u.zonesCollecte) && u.zonesCollecte.some((z: any) => typeof z === 'string' && z.toUpperCase().replace('ZONE ', '').trim() === normalizedZone))
       )
     );
-    return agent ? agent.identifiant.toUpperCase() : 'N/A';
+    return agent ? (agent.identifiant || '').toUpperCase() : 'N/A';
   }
 
   const loadUsers = () => {
@@ -50,14 +50,17 @@ const ValidateZoneCotisations: React.FC = () => {
   };
 
   useEffect(() => {
-    loadZones();
-    loadUsers();
-    window.addEventListener('storage', () => { loadZones(); loadUsers(); });
-    window.addEventListener('microfox_storage' as any, () => { loadZones(); loadUsers(); });
-    const interval = setInterval(() => { loadZones(); loadUsers(); }, 3000);
+    const update = () => {
+      loadZones();
+      loadUsers();
+    };
+    update();
+    window.addEventListener('storage', update);
+    window.addEventListener('microfox_storage' as any, update);
+    const interval = setInterval(update, 3000);
     return () => {
-      window.removeEventListener('storage', loadZones);
-      window.removeEventListener('microfox_storage' as any, loadZones);
+      window.removeEventListener('storage', update);
+      window.removeEventListener('microfox_storage' as any, update);
       clearInterval(interval);
     };
   }, []);

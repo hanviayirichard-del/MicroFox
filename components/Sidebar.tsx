@@ -104,7 +104,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
           if (savedStocks) {
             const stocks = JSON.parse(savedStocks);
             const myId = (user.identifiant || '').trim().toLowerCase();
-            const pendingReceptions = (stocks.distributions || []).filter((d: any) => 
+            const distributions = Array.isArray(stocks?.distributions) ? stocks.distributions : [];
+            const pendingReceptions = distributions.filter((d: any) => 
               (d.recipient || '').trim().toLowerCase() === myId && d.status === 'En attente'
             );
             if (pendingReceptions.length > 0) count += pendingReceptions.length;
@@ -121,8 +122,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         if (['auditeur', 'contrôleur', 'administrateur'].includes(user.role)) {
           const saved = localStorage.getItem('microfox_pending_withdrawals');
           if (saved) {
-            const pending = JSON.parse(saved).filter((r: any) => !r.isDeleted && r.status === 'En attente');
-            if (pending.length > 0) count++;
+            try {
+              const parsed = JSON.parse(saved);
+              const pending = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && r.status === 'En attente') : [];
+              if (pending.length > 0) count++;
+            } catch (e) {}
           }
         }
 
@@ -131,21 +135,29 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
           // Tontine withdrawals
           const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
           if (savedValidated) {
-            const validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed);
-            if (validated.length > 0) count++;
+            try {
+              const parsed = JSON.parse(savedValidated);
+              const validated = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed) : [];
+              if (validated.length > 0) count++;
+            } catch (e) {}
           }
           // Agent payments
           const savedPayments = localStorage.getItem('microfox_agent_payments');
           if (savedPayments) {
-            const pendingPayments = JSON.parse(savedPayments).filter((p: any) => p.status === 'En attente');
-            if (pendingPayments.length > 0) count++;
+            try {
+              const parsed = JSON.parse(savedPayments);
+              const pendingPayments = Array.isArray(parsed) ? parsed.filter((p: any) => p.status === 'En attente') : [];
+              if (pendingPayments.length > 0) count++;
+            } catch (e) {}
           }
           // Credit disbursements
           const savedMembers = localStorage.getItem('microfox_members_data');
           if (savedMembers) {
-            const members = JSON.parse(savedMembers);
-            const pendingCredits = members.filter((m: any) => m.lastCreditRequest && m.lastCreditRequest.status === 'En attente');
-            if (pendingCredits.length > 0) count++;
+            try {
+              const parsed = JSON.parse(savedMembers);
+              const pendingCredits = Array.isArray(parsed) ? parsed.filter((m: any) => m.lastCreditRequest && m.lastCreditRequest.status === 'En attente') : [];
+              if (pendingCredits.length > 0) count++;
+            } catch (e) {}
           }
         }
 
