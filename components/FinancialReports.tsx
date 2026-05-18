@@ -1026,7 +1026,7 @@ const FinancialReports: React.FC = () => {
           <p className={`text-xs sm:text-xl font-black text-${color}-600 whitespace-nowrap`}>{calculateTotal(list).toLocaleString()} F</p>
         </div>
       </div>
-      <div className="max-h-[300px] overflow-y-auto custom-scrollbar overflow-x-auto">
+      <div className="max-h-[600px] overflow-y-auto custom-scrollbar overflow-x-auto">
         <table className="w-full text-left min-w-[400px]">
           <thead className="sticky top-0 bg-white shadow-sm z-10">
             <tr>
@@ -1088,7 +1088,7 @@ const FinancialReports: React.FC = () => {
 };
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-8 pb-20 overflow-y-auto max-h-screen">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-[#121c32] uppercase tracking-tight">Rapports Financiers Détaillés</h1>

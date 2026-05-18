@@ -46,6 +46,38 @@ const ValidatePreviousCotisations: React.FC = () => {
 
   const [selectedDetail, setSelectedDetail] = useState<{ name: string, type: 'agent' | 'cashier', details: any[] } | null>(null);
 
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+
+  function getAssignedAgent(zoneName: string): string {
+    if (!zoneName) return 'N/A';
+    const normalizedZone = zoneName.toUpperCase().replace('ZONE ', '').trim();
+    const agent = users.find((u: any) => 
+      !u.isDeleted && 
+      u.role === 'agent commercial' && 
+      (
+        (u.zoneCollecte && u.zoneCollecte.toUpperCase().replace('ZONE ', '').trim() === normalizedZone) || 
+        (u.zonesCollecte && u.zonesCollecte.some((z: string) => z.toUpperCase().replace('ZONE ', '').trim() === normalizedZone))
+      )
+    );
+    return agent ? agent.identifiant.toUpperCase() : 'N/A';
+  }
+
+  const [mfConfig] = useState(() => {
+    const saved = localStorage.getItem('microfox_mf_config');
+    return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
+  });
+
+  const loadUsers = () => {
+    const saved = localStorage.getItem('microfox_users');
+    if (saved) {
+      try {
+        setUsers(JSON.parse(saved));
+      } catch (e) {}
+    }
+  };
+
   const agentsUnfulfilled = React.useMemo(() => {
     const members = JSON.parse(localStorage.getItem('microfox_members_data') || '[]');
     const validatedZones = JSON.parse(localStorage.getItem('microfox_validated_zone_cotisations') || '{}');
@@ -68,7 +100,7 @@ const ValidatePreviousCotisations: React.FC = () => {
         const val = validatedZones[valKey];
         
         if (val && new Date(tx.date).getTime() <= new Date(val.validatedAt).getTime()) {
-          const name = tx.cashierName.toUpperCase();
+          const name = getAssignedAgent(m.zone) || tx.cashierName.toUpperCase();
           if (!agentDebt[name]) agentDebt[name] = { amount: 0, details: [] };
           agentDebt[name].amount += tx.amount;
           agentDebt[name].details.push({
@@ -76,6 +108,7 @@ const ValidatePreviousCotisations: React.FC = () => {
             client: m.name,
             code: m.code,
             amount: tx.amount,
+            zone: m.zone,
             type: 'Collecte'
           });
         }
@@ -88,7 +121,8 @@ const ValidatePreviousCotisations: React.FC = () => {
         if (startDate && pDay < startDate) return;
         if (endDate && pDay > endDate) return;
 
-        const name = p.agentName.toUpperCase();
+        // Try to find the assigned name for the agent's zone
+        const name = (p.zone ? getAssignedAgent(p.zone) : null) || p.agentName.toUpperCase();
         if (!agentDebt[name]) agentDebt[name] = { amount: 0, details: [] };
         agentDebt[name].amount -= (p.observedAmount || p.totalAmount);
         agentDebt[name].details.push({
@@ -96,6 +130,7 @@ const ValidatePreviousCotisations: React.FC = () => {
           client: 'VERSEMENT CAISSE',
           code: p.caisse || 'CP',
           amount: -(p.observedAmount || p.totalAmount),
+          zone: p.zone,
           type: 'Versement'
         });
       }
@@ -151,18 +186,12 @@ const ValidatePreviousCotisations: React.FC = () => {
       .filter(a => a.amount > 10)
       .sort((a, b) => b.amount - a.amount);
   }, [pendingCotisations, startDate, endDate]);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [mfConfig] = useState(() => {
-    const saved = localStorage.getItem('microfox_mf_config');
-    return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
-  });
-
   useEffect(() => {
     loadZones();
-    window.addEventListener('storage', loadZones);
-    window.addEventListener('microfox_storage' as any, loadZones);
-    const interval = setInterval(loadZones, 3000);
+    loadUsers();
+    window.addEventListener('storage', () => { loadZones(); loadUsers(); });
+    window.addEventListener('microfox_storage' as any, () => { loadZones(); loadUsers(); });
+    const interval = setInterval(() => { loadZones(); loadUsers(); }, 3000);
     return () => {
       window.removeEventListener('storage', loadZones);
       window.removeEventListener('microfox_storage' as any, loadZones);
@@ -442,8 +471,8 @@ const ValidatePreviousCotisations: React.FC = () => {
   const handlePrint = () => {
     if (!zoneData || zoneData.transactions.length === 0) return;
 
-    const agentNames = Array.from(new Set(zoneData.transactions.map(tx => tx.cashierName).filter(Boolean))) as string[];
-    const agentsList = agentNames.length > 0 ? agentNames.join(", ") : "N/A";
+    const assignedAgentStr = getAssignedAgent(zoneData.zone);
+    const agentsList = assignedAgentStr || "N/A";
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -521,7 +550,7 @@ const ValidatePreviousCotisations: React.FC = () => {
                   T: ${tx.tontineAccountNumber}<br/>
                   É: ${tx.epargneAccountNumber}
                 </td>
-                <td>${(tx.cashierName || 'N/A').toUpperCase()}</td>
+                <td>${assignedAgentStr}</td>
                 <td><strong>${(tx.dailyMise || 0).toLocaleString()} F</strong></td>
                 <td class="text-right"><strong>${tx.amount.toLocaleString()} F</strong></td>
               </tr>
@@ -532,7 +561,7 @@ const ValidatePreviousCotisations: React.FC = () => {
         <div class="footer">
           <div class="signatures">
             <div>
-              <p><strong>Agent Commercial:</strong> ${agentsList}</p>
+              <p><strong>Agent Commercial:</strong> ${assignedAgentStr}</p>
               <div class="signature-box">Signature Agent</div>
             </div>
             <div class="text-right">
@@ -557,7 +586,7 @@ const ValidatePreviousCotisations: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+    <div className="max-w-5xl w-full mx-auto space-y-6 pb-12 overflow-y-auto max-h-screen pr-2">
       <div className="flex justify-between items-start">
         <div className="flex items-start gap-3">
           <div className="mt-1 text-blue-600">
@@ -805,7 +834,7 @@ const ValidatePreviousCotisations: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">
-                            {tx.cashierName || 'N/A'}
+                            {getAssignedAgent(zoneData.zone)}
                           </td>
                           <td className="px-6 py-3 text-xs font-black text-blue-600">
                             {(tx.dailyMise || 0).toLocaleString()} F
@@ -840,7 +869,7 @@ const ValidatePreviousCotisations: React.FC = () => {
         </div>
         </>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full">
           {(isCaissier || isAdminOrDir || isAgentCommercial) && (
             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
               <div className="flex items-center justify-between">
@@ -853,12 +882,12 @@ const ValidatePreviousCotisations: React.FC = () => {
                 </div>
               </div>
               
-              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
-                <table className="w-full text-left">
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
+                <table className="w-full text-left min-w-[500px]">
                   <thead>
                     <tr className="bg-gray-100/50 border-b border-gray-200">
-                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest">Nom de l'Agent</th>
-                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Montant Non Versé</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Nom de l'Agent</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right whitespace-nowrap">Montant Non Versé</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -900,12 +929,12 @@ const ValidatePreviousCotisations: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
-                <table className="w-full text-left">
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-x-auto">
+                <table className="w-full text-left min-w-[500px]">
                   <thead>
                     <tr className="bg-gray-100/50 border-b border-gray-200">
-                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest">Identifiant Caisse</th>
-                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Montant Non Versé</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Identifiant Caisse</th>
+                      <th className="px-6 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right whitespace-nowrap">Montant Non Versé</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">

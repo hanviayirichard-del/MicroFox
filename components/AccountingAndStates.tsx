@@ -82,8 +82,9 @@ const AccountingAndStates: React.FC = () => {
       
       // 1. Members History
       parsed.forEach((m: any) => {
-        if (m.history) {
-          m.history.forEach((tx: any) => {
+        const historyStr = localStorage.getItem(`microfox_history_${m.id}`);
+        const mHistory = historyStr ? JSON.parse(historyStr) : (m.history || []);
+        mHistory.forEach((tx: any) => {
             if (isCaissier && tx.userId !== user.id) return;
             if (selectedCaisse !== 'TOUT' && tx.caisse && tx.caisse !== selectedCaisse) return;
 
@@ -150,7 +151,6 @@ const AccountingAndStates: React.FC = () => {
               }
             }
           });
-        }
       });
 
       // 2. Admin Expenses

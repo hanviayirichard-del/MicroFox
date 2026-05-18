@@ -57,7 +57,52 @@ import { dispatchStorageEvent } from './utils/events';
 
 // Capture des méthodes de stockage natives au chargement du module
 const nativeGetItem = (key: string) => Storage.prototype.getItem.call(localStorage, key);
-const nativeSetItem = (key: string, value: string) => Storage.prototype.setItem.call(localStorage, key, value);
+const nativeSetItem = (key: string, value: string) => {
+  let finalValue = value;
+  // Optimization: Strip redundant history from members_data as it's stored in microfox_history_${id}
+  if (key.endsWith('microfox_members_data')) {
+    try {
+      const members = JSON.parse(value);
+      if (Array.isArray(members)) {
+        finalValue = JSON.stringify(members.map((m: any) => {
+          const { history, ...rest } = m;
+          return rest;
+        }));
+      }
+    } catch (e) {}
+  }
+  
+  try {
+    Storage.prototype.setItem.call(localStorage, key, finalValue);
+  } catch (e: any) {
+    if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
+      console.warn(`LocalStorage quota exceeded for key: ${key}. Attempting emergency cleanup.`);
+      
+      // Drastic emergency cleanup for quota issues
+      try {
+        const fullJourneys = nativeGetItem('microfox_user_journeys');
+        if (fullJourneys) nativeRemoveItem('microfox_user_journeys');
+        
+        const fullLogs = nativeGetItem('microfox_audit_logs');
+        if (fullLogs) {
+          try {
+            const parsed = JSON.parse(fullLogs);
+            if (Array.isArray(parsed)) {
+              nativeSetItem('microfox_audit_logs', JSON.stringify(parsed.slice(-100)));
+            }
+          } catch (err) {
+            nativeRemoveItem('microfox_audit_logs');
+          }
+        }
+        
+        // Retry the save once after emergency cleanup
+        Storage.prototype.setItem.call(localStorage, key, finalValue);
+      } catch (retryError) {
+        window.dispatchEvent(new CustomEvent('microfox_quota_exceeded'));
+      }
+    }
+  }
+};
 const nativeRemoveItem = (key: string) => Storage.prototype.removeItem.call(localStorage, key);
 
 // Variable globale pour stocker le code MF courant afin que les surcharges y aient accès immédiatement
@@ -67,31 +112,65 @@ let globalMfCode = nativeGetItem('microfox_current_mf');
 try {
   (localStorage as any).getItem = (key: string) => {
     const mfCode = globalMfCode;
+    let fullKey = key;
     if (mfCode && key.startsWith('microfox_') && 
         key !== 'microfox_current_mf' && 
         key !== 'microfox_current_user' && 
         key !== 'microfox_users' && 
         key !== 'microfox_permissions') {
       const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-      return nativeGetItem(prefix + key);
+      fullKey = prefix + key;
     }
-    return nativeGetItem(key);
+    
+    const value = nativeGetItem(fullKey);
+
+    // Optimization: Rehydrate history for members_data if it was stripped
+    if (key === 'microfox_members_data' && value) {
+      try {
+        const members = JSON.parse(value);
+        if (Array.isArray(members)) {
+          const prefix = fullKey.substring(0, fullKey.lastIndexOf('microfox_members_data'));
+          const rehydrated = members.map((m: any) => {
+            const historyKey = `${prefix}microfox_history_${m.id || m.code}`;
+            const historyStr = nativeGetItem(historyKey);
+            if (historyStr) {
+              try {
+                return { ...m, history: JSON.parse(historyStr) };
+              } catch (e) {
+                return m;
+              }
+            }
+            return m;
+          });
+          return JSON.stringify(rehydrated);
+        }
+      } catch (e) {}
+    }
+
+    return value;
   };
 
   (localStorage as any).setItem = (key: string, value: string) => {
+    if (key === 'microfox_current_mf') {
+      globalMfCode = value;
+    }
     const mfCode = globalMfCode;
     const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
     
     if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
       const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
       const fullKey = isGlobal ? key : prefix + key;
+      
       nativeSetItem(fullKey, value);
 
       // Mark as dirty
       if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
         try {
-          const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-          if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
+          const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+          let dirtyKeys = JSON.parse(dirtyKeysStr);
+          if (!Array.isArray(dirtyKeys)) dirtyKeys = [];
+          
+          if (!dirtyKeys.includes(fullKey)) {
             dirtyKeys.push(fullKey);
             nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
           }
@@ -105,7 +184,8 @@ try {
           const success = await m.syncToSupabase(fullKey, value);
           if (success) {
             try {
-              const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+              const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+              let dirtyKeys = JSON.parse(dirtyKeysStr);
               if (Array.isArray(dirtyKeys)) {
                 const updated = dirtyKeys.filter(k => k !== fullKey);
                 if (updated.length === 0) {
@@ -128,7 +208,7 @@ try {
   };
 
   (localStorage as any).removeItem = (key: string) => {
-    const mfCode = globalMfCode;
+    const mfCode = nativeGetItem('microfox_current_mf');
     const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
 
     if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
@@ -138,7 +218,8 @@ try {
 
       if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
         try {
-          const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+          const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+          let dirtyKeys = JSON.parse(dirtyKeysStr);
           if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
             dirtyKeys.push(fullKey);
             nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
@@ -154,7 +235,8 @@ try {
             const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
             if (!error) {
               try {
-                const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+                const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+                let dirtyKeys = JSON.parse(dirtyKeysStr);
                 if (Array.isArray(dirtyKeys)) {
                   const updated = dirtyKeys.filter(k => k !== fullKey);
                   if (updated.length === 0) {
@@ -390,12 +472,38 @@ const App: React.FC = () => {
         }
       } catch (e) {}
     }
+
+    // 5. Redundant History Strip from members_data
+    const membersData = localStorage.getItem('microfox_members_data');
+    if (membersData) {
+      try {
+        const parsed = JSON.parse(membersData);
+        if (Array.isArray(parsed)) {
+          let modified = false;
+          const cleaned = parsed.map((m: any) => {
+            if (m.history && m.history.length > 0) {
+              modified = true;
+              return { ...m, history: [] };
+            }
+            return m;
+          });
+          if (modified) {
+            localStorage.setItem('microfox_members_data', JSON.stringify(cleaned));
+          }
+        }
+      } catch (e) {}
+    }
   }, []);
 
   useEffect(() => {
+    const handleQuota = () => cleanupStorage();
+    window.addEventListener('microfox_quota_exceeded', handleQuota);
     cleanupStorage();
     const interval = setInterval(cleanupStorage, 3600000); // Nettoyage périodique toutes les heures
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('microfox_quota_exceeded', handleQuota);
+    };
   }, [cleanupStorage]);
 
   const checkScheduleBlocking = () => {
@@ -629,171 +737,6 @@ const App: React.FC = () => {
       window.removeEventListener('microfox_storage' as any, handleStorageChange);
     };
   }, []);
-
-  // Robust calibration and correction for FABES MICROFINANCE (002FABES)
-  useEffect(() => {
-    if (currentUser?.codeMF?.toUpperCase() === '002FABES') {
-      const correctionFlag = 'microfox_fabes_recalculation_final_v4';
-      if (localStorage.getItem(correctionFlag) !== 'true') {
-        const initialCash = 30000000;
-        const initialVault = 20000000;
-        
-        let cashDelta = 0;
-        let vaultDelta = 0;
-
-        // Ensure agent 'koko' is removed if exists
-        const savedUsersStr = localStorage.getItem('microfox_users');
-        if (savedUsersStr) {
-          try {
-            const users = JSON.parse(savedUsersStr);
-            const updatedUsers = users.map((u: any) => 
-              u.identifiant.toLowerCase() === 'koko' ? { ...u, isDeleted: true, updatedAt: new Date().toISOString() } : u
-            );
-            if (JSON.stringify(updatedUsers) !== savedUsersStr) {
-              localStorage.setItem('microfox_users', JSON.stringify(updatedUsers));
-            }
-          } catch (e) {
-            console.error("Error cleaning up koko:", e);
-          }
-        }
-
-        // Correct transactions: Replace KOKO with KAO NAKOUTCHA for Zone 02
-        const tontineDataStr = localStorage.getItem('microfox_tontine_data');
-        if (tontineDataStr) {
-          try {
-            const tontine = JSON.parse(tontineDataStr);
-            let tontineChanged = false;
-            const updatedTontine = tontine.map((tx: any) => {
-              if (tx.zone === '02' && (tx.cashierName || '').toLowerCase() === 'koko') {
-                tontineChanged = true;
-                return { ...tx, cashierName: 'KAO NAKOUTCHA' };
-              }
-              return tx;
-            });
-            if (tontineChanged) {
-              localStorage.setItem('microfox_tontine_data', JSON.stringify(updatedTontine));
-            }
-          } catch (e) {
-            console.error("Error correcting koko transactions:", e);
-          }
-        }
-
-        // Correct Agent Payments
-        const agentPaymentsStrFix = localStorage.getItem('microfox_agent_payments');
-        if (agentPaymentsStrFix) {
-          try {
-            const payments = JSON.parse(agentPaymentsStrFix);
-            let paymentsChanged = false;
-            const updatedPayments = payments.map((p: any) => {
-              if (p.zone === '02' && (p.agentName || '').toLowerCase() === 'koko') {
-                paymentsChanged = true;
-                return { ...p, agentName: 'KAO NAKOUTCHA', cashierName: 'KAO NAKOUTCHA' };
-              }
-              return p;
-            });
-            if (paymentsChanged) {
-              localStorage.setItem('microfox_agent_payments', JSON.stringify(updatedPayments));
-            }
-          } catch (e) {
-            console.error("Error correcting koko payments:", e);
-          }
-        }
-
-        // --- Balance Recalculation ---
-        // 1. Members Transactions
-        const membersDataStr = localStorage.getItem('microfox_members_data');
-        const membersData = membersDataStr ? JSON.parse(membersDataStr) : [];
-        const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
-        
-        membersData.forEach((m: any) => {
-          const historyStr = localStorage.getItem(`microfox_history_${m.id}`);
-          const history = historyStr ? JSON.parse(historyStr) : (m.history || []);
-          history.forEach((tx: any) => {
-            if (tx.cancelled) return;
-            const amount = Number(tx.amount || 0);
-            
-            // On ne prend que les opérations explicitement liées à la CAISSE PRINCIPALE
-            let txCaisse = tx.caisse || tx.targetCaisse;
-            if (!txCaisse) {
-              const opUser = savedUsers.find((u: any) => 
-                u.id === tx.userId || 
-                u.identifiant === tx.operator || 
-                u.identifiant === tx.cashierName ||
-                u.identifiant === tx.author
-              );
-              if (opUser?.caisse) {
-                txCaisse = opUser.caisse;
-              }
-            }
-
-            const isMainCaisse = txCaisse === 'CAISSE PRINCIPALE';
-            
-            if (isMainCaisse) {
-              const desc = (tx.description || '').toLowerCase();
-              if (['depot', 'cotisation', 'remboursement', 'versement'].includes(tx.type)) {
-                cashDelta += amount;
-              } else if (['retrait', 'deblocage'].includes(tx.type)) {
-                // Exclude manual credit penalties which are marked as 'deblocage' but don't involve cash
-                if (!desc.includes('pénalité')) {
-                  cashDelta -= amount;
-                }
-              } else if (desc.includes('adhésion') || 
-                         desc.includes('livret') || 
-                         desc.includes('part sociale')) {
-                cashDelta += amount;
-              }
-            }
-          });
-        });
-
-        // 2. Admin Expenses
-        const expensesStr = localStorage.getItem('microfox_admin_expenses');
-        const expenses = expensesStr ? JSON.parse(expensesStr) : [];
-        expenses.forEach((e: any) => {
-          if (!e.isDeleted) {
-            const recordedBy = e.recordedBy;
-            const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
-            const expUser = savedUsers.find((u: any) => u.identifiant === recordedBy);
-            const caisse = e.caisse || expUser?.caisse;
-            if (caisse === 'CAISSE PRINCIPALE') {
-              cashDelta -= Number(e.amount || 0);
-            }
-          }
-        });
-
-        // 3. Vault transactions
-        const vaultTransactionsStr = localStorage.getItem('microfox_vault_transactions');
-        const vaultTransactions = vaultTransactionsStr ? JSON.parse(vaultTransactionsStr) : [];
-        vaultTransactions.forEach((t: any) => {
-          if (t.status === 'Validé') {
-            const amount = Number(t.amount || 0);
-            if (t.from === 'CAISSE PRINCIPALE') cashDelta -= amount;
-            if (t.to === 'CAISSE PRINCIPALE') cashDelta += amount;
-            if (t.from === 'Vault' || t.from === 'Coffre' || t.from === 'COFFRE') vaultDelta -= amount;
-            if (t.to === 'Vault' || t.to === 'Coffre' || t.to === 'COFFRE') vaultDelta += amount;
-          }
-        });
-
-        // 4. Agent Payments
-        const agentPaymentsStr = localStorage.getItem('microfox_agent_payments');
-        const agentPayments = agentPaymentsStr ? JSON.parse(agentPaymentsStr) : [];
-        agentPayments.forEach((p: any) => {
-          if (p.status === 'Validé') {
-            const caisse = p.targetCaisse || p.caisse;
-            if (caisse === 'CAISSE PRINCIPALE') {
-              cashDelta += Number(p.observedAmount || p.totalAmount || 0);
-            }
-          }
-        });
-
-        localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', (initialCash + cashDelta).toString());
-        localStorage.setItem('microfox_vault_balance', (initialVault + vaultDelta).toString());
-        localStorage.setItem(correctionFlag, 'true');
-        localStorage.setItem('microfox_fabes_init_v2', 'true');
-        dispatchStorageEvent();
-      }
-    }
-  }, [currentUser]);
 
   // User Location Tracking
   useEffect(() => {
@@ -1208,7 +1151,7 @@ const App: React.FC = () => {
           onLogout={handleLogout}
           isSyncing={isBackgroundSyncing}
         />
-        <main key={syncVersion} className="flex-1 overflow-y-auto p-4 lg:p-6 custom-scrollbar">
+        <main key={syncVersion} className="flex-1 min-h-0 overflow-y-auto p-4 lg:p-6 custom-scrollbar">
           {renderContent()}
         </main>
       </div>

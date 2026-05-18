@@ -20,16 +20,41 @@ const ValidateZoneCotisations: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
   const [mfConfig] = useState(() => {
     const saved = localStorage.getItem('microfox_mf_config');
     return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
   });
 
+  function getAssignedAgent(zoneName: string): string {
+    if (!zoneName) return 'N/A';
+    const normalizedZone = zoneName.toUpperCase().replace('ZONE ', '').trim();
+    const agent = users.find((u: any) => 
+      !u.isDeleted && 
+      u.role === 'agent commercial' && 
+      (
+        (u.zoneCollecte && u.zoneCollecte.toUpperCase().replace('ZONE ', '').trim() === normalizedZone) || 
+        (u.zonesCollecte && u.zonesCollecte.some((z: string) => z.toUpperCase().replace('ZONE ', '').trim() === normalizedZone))
+      )
+    );
+    return agent ? agent.identifiant.toUpperCase() : 'N/A';
+  }
+
+  const loadUsers = () => {
+    const saved = localStorage.getItem('microfox_users');
+    if (saved) {
+      try {
+        setUsers(JSON.parse(saved));
+      } catch (e) {}
+    }
+  };
+
   useEffect(() => {
     loadZones();
-    window.addEventListener('storage', loadZones);
-    window.addEventListener('microfox_storage' as any, loadZones);
-    const interval = setInterval(loadZones, 3000);
+    loadUsers();
+    window.addEventListener('storage', () => { loadZones(); loadUsers(); });
+    window.addEventListener('microfox_storage' as any, () => { loadZones(); loadUsers(); });
+    const interval = setInterval(() => { loadZones(); loadUsers(); }, 3000);
     return () => {
       window.removeEventListener('storage', loadZones);
       window.removeEventListener('microfox_storage' as any, loadZones);
@@ -261,8 +286,8 @@ const ValidateZoneCotisations: React.FC = () => {
   const handlePrint = () => {
     if (!zoneData || zoneData.transactions.length === 0) return;
 
-    const agentNames = Array.from(new Set(zoneData.transactions.map(tx => tx.cashierName).filter(Boolean))) as string[];
-    const agentsList = agentNames.length > 0 ? agentNames.join(", ") : "N/A";
+    const assignedAgentStr = getAssignedAgent(zoneData.zone);
+    const agentsList = assignedAgentStr || "N/A";
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -341,8 +366,8 @@ const ValidateZoneCotisations: React.FC = () => {
                   T: ${tx.tontineAccountNumber}<br/>
                   É: ${tx.epargneAccountNumber}
                 </td>
-                <td>${(tx.cashierName || 'N/A').toUpperCase()}</td>
-                <td><strong>${(tx.dailyMise || 0).toLocaleString()} F</strong></td>
+                <td>${assignedAgentStr}</td>
+                <td><strong>${((tx.dailyMise || 0)).toLocaleString()} F</strong></td>
                 <td class="text-right"><strong>${tx.amount.toLocaleString()} F</strong></td>
               </tr>
             `}).join('')}
@@ -379,8 +404,8 @@ const ValidateZoneCotisations: React.FC = () => {
   const handleExportHTML = () => {
     if (!zoneData || zoneData.transactions.length === 0) return;
 
-    const agentNames = Array.from(new Set(zoneData.transactions.map(tx => tx.cashierName).filter(Boolean))) as string[];
-    const agentsList = agentNames.length > 0 ? agentNames.join(", ") : "N/A";
+    const assignedAgentStr = getAssignedAgent(zoneData.zone);
+    const agentsList = assignedAgentStr || "N/A";
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -452,7 +477,7 @@ const ValidateZoneCotisations: React.FC = () => {
                   T: ${tx.tontineAccountNumber}<br/>
                   É: ${tx.epargneAccountNumber}
                 </td>
-                <td>${(tx.cashierName || 'N/A').toUpperCase()}</td>
+                <td>${assignedAgentStr}</td>
                 <td><strong>${(tx.dailyMise || 0).toLocaleString()} F</strong></td>
                 <td class="text-right"><strong>${tx.amount.toLocaleString()} F</strong></td>
               </tr>
@@ -711,7 +736,7 @@ const ValidateZoneCotisations: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-3 text-xs font-bold text-gray-600 uppercase">
-                            {tx.cashierName || 'N/A'}
+                            {getAssignedAgent(zoneData.zone)}
                           </td>
                           <td className="px-6 py-3 text-xs font-black text-blue-600">
                             {(tx.dailyMise || 0).toLocaleString()} F
@@ -796,7 +821,7 @@ const ValidateZoneCotisations: React.FC = () => {
                     T: {tx.tontineAccountNumber}<br/>
                     É: {tx.epargneAccountNumber}
                   </td>
-                  <td className="py-2 text-xs uppercase">{tx.cashierName || 'N/A'}</td>
+                  <td className="py-2 text-xs uppercase">{getAssignedAgent(zoneData?.zone || '')}</td>
                   <td className="py-2 text-xs font-bold">{(tx.dailyMise || 0).toLocaleString()} F</td>
                   <td className="py-2 text-xs font-bold text-right">{tx.amount.toLocaleString()} F</td>
                 </tr>
@@ -808,7 +833,7 @@ const ValidateZoneCotisations: React.FC = () => {
         <div className="mt-12 pt-4 border-t border-black">
           <div className="flex justify-between">
             <div>
-              <p className="text-xs font-bold">Agent Commercial: {Array.from(new Set(zoneData?.transactions.map(tx => tx.cashierName).filter(Boolean))).join(", ") || "N/A"}</p>
+              <p className="text-xs font-bold">Agent Commercial: {getAssignedAgent(zoneData?.zone || '')}</p>
               <div className="mt-8 w-48 border-t border-dashed border-black text-[10px] text-center pt-1">Signature Agent</div>
             </div>
             <div className="text-right">

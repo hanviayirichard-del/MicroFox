@@ -1,10 +1,13 @@
 {
-  "name": "Copy of MicroFoX",
-  "description": "Application de gestion de microfinance avec suivi des agents, membres, tontines et comptabilité.",
+  "name": "MicroFoX",
+  "description": "Système de gestion de microfinance pour le suivi des agents, tontines et opérations de caisse.",
   "requestFramePermissions": [
     "geolocation",
     "camera",
     "publickey-credentials-get",
     "publickey-credentials-create"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }
