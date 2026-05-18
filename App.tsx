@@ -183,24 +183,33 @@ try {
       }
 
       if (nativeGetItem('microfox_offline_mode') !== 'true') {
-        import('./utils/supabaseSync').then(async m => {
-          const success = await m.syncToSupabase(fullKey, value);
-          if (success) {
-            try {
-              const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
-              let dirtyKeys = JSON.parse(dirtyKeysStr);
-              if (Array.isArray(dirtyKeys)) {
-                const updated = dirtyKeys.filter(k => k !== fullKey);
-                if (updated.length === 0) {
-                  nativeRemoveItem('microfox_dirty_keys');
-                  nativeRemoveItem('microfox_pending_sync');
-                } else {
-                  nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+        // Debounced sync logic to avoid hitting Supabase quota with rapid writes
+        const syncDebounceKey = `sync_timeout_${fullKey}`;
+        if ((window as any)[syncDebounceKey]) {
+          clearTimeout((window as any)[syncDebounceKey]);
+        }
+        
+        (window as any)[syncDebounceKey] = setTimeout(() => {
+          import('./utils/supabaseSync').then(async m => {
+            const success = await m.syncToSupabase(fullKey, value);
+            if (success) {
+              try {
+                const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+                let dirtyKeys = JSON.parse(dirtyKeysStr);
+                if (Array.isArray(dirtyKeys)) {
+                  const updated = dirtyKeys.filter(k => k !== fullKey);
+                  if (updated.length === 0) {
+                    nativeRemoveItem('microfox_dirty_keys');
+                    nativeRemoveItem('microfox_pending_sync');
+                  } else {
+                    nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                  }
                 }
-              }
-            } catch (e) {}
-          }
-        });
+              } catch (e) {}
+            }
+          });
+          delete (window as any)[syncDebounceKey];
+        }, 2000); // Wait 2 seconds of inactivity for this key before syncing
       }
       if (key !== 'microfox_pending_sync') {
         nativeSetItem('microfox_pending_sync', 'true');
@@ -233,26 +242,34 @@ try {
       }
 
       if (nativeGetItem('microfox_offline_mode') !== 'true') {
-        import('./supabase').then(async m => {
-          if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
-            const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
-            if (!error) {
-              try {
-                const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
-                let dirtyKeys = JSON.parse(dirtyKeysStr);
-                if (Array.isArray(dirtyKeys)) {
-                  const updated = dirtyKeys.filter(k => k !== fullKey);
-                  if (updated.length === 0) {
-                    nativeRemoveItem('microfox_dirty_keys');
-                    nativeRemoveItem('microfox_pending_sync');
-                  } else {
-                    nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+        const removeDebounceKey = `remove_timeout_${fullKey}`;
+        if ((window as any)[removeDebounceKey]) {
+          clearTimeout((window as any)[removeDebounceKey]);
+        }
+        
+        (window as any)[removeDebounceKey] = setTimeout(() => {
+          import('./supabase').then(async m => {
+            if (m.supabase && (import.meta as any).env?.VITE_SUPABASE_URL) {
+              const { error } = await m.supabase.from('storage').delete().eq('key', fullKey);
+              if (!error) {
+                try {
+                  const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+                  let dirtyKeys = JSON.parse(dirtyKeysStr);
+                  if (Array.isArray(dirtyKeys)) {
+                    const updated = dirtyKeys.filter(k => k !== fullKey);
+                    if (updated.length === 0) {
+                      nativeRemoveItem('microfox_dirty_keys');
+                      nativeRemoveItem('microfox_pending_sync');
+                    } else {
+                      nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                    }
                   }
-                }
-              } catch (e) {}
+                } catch (e) {}
+              }
             }
-          }
-        });
+          });
+          delete (window as any)[removeDebounceKey];
+        }, 2000);
       }
       if (key !== 'microfox_pending_sync') {
         nativeSetItem('microfox_pending_sync', 'true');
