@@ -451,6 +451,10 @@ const DailyTontine: React.FC = () => {
       return;
     }
 
+    // Optimistic update
+    const now = new Date().toISOString();
+    setClientList(prev => prev.map(c => c.id === clientId ? { ...c, dailyMise: newMise } : c));
+
     const savedMembers = localStorage.getItem('microfox_members_data');
     if (savedMembers) {
       const allMembers = JSON.parse(savedMembers);
@@ -459,11 +463,11 @@ const DailyTontine: React.FC = () => {
           if (m.tontineAccounts && m.tontineAccounts.length > 0) {
             const updatedTontineAccounts = m.tontineAccounts.map((acc: any) => {
               if (acc.id === client.tontineAccountId) {
-                return { ...acc, dailyMise: newMise };
+                return { ...acc, dailyMise: newMise, updatedAt: now };
               }
               return acc;
             });
-            return { ...m, tontineAccounts: updatedTontineAccounts };
+            return { ...m, tontineAccounts: updatedTontineAccounts, updatedAt: now };
           }
         }
         return m;
@@ -565,7 +569,8 @@ const DailyTontine: React.FC = () => {
             ...m,
             balances: { ...m.balances, tontine: (m.balances?.tontine || 0) + amount },
             tontineAccounts: updatedTontineAccounts,
-            history: newHistory
+            history: newHistory,
+            updatedAt: new Date().toISOString()
           };
         }
         return m;

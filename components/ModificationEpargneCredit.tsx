@@ -156,7 +156,12 @@ const ModificationEpargneCredit: React.FC = () => {
         }
 
         localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(newHistory));
-        return { ...m, history: newHistory, balances: newBalances };
+        return { 
+          ...m, 
+          history: newHistory, 
+          balances: newBalances,
+          updatedAt: new Date().toISOString()
+        };
       }
       return m;
     });

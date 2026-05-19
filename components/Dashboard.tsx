@@ -118,7 +118,9 @@ const Dashboard: React.FC = () => {
                 if (indices[indices.length - 1] !== cycleIdx) usedWithdrawalIds.delete(priorWithdrawal.id);
               }
               if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
-                remainingWithdrawals += priorWithdrawal.amount;
+                if (!priorWithdrawal.description.includes('Cycles:')) {
+                  remainingWithdrawals += priorWithdrawal.amount;
+                }
                 encounteredWithdrawalIds.add(priorWithdrawal.id);
               }
               const comm = Number(dailyMise);

@@ -122,18 +122,21 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
       // Tontine withdrawals to disburse
       const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
       if (savedValidated) {
-        const validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed);
-        if (validated.length > 0) {
-          newNotifications.push({
-            id: 'pending_disbursements',
-            type: 'info',
-            title: 'Décaissements en attente',
-            message: `Il y a ${validated.length} retrait(s) tontine validé(s) en attente de décaissement.`,
-            date: now,
-            role: ['caissier', 'administrateur', 'directeur'],
-            action: 'Membres'
-          });
-        }
+        try {
+          const validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed);
+          if (validated.length > 0) {
+            const accNumbers = Array.from(new Set(validated.map((r: any) => r.tontineAccountNumber || r.clientCode))).filter(Boolean).join(', ');
+            newNotifications.push({
+              id: 'pending_disbursements',
+              type: 'info',
+              title: 'Décaissements en attente',
+              message: `Il y a ${validated.length} retrait(s) tontine validé(s) (${accNumbers}) en attente de décaissement.`,
+              date: now,
+              role: ['caissier', 'administrateur', 'directeur'],
+              action: 'Membres'
+            });
+          }
+        } catch (e) {}
       }
 
       // Agent payments to validate
