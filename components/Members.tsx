@@ -2248,10 +2248,12 @@ const Members: React.FC = () => {
 
   useEffect(() => {
     const loadPending = () => {
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      const activeMemberIds = new Set(savedMembers ? JSON.parse(savedMembers).filter((m: any) => !m.isDeleted).map((m: any) => m.id) : []);
       const savedPending = localStorage.getItem('microfox_pending_withdrawals');
       const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
-      const pending = savedPending ? JSON.parse(savedPending).filter((r: any) => !r.isDeleted) : [];
-      const validated = savedValidated ? JSON.parse(savedValidated).filter((r: any) => !r.isDeleted) : [];
+      const pending = savedPending ? JSON.parse(savedPending).filter((r: any) => !r.isDeleted && activeMemberIds.has(r.clientId)) : [];
+      const validated = savedValidated ? JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && activeMemberIds.has(r.clientId)) : [];
       setPendingWithdrawals([...pending, ...validated]);
     };
     window.addEventListener('storage', loadPending);

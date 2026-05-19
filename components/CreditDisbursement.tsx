@@ -67,7 +67,7 @@ const CreditDisbursement: React.FC = () => {
   const pendingRequests = members.filter(m => {
     const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     if (currentUser.role === 'caissier' && m.isEpargneInvisible) return false;
-    return m.epargneAccountNumber && m.lastCreditRequest && m.lastCreditRequest.status === 'Validé';
+    return !m.isDeleted && m.epargneAccountNumber && m.lastCreditRequest && m.lastCreditRequest.status === 'Validé';
   }).filter(m => {
     const search = searchTerm.toLowerCase();
     return m.name.toLowerCase().includes(search) || m.code.toLowerCase().includes(search);

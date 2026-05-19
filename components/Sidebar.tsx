@@ -98,6 +98,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
         const user = JSON.parse(userStr);
         let count = 0;
 
+        const savedMembersForCount = localStorage.getItem('microfox_members_data');
+        const activeMemberIds = new Set(savedMembersForCount ? JSON.parse(savedMembersForCount).filter((m: any) => !m.isDeleted).map((m: any) => m.id) : []);
+
         // Pending booklet receptions (Agent & Cashier)
         if (user.role === 'agent commercial' || user.role === 'caissier') {
           const savedStocks = localStorage.getItem('microfox_livrets_stocks');
@@ -124,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
-              const pending = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && r.status === 'En attente') : [];
+              const pending = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && r.status === 'En attente' && activeMemberIds.has(r.clientId)) : [];
               if (pending.length > 0) count++;
             } catch (e) {}
           }
@@ -137,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
           if (savedValidated) {
             try {
               const parsed = JSON.parse(savedValidated);
-              const validated = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed) : [];
+              const validated = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed && activeMemberIds.has(r.clientId)) : [];
               if (validated.length > 0) count++;
             } catch (e) {}
           }

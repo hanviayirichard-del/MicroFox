@@ -101,8 +101,14 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
     // 2. Auditeur / Contrôleur Notifications
     if (user.role === 'auditeur' || user.role === 'contrôleur' || user.role === 'administrateur') {
       const savedRequests = localStorage.getItem('microfox_pending_withdrawals');
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      const members = savedMembers ? JSON.parse(savedMembers) : [];
+      const activeMemberIds = new Set(members.filter((m: any) => !m.isDeleted).map((m: any) => m.id));
+
       if (savedRequests) {
-        const pending = JSON.parse(savedRequests).filter((r: any) => !r.isDeleted && r.status === 'En attente');
+        const pending = JSON.parse(savedRequests).filter((r: any) => 
+          activeMemberIds.has(r.clientId) && !r.isDeleted && r.status === 'En attente'
+        );
         if (pending.length > 0) {
           newNotifications.push({
             id: 'pending_verifications',
@@ -121,9 +127,15 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
     if (user.role === 'caissier' || user.role === 'administrateur' || user.role === 'directeur') {
       // Tontine withdrawals to disburse
       const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
+      const savedMembersData = localStorage.getItem('microfox_members_data');
+      const membersData = savedMembersData ? JSON.parse(savedMembersData) : [];
+      const activeMemberIds = new Set(membersData.filter((m: any) => !m.isDeleted).map((m: any) => m.id));
+
       if (savedValidated) {
         try {
-          const validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && r.status === 'Validé' && !r.isDisbursed);
+          const validated = JSON.parse(savedValidated).filter((r: any) => 
+            activeMemberIds.has(r.clientId) && !r.isDeleted && r.status === 'Validé' && !r.isDisbursed
+          );
           if (validated.length > 0) {
             const accNumbers = Array.from(new Set(validated.map((r: any) => r.tontineAccountNumber || r.clientCode))).filter(Boolean).join(', ');
             newNotifications.push({
@@ -212,7 +224,7 @@ const Notifications: React.FC<NotificationProps> = ({ onSelectSection }) => {
       if (savedMembers) {
         const members = JSON.parse(savedMembers);
         const pendingCredits = members.filter((m: any) => 
-          m.lastCreditRequest && m.lastCreditRequest.status === 'En attente'
+          !m.isDeleted && m.lastCreditRequest && m.lastCreditRequest.status === 'En attente'
         );
         if (pendingCredits.length > 0) {
           newNotifications.push({

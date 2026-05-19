@@ -659,8 +659,10 @@ const TontineVerification: React.FC = () => {
       return { ...m, tontineAccounts: updatedTontineAccounts };
     });
 
+    const activeMemberIds = new Set(allMembers.filter((m: any) => !m.isDeleted).map((m: any) => m.id));
+
     if (savedRequests) {
-      let requests = JSON.parse(savedRequests).filter((r: any) => !r.isDeleted);
+      let requests = JSON.parse(savedRequests).filter((r: any) => !r.isDeleted && activeMemberIds.has(r.clientId));
       
       // Filtrage par zone pour l'agent commercial
       if (currentUser?.role === 'agent commercial') {
@@ -676,7 +678,7 @@ const TontineVerification: React.FC = () => {
     }
     const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
     if (savedValidated) {
-      let validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted);
+      let validated = JSON.parse(savedValidated).filter((r: any) => !r.isDeleted && activeMemberIds.has(r.clientId));
       // Filtrage par zone pour l'agent commercial
       if (currentUser?.role === 'agent commercial') {
         const agentZones = currentUser.zonesCollecte || (currentUser.zoneCollecte ? [currentUser.zoneCollecte] : []);

@@ -646,12 +646,13 @@ const TontineWithdrawal: React.FC = () => {
     }
 
     // Récupération des demandes en attente et validées pour filtrer les cycles déjà demandés
+    const activeMemberIds = new Set(allMembers.filter((m: any) => !m.isDeleted).map((m: any) => m.id));
     const savedPending = localStorage.getItem('microfox_pending_withdrawals');
     let pending: any[] = [];
     if (savedPending) {
       try {
         const parsed = JSON.parse(savedPending);
-        pending = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted) : [];
+        pending = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && activeMemberIds.has(r.clientId)) : [];
       } catch (e) {
         pending = [];
       }
@@ -673,7 +674,7 @@ const TontineWithdrawal: React.FC = () => {
     if (savedValidated) {
       try {
         const parsed = JSON.parse(savedValidated);
-        validated = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted) : [];
+        validated = Array.isArray(parsed) ? parsed.filter((r: any) => !r.isDeleted && activeMemberIds.has(r.clientId)) : [];
       } catch (e) {
         validated = [];
       }

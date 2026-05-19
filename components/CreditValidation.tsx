@@ -63,7 +63,7 @@ const CreditValidation: React.FC = () => {
   }, []);
 
   const pendingRequests = members.filter(m => 
-    m.lastCreditRequest && m.lastCreditRequest.status === 'En attente'
+    !m.isDeleted && m.lastCreditRequest && m.lastCreditRequest.status === 'En attente'
   ).filter(m => {
     const search = searchTerm.toLowerCase();
     return m.name.toLowerCase().includes(search) || m.code.toLowerCase().includes(search);
