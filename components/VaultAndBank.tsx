@@ -14,6 +14,227 @@ const VaultAndBank: React.FC = () => {
     return saved ? Number(saved) : 0;
   });
 
+  const [auditData, setAuditData] = useState<any[]>([]);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+
+  const runCaisseVerification = () => {
+    const storedCoffre = Number(localStorage.getItem('microfox_vault_balance') || 0);
+    const storedBanque = Number(localStorage.getItem('microfox_bank_balance') || 0);
+    const storedCaissePrincipale = Number(localStorage.getItem('microfox_cash_balance_CAISSE PRINCIPALE') || 0);
+    const storedCaisse1 = Number(localStorage.getItem('microfox_cash_balance_CAISSE 1') || 0);
+    const storedCaisse2 = Number(localStorage.getItem('microfox_cash_balance_CAISSE 2') || 0);
+    const storedCaisse3 = Number(localStorage.getItem('microfox_cash_balance_CAISSE 3') || 0);
+    const storedCaisse4 = Number(localStorage.getItem('microfox_cash_balance_CAISSE 4') || 0);
+
+    const savedMembers = localStorage.getItem('microfox_members_data');
+    const members = savedMembers ? JSON.parse(savedMembers) : [];
+    
+    const savedVault = localStorage.getItem('microfox_vault_transactions');
+    const vaultTxs = savedVault ? JSON.parse(savedVault) : [];
+    
+    const savedExpenses = localStorage.getItem('microfox_admin_expenses');
+    const expenses = savedExpenses ? JSON.parse(savedExpenses) : [];
+    
+    const savedPayments = localStorage.getItem('microfox_agent_payments');
+    const payments = savedPayments ? JSON.parse(savedPayments) : [];
+
+    const chronoVaultTxs = [...vaultTxs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const theoretical: Record<string, number> = {
+      'COFFRE': 0,
+      'BANQUE': storedBanque,
+      'CAISSE PRINCIPALE': 0,
+      'CAISSE 1': 0,
+      'CAISSE 2': 0,
+      'CAISSE 3': 0,
+      'CAISSE 4': 0,
+    };
+
+    chronoVaultTxs.forEach((tx: any) => {
+      if (tx.type === "Initialisation Coffre Fort") {
+        theoretical['COFFRE'] = tx.amount;
+      } else if (tx.type === "Initialisation Caisse Principale") {
+        theoretical['CAISSE PRINCIPALE'] = tx.amount;
+      }
+    });
+
+    members.forEach((m: any) => {
+      if (m.history) {
+        m.history.forEach((tx: any) => {
+          const txCaisse = (tx.caisse || '').toUpperCase();
+          if (txCaisse && theoretical[txCaisse] !== undefined) {
+            const isCredit = tx.type === 'deposit' || tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
+            const isDebit = tx.type === 'retrait' || tx.type === 'transfert' || tx.type === 'deblocage';
+            if (isCredit) {
+              theoretical[txCaisse] += tx.amount;
+            } else if (isDebit) {
+              theoretical[txCaisse] -= tx.amount;
+            }
+          }
+        });
+      }
+    });
+
+    chronoVaultTxs.forEach((tx: any) => {
+      const fromCaisse = (tx.from || '').toUpperCase();
+      const toCaisse = (tx.to || '').toUpperCase();
+
+      if (tx.type === "Initialisation Coffre Fort" || tx.type === "Initialisation Caisse Principale") {
+        return;
+      }
+
+      if (fromCaisse === 'COFFRE') {
+        theoretical['COFFRE'] -= tx.amount;
+      } else if (theoretical[fromCaisse] !== undefined) {
+        theoretical[fromCaisse] -= tx.amount;
+      }
+
+      if (toCaisse === 'COFFRE') {
+        theoretical['COFFRE'] += tx.amount;
+      } else if (theoretical[toCaisse] !== undefined) {
+        theoretical[toCaisse] += tx.amount;
+      }
+    });
+
+    expenses.forEach((e: any) => {
+      if (!e.isDeleted) {
+        const caisse = (e.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+        if (theoretical[caisse] !== undefined) {
+          theoretical[caisse] -= e.amount;
+        }
+      }
+    });
+
+    payments.forEach((p: any) => {
+      if (p.status === 'Validé' && p.type !== 'CASHIER_TRANSFER') {
+        const caisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+        if (theoretical[caisse] !== undefined) {
+          theoretical[caisse] += (p.observedAmount || p.totalAmount);
+        }
+      }
+    });
+
+    const auditRows = [
+      {
+        id: 'COFFRE',
+        name: 'Coffre Fort (Réserve)',
+        key: 'microfox_vault_balance',
+        stored: storedCoffre,
+        computed: theoretical['COFFRE'],
+        type: 'vault'
+      },
+      {
+        id: 'BANQUE',
+        name: 'Banque (Fonds Externes)',
+        key: 'microfox_bank_balance',
+        stored: storedBanque,
+        computed: storedBanque,
+        type: 'bank'
+      },
+      {
+        id: 'CAISSE PRINCIPALE',
+        name: 'Caisse Principale',
+        key: 'microfox_cash_balance_CAISSE PRINCIPALE',
+        stored: storedCaissePrincipale,
+        computed: theoretical['CAISSE PRINCIPALE'],
+        type: 'caisse'
+      },
+      {
+        id: 'CAISSE 1',
+        name: 'Caisse Secondaire 1',
+        key: 'microfox_cash_balance_CAISSE 1',
+        stored: storedCaisse1,
+        computed: theoretical['CAISSE 1'],
+        type: 'caisse'
+      },
+      {
+        id: 'CAISSE 2',
+        name: 'Caisse Secondaire 2',
+        key: 'microfox_cash_balance_CAISSE 2',
+        stored: storedCaisse2,
+        computed: theoretical['CAISSE 2'],
+        type: 'caisse'
+      },
+      {
+        id: 'CAISSE 3',
+        name: 'Caisse Secondaire 3',
+        key: 'microfox_cash_balance_CAISSE 3',
+        stored: storedCaisse3,
+        computed: theoretical['CAISSE 3'],
+        type: 'caisse'
+      },
+      {
+        id: 'CAISSE 4',
+        name: 'Caisse Secondaire 4',
+        key: 'microfox_cash_balance_CAISSE 4',
+        stored: storedCaisse4,
+        computed: theoretical['CAISSE 4'],
+        type: 'caisse'
+      }
+    ];
+
+    setAuditData(auditRows);
+  };
+
+  const handleFixBalance = (id: string, computedValue: number, key: string) => {
+    localStorage.setItem(key, computedValue.toString());
+    
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+    const newTx = {
+      id: `${Date.now()}_adj`,
+      type: "Ajustement de Caisse",
+      from: "Audit Interne",
+      to: id,
+      amount: computedValue,
+      date: new Date().toISOString(),
+      userId: currentUser?.id,
+      cashierName: currentUser?.identifiant,
+      details: `Régularisation de conformité / Correction d'écart`
+    };
+
+    const savedVault = localStorage.getItem('microfox_vault_transactions');
+    const vaultTxs = savedVault ? JSON.parse(savedVault) : [];
+    localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...vaultTxs]));
+    localStorage.setItem('microfox_pending_sync', 'true');
+    dispatchStorageEvent();
+    alert(`Le solde de ${id} a été ramené en conformité à ${computedValue.toLocaleString()} F avec succès.`);
+  };
+
+  const handleManualSave = (id: string, key: string) => {
+    const valStr = editValue.trim();
+    if (valStr === '') return;
+    const num = Number(valStr);
+    if (isNaN(num) || num < 0) {
+      alert("Montant invalide");
+      return;
+    }
+
+    localStorage.setItem(key, num.toString());
+
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+    const newTx = {
+      id: `${Date.now()}_override`,
+      type: "Ajustement de Caisse",
+      from: "Correction Manuelle",
+      to: id,
+      amount: num,
+      date: new Date().toISOString(),
+      userId: currentUser?.id,
+      cashierName: currentUser?.identifiant,
+      details: `Ajustement de solde forcé manuellement à ${num.toLocaleString()} F`
+    };
+
+    const savedVault = localStorage.getItem('microfox_vault_transactions');
+    const vaultTxs = savedVault ? JSON.parse(savedVault) : [];
+    localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...vaultTxs]));
+    localStorage.setItem('microfox_pending_sync', 'true');
+
+    setEditingRowId(null);
+    setEditValue('');
+    dispatchStorageEvent();
+  };
+
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'VtoB' | 'BtoV' | 'VtoC' | 'CtoV' | 'INIT_BANK' | 'INIT_VAULT'>('VtoB');
@@ -88,13 +309,17 @@ const VaultAndBank: React.FC = () => {
           setSelectedCaisse(allCaisses[0]);
         }
       }
+
+      runCaisseVerification();
     };
 
     loadData();
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
-    return () => window.removeEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
+    };
   }, []);
 
   const handleTransaction = () => {
@@ -380,6 +605,122 @@ const VaultAndBank: React.FC = () => {
               Versement Fin de Journée
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Contrôle & Audit de Cohérence des Soldes */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden space-y-6 p-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+              <ShieldCheck size={28} />
+            </div>
+            <div>
+              <h2 className="text-base font-black text-[#121c32] uppercase tracking-wider">Vérification de la Cohérence des Soldes</h2>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-tight mt-1">Audit en temps réel des soldes enregistrés face au grand livre (journal global + transactions)</p>
+            </div>
+          </div>
+          <button 
+            onClick={runCaisseVerification}
+            className="px-4 py-2 border border-gray-100 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#121c32] transition-all"
+          >
+            Rafraîchir l'Audit
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50/50">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Caisse / Compte</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Solde Enregistré</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Solde Théorique (Historique)</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Écart & Statut</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions de Régularisation</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {auditData.map((row) => {
+                const diff = row.stored - row.computed;
+                const isPerfect = diff === 0;
+                
+                return (
+                  <tr key={row.id} className="hover:bg-gray-50/30 transition-colors">
+                    <td className="px-6 py-4">
+                      <p className="text-xs font-black text-[#121c32]">{row.name}</p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{row.id}</p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {editingRowId === row.id ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <input 
+                            type="number"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="w-28 p-2 border border-indigo-200 rounded-lg text-xs font-black text-right outline-none focus:border-indigo-500"
+                            placeholder="Nouveau solde..."
+                          />
+                          <button 
+                            onClick={() => handleManualSave(row.id, row.key)}
+                            className="px-2 py-1 bg-[#121c32] text-white rounded text-[10px] font-bold uppercase transition-all"
+                          >
+                            OK
+                          </button>
+                          <button 
+                            onClick={() => setEditingRowId(null)}
+                            className="px-2 py-1 bg-gray-100 text-gray-450 rounded text-[10px] font-bold uppercase transition-all"
+                          >
+                            X
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs font-black text-[#131d35]">{row.stored.toLocaleString()} F</p>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <p className="text-xs font-black text-indigo-600">{row.computed.toLocaleString()} F</p>
+                    </td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                      {isPerfect ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                          ✓ CONFORME
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full animate-pulse" title={`Écart de ${diff.toLocaleString()} F`}>
+                          ⚠️ ÉCART: {diff > 0 ? '+' : ''}{diff.toLocaleString()} F
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {!isPerfect && (
+                          <button 
+                            onClick={() => handleFixBalance(row.id, row.computed, row.key)}
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                            title="Ajuste instantanément le Solde Enregistré pour correspondre parfaitement au Solde Théorique calculé"
+                          >
+                            Fixer au théorique
+                          </button>
+                        )}
+                        {editingRowId !== row.id && (
+                          <button 
+                            onClick={() => {
+                              setEditingRowId(row.id);
+                              setEditValue(row.stored.toString());
+                            }}
+                            className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                            title="Saisir manuellement le solde réel"
+                          >
+                            Ajuster Solde
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
