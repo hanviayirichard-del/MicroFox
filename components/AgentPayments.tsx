@@ -78,7 +78,7 @@ const AgentPayments: React.FC = () => {
       let nbLivrets = 0;
       let todayTotal = 0;
       let todayTxs: any[] = [];
-      const todayStr = new Date().toISOString().split('T')[0];
+      const today = new Date().toDateString();
 
       if (savedMembers) {
         const allMembers = JSON.parse(savedMembers);
@@ -100,7 +100,7 @@ const AgentPayments: React.FC = () => {
               if (isValidType) {
                 // Pour le détail et le solde, on ne filtre plus par date pour permettre les retours de fonds
                 todayTotal += amount;
-                if (tx.date.startsWith(todayStr)) {
+                if (new Date(tx.date).toDateString() === today || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0])) {
                   todayTxs.push({ ...tx, clientName: m.name, clientCode: m.code });
                 }
                 

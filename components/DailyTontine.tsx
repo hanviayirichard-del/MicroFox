@@ -72,7 +72,6 @@ const DailyTontine: React.FC = () => {
 
           return accountsToProcess.map((acc: any, index: number) => {
             const accountId = acc.id || `${m.id}_tn_${index + 1}`;
-            const todayStr = new Date().toISOString().split('T')[0];
             const isFirstAccount = index === 0;
 
             const sessionCotise = clientHistory
@@ -83,7 +82,7 @@ const DailyTontine: React.FC = () => {
                   (isFirstAccount && (!h.description?.includes('Compte:') || (acc.number && h.description?.includes(acc.number)))) ||
                   (acc.number && h.description?.includes(acc.number))
                 ))
-              ) && h.type === 'cotisation' && h.date.startsWith(todayStr) && !h.description?.toLowerCase().includes('livret'))
+              ) && h.type === 'cotisation' && (new Date(h.date).toDateString() === new Date().toDateString() || (h.date && h.date.split('T')[0] === new Date().toISOString().split('T')[0])) && !h.description?.toLowerCase().includes('livret'))
               .reduce((sum: number, h: any) => sum + h.amount, 0);
 
             const tontineDeposits = clientHistory
