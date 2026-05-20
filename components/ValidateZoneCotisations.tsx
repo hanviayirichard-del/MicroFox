@@ -101,16 +101,18 @@ const ValidateZoneCotisations: React.FC = () => {
             // Ignore deleted or cancelled transactions
             if (tx.isDeleted || tx.type === 'annulation') return;
             
-            if (tx.type === 'cotisation' && tx.account === 'tontine') {
-              const txDate = new Date(tx.date);
+            if ((tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine') {
+              const txDate = tx.date ? new Date(tx.date) : null;
+              if (!txDate || isNaN(txDate.getTime())) return;
               const txDay = txDate.toISOString().split('T')[0];
               const validationKey = `${txDay}_${zone}`;
               const zoneValidation = validatedZones[validationKey];
               
               // Robust time comparison using getTime() to avoid string precision issues
-              const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
+              const isTxValidated = tx.isValidated === true || (zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime());
 
-              if (txDay === today) {
+              const isToday = txDate.toDateString() === new Date().toDateString() || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
+              if (isToday) {
                 hasTransactionsToday = true;
                 if (!isTxValidated) {
                   hasPendingToday = true;
@@ -168,16 +170,18 @@ const ValidateZoneCotisations: React.FC = () => {
             // Ignore deleted or cancelled transactions
             if (tx.isDeleted || tx.type === 'annulation') return;
             
-            if (tx.type === 'cotisation' && tx.account === 'tontine') {
-              const txDate = new Date(tx.date);
+            if ((tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine') {
+              const txDate = tx.date ? new Date(tx.date) : null;
+              if (!txDate || isNaN(txDate.getTime())) return;
               const txDay = txDate.toISOString().split('T')[0];
               const validationKey = `${txDay}_${zoneName}`;
               const zoneValidation = validatedZones[validationKey];
               
               // Robust time comparison
-              const isTxValidated = zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime();
+              const isTxValidated = tx.isValidated === true || (zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime());
 
-              if (txDay === today || !isTxValidated) {
+              const isToday = txDate.toDateString() === new Date().toDateString() || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
+              if (isToday || !isTxValidated) {
                 total += tx.amount;
                 count++;
                 transactions.push({
@@ -244,7 +248,9 @@ const ValidateZoneCotisations: React.FC = () => {
       
       zoneData.transactions.forEach(tx => {
         if (!tx.isValidated) {
-          const day = new Date(tx.date).toISOString().split('T')[0];
+          const txDate = tx.date ? new Date(tx.date) : null;
+          if (!txDate || isNaN(txDate.getTime())) return;
+          const day = txDate.toISOString().split('T')[0];
           if (!pendingByDay[day]) {
             pendingByDay[day] = { total: 0, count: 0 };
           }
@@ -353,8 +359,8 @@ const ValidateZoneCotisations: React.FC = () => {
           </thead>
           <tbody>
             ${zoneData.transactions.map(tx => {
-              const txDate = new Date(tx.date);
-              const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              const txDate = tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date) : new Date();
+              const isToday = txDate.toDateString() === new Date().toDateString() || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
               return `
               <tr>
                 <td>
@@ -464,8 +470,8 @@ const ValidateZoneCotisations: React.FC = () => {
           </thead>
           <tbody>
             ${zoneData.transactions.map(tx => {
-              const txDate = new Date(tx.date);
-              const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              const txDate = tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date) : new Date();
+              const isToday = txDate.toDateString() === new Date().toDateString() || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
               return `
               <tr>
                 <td>
@@ -710,9 +716,9 @@ const ValidateZoneCotisations: React.FC = () => {
                 <tbody className="divide-y divide-gray-100">
                   {zoneData.transactions.length > 0 ? (
                     zoneData.transactions.map((tx, idx) => {
-                      const txDate = new Date(tx.date);
+                      const txDate = tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date) : new Date();
                       const isTxValidated = tx.isValidated;
-                      const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                      const isToday = txDate.toDateString() === new Date().toDateString() || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
 
                       return (
                         <tr key={tx.id || idx} className={`hover:bg-white transition-colors ${isTxValidated ? 'bg-emerald-50/30' : ''}`}>
@@ -806,8 +812,8 @@ const ValidateZoneCotisations: React.FC = () => {
           </thead>
           <tbody>
             {zoneData?.transactions.map((tx, idx) => {
-              const txDate = new Date(tx.date);
-              const isToday = txDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              const txDate = tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date) : new Date();
+              const isToday = txDate.toDateString() === new Date().toDateString() || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
               return (
                 <tr key={idx} className="border-b border-gray-200">
                   <td className="py-2 text-xs">

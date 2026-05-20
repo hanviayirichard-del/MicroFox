@@ -90,10 +90,22 @@ const recalculateMicrofoxBalances = () => {
     });
 
     payments.forEach((p: any) => {
-      if (p.status === 'Validé' && p.type !== 'CASHIER_TRANSFER') {
-        const caisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
-        if (theoretical[caisse] !== undefined) {
-          theoretical[caisse] += (p.observedAmount || p.totalAmount);
+      if (p.type === 'CASHIER_TRANSFER') {
+        const sourceCaisse = (p.agentId || '').toUpperCase();
+        if (theoretical[sourceCaisse] !== undefined) {
+          if (p.status === 'En attente') {
+            const theoreticalAmt = p.totalAmount - (p.gap || 0);
+            theoretical[sourceCaisse] -= theoreticalAmt;
+          } else if (p.status === 'Validé') {
+            theoretical[sourceCaisse] += (p.gap || 0);
+          }
+        }
+      } else {
+        if (p.status === 'Validé') {
+          const caisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+          if (theoretical[caisse] !== undefined) {
+            theoretical[caisse] += (p.observedAmount || p.totalAmount);
+          }
         }
       }
     });
