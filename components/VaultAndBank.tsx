@@ -365,6 +365,9 @@ const VaultAndBank: React.FC = () => {
     } else if (modalType === 'VtoC') {
       newVault -= val;
       cashBalance += val;
+      if (selectedCaisse === 'CAISSE PRINCIPALE') {
+        newBank = cashBalance;
+      }
       typeLabel = "Approvisionnement Caisse";
       from = "Coffre";
       to = selectedCaisse;

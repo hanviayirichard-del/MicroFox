@@ -152,14 +152,19 @@ const MainCashier: React.FC = () => {
           const gap = finalAmount - theoretical;
 
           if (action === 'Validé' && p.status !== 'Validé') {
-            const targetCaisse = selectedCaisse;
+            const targetCaisse = p.caisse || 'CAISSE PRINCIPALE';
             const balanceKey = `microfox_cash_balance_${targetCaisse}`;
             const savedBal = localStorage.getItem(balanceKey);
             const currentBal = savedBal !== null ? Number(savedBal) : 0;
             const newBal = currentBal + finalAmount;
             localStorage.setItem(balanceKey, newBal.toString());
             
-            setCashBalance(newBal);
+            if (targetCaisse === selectedCaisse) {
+              setCashBalance(newBal);
+            } else {
+              const savedSelectedBal = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
+              setCashBalance(savedSelectedBal !== null ? Number(savedSelectedBal) : 0);
+            }
 
             // Record in general history
             const txsSaved = localStorage.getItem('microfox_vault_transactions');
@@ -223,7 +228,7 @@ const MainCashier: React.FC = () => {
             
             recordAuditLog('MODIFICATION', 'CAISSE', `Versement de ${p.agentName} REJETÉ (${p.totalAmount} FCFA)`);
           }
-          return { ...p, status: action, caisse: selectedCaisse, observedAmount: finalAmount, gap: gap, validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id };
+          return { ...p, status: action, caisse: p.caisse || 'CAISSE PRINCIPALE', observedAmount: finalAmount, gap: gap, validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id };
         }
         return p;
       });
@@ -386,7 +391,10 @@ const MainCashier: React.FC = () => {
   const filteredPayments = payments.filter(p => {
     const matchesSearch = p.agentName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'Tous' || p.status === filterStatus;
-    const matchesCaisse = (p.caisse?.toLowerCase() === selectedCaisse?.toLowerCase()) || (!p.caisse && selectedCaisse === 'CAISSE PRINCIPALE');
+    const matchesCaisse = 
+      (p.caisse?.toLowerCase() === selectedCaisse?.toLowerCase()) || 
+      (!p.caisse && selectedCaisse === 'CAISSE PRINCIPALE') ||
+      (p.type === 'CASHIER_TRANSFER' && p.agentName?.toLowerCase() === selectedCaisse?.toLowerCase());
     
     const txDate = p.date.split('T')[0];
     const matchesDate = (!startDate || txDate >= startDate) && (!endDate || txDate <= endDate);
