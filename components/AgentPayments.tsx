@@ -98,17 +98,17 @@ const AgentPayments: React.FC = () => {
               const isValidType = tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'remboursement' || tx.type === 'complement';
               
               if (isValidType) {
-                // Pour le détail et le solde, on ne filtre plus par date pour permettre les retours de fonds
-                todayTotal += amount;
-                if (new Date(tx.date).toDateString() === today || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0])) {
+                const isTxToday = new Date(tx.date).toDateString() === today || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
+                if (isTxToday) {
+                  todayTotal += amount;
                   todayTxs.push({ ...tx, clientName: m.name, clientCode: m.code });
-                }
-                
-                if (desc.includes('livret')) {
-                  livrets += amount;
-                  nbLivrets += 1;
-                } else {
-                  cotisations += amount;
+                  
+                  if (desc.includes('livret')) {
+                    livrets += amount;
+                    nbLivrets += 1;
+                  } else {
+                    cotisations += amount;
+                  }
                 }
               }
             }
@@ -124,8 +124,9 @@ const AgentPayments: React.FC = () => {
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
-          // Soustraire les versements Validés OU En attente pour cet agent
-          if (String(p.agentId) === String(user.id) && (p.status === 'Validé' || p.status === 'En attente')) {
+          // Soustraire les versements de la date d'aujourd'hui
+          const isPaymentToday = new Date(p.date).toDateString() === today || (p.date && p.date.split('T')[0] === new Date().toISOString().split('T')[0]);
+          if (String(p.agentId) === String(user.id) && isPaymentToday && (p.status === 'Validé' || p.status === 'En attente')) {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
             paidNbLivrets += Number(p.nbLivrets || 0);
