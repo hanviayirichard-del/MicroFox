@@ -166,8 +166,10 @@ try {
       
       nativeSetItem(fullKey, value);
 
+      const isBalanceKey = key === 'microfox_vault_balance' || key === 'microfox_bank_balance' || key.startsWith('microfox_cash_balance_');
+
       // Mark as dirty
-      if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+      if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys' && !isBalanceKey) {
         try {
           const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
           let dirtyKeys = JSON.parse(dirtyKeysStr);
@@ -182,7 +184,7 @@ try {
         }
       }
 
-      if (nativeGetItem('microfox_offline_mode') !== 'true') {
+      if (nativeGetItem('microfox_offline_mode') !== 'true' && !isBalanceKey) {
         // Debounced sync logic to avoid hitting Supabase quota with rapid writes
         const syncDebounceKey = `sync_timeout_${fullKey}`;
         if ((window as any)[syncDebounceKey]) {
@@ -211,7 +213,7 @@ try {
           delete (window as any)[syncDebounceKey];
         }, 2000); // Wait 2 seconds of inactivity for this key before syncing
       }
-      if (key !== 'microfox_pending_sync') {
+      if (key !== 'microfox_pending_sync' && !isBalanceKey) {
         nativeSetItem('microfox_pending_sync', 'true');
       }
     } else {
@@ -228,7 +230,9 @@ try {
       const fullKey = isGlobal ? key : prefix + key;
       nativeRemoveItem(fullKey);
 
-      if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys') {
+      const isBalanceKey = key === 'microfox_vault_balance' || key === 'microfox_bank_balance' || key.startsWith('microfox_cash_balance_');
+
+      if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys' && !isBalanceKey) {
         try {
           const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
           let dirtyKeys = JSON.parse(dirtyKeysStr);
@@ -241,7 +245,7 @@ try {
         }
       }
 
-      if (nativeGetItem('microfox_offline_mode') !== 'true') {
+      if (nativeGetItem('microfox_offline_mode') !== 'true' && !isBalanceKey) {
         const removeDebounceKey = `remove_timeout_${fullKey}`;
         if ((window as any)[removeDebounceKey]) {
           clearTimeout((window as any)[removeDebounceKey]);
@@ -271,7 +275,7 @@ try {
           delete (window as any)[removeDebounceKey];
         }, 2000);
       }
-      if (key !== 'microfox_pending_sync') {
+      if (key !== 'microfox_pending_sync' && !isBalanceKey) {
         nativeSetItem('microfox_pending_sync', 'true');
       }
     } else {

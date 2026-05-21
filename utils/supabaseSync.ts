@@ -157,6 +157,9 @@ export const pullFromSupabase = async (
     if (data) {
       let changed = false;
       data.forEach(item => {
+        if (item.key.includes('microfox_vault_balance') || item.key.includes('microfox_bank_balance') || item.key.includes('microfox_cash_balance_')) {
+          return;
+        }
         const localValue = originalGetItem(item.key);
         if (localValue !== item.value) {
           // If the key is dirty locally, we skip pulling it to avoid overwriting unpushed changes
