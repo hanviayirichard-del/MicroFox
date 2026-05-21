@@ -616,7 +616,7 @@ const App: React.FC = () => {
               const localValue = nativeGetItem(key);
               
               if (remoteValue && remoteValue !== localValue) {
-                // Skip if locally dirty to avoid overwriting newer local changes
+                // Skip if locally dirty and not mergeable JSON to avoid overwriting newer local changes
                 const isDirty = () => {
                   try {
                     const dirty = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
@@ -624,7 +624,16 @@ const App: React.FC = () => {
                   } catch (e) { return false; }
                 };
 
-                if (isDirty()) return;
+                if (isDirty()) {
+                  if (localValue && localValue !== '[]' && localValue !== '{}' && localValue !== 'null') {
+                    try {
+                      JSON.parse(localValue);
+                      JSON.parse(remoteValue);
+                    } catch (e) {
+                      return;
+                    }
+                  }
+                }
 
                 const { mergeJSON } = await import('./utils/supabaseSync');
                 const finalValue = localValue ? mergeJSON(localValue, remoteValue) : remoteValue;

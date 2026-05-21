@@ -183,11 +183,15 @@ export const pullFromSupabase = async (
         }
         const localValue = originalGetItem(item.key);
         if (localValue !== item.value) {
-          // If the key is dirty locally, we skip pulling it to avoid overwriting unpushed changes
-          // EXCEPT if the local value is empty/initial (like on a fresh device setup)
+          // If the key is dirty locally, we only skip if it's not mergeable JSON
           if (isDirty && isDirty(item.key)) {
             if (localValue && localValue !== '[]' && localValue !== '{}' && localValue !== 'null') {
-              return;
+              try {
+                JSON.parse(localValue);
+                JSON.parse(item.value);
+              } catch (e) {
+                return;
+              }
             }
           }
 
