@@ -149,12 +149,22 @@ export const pullFromSupabase = async (
     const batchSize = 1000;
     let hasMore = true;
 
+    // Use incremental sync to protect the database Disk I/O budget
+    const lastPullTime = localStorage.getItem(`microfox_last_pulled_${prefix}`);
+
     while (hasMore) {
-      const { data, error } = await supabase
+      let query = supabase
         .from('storage')
-        .select('key, value')
+        .select('key, value, updated_at')
         .like('key', `${prefix}%`)
+        .order('key')
         .range(from, from + batchSize - 1);
+
+      if (lastPullTime) {
+        query = query.gt('updated_at', lastPullTime);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error pulling from Supabase:', error);
@@ -177,7 +187,13 @@ export const pullFromSupabase = async (
     
     if (data) {
       let changed = false;
+      let maxUpdatedAt = lastPullTime || new Date(0).toISOString();
+
       data.forEach(item => {
+        if (item.updated_at && item.updated_at > maxUpdatedAt) {
+          maxUpdatedAt = item.updated_at;
+        }
+
         if (item.key.includes('microfox_vault_balance') || item.key.includes('microfox_bank_balance') || item.key.includes('microfox_cash_balance_')) {
           return;
         }
@@ -202,6 +218,13 @@ export const pullFromSupabase = async (
           }
         }
       });
+
+      if (data.length > 0) {
+        localStorage.setItem(`microfox_last_pulled_${prefix}`, maxUpdatedAt);
+      } else if (!lastPullTime) {
+        localStorage.setItem(`microfox_last_pulled_${prefix}`, new Date().toISOString());
+      }
+
       return changed;
     }
     return false;
