@@ -144,15 +144,36 @@ export const pullFromSupabase = async (
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return;
     
-    const { data, error } = await supabase
-      .from('storage')
-      .select('key, value')
-      .like('key', `${prefix}%`);
-      
-    if (error) {
-      console.error('Error pulling from Supabase:', error);
-      return;
+    let allData: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('storage')
+        .select('key, value')
+        .like('key', `${prefix}%`)
+        .range(from, from + batchSize - 1);
+
+      if (error) {
+        console.error('Error pulling from Supabase:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        if (data.length < batchSize) {
+          hasMore = false;
+        } else {
+          from += batchSize;
+        }
+      } else {
+        hasMore = false;
+      }
     }
+    
+    const data = allData;
     
     if (data) {
       let changed = false;
