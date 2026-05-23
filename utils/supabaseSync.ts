@@ -98,25 +98,73 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
-    // Fetch current remote value to merge and avoid overwriting other devices' data
-    const { data: remoteItem, error: fetchError } = await supabase
+    const maxRetries = 5;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Fetch current remote value to merge and avoid overwriting other devices' data
+      const { data: remoteItem, error: fetchError } = await supabase
+        .from('storage')
+        .select('value, updated_at')
+        .eq('key', key)
+        .maybeSingle();
+        
+      if (fetchError) {
+        // If table doesn't exist (42P01), we should probably stop trying to sync
+        if (fetchError.code === '42P01') {
+          console.warn('Supabase storage table not found. Please run the SQL schema script.');
+          return false;
+        }
+        console.error(`Error fetching remote value for key ${key}:`, fetchError);
+      }
+        
+      if (remoteItem) {
+        const finalValue = mergeJSON(remoteItem.value, value);
+        
+        // Optimistic locking: update ONLY if updated_at has not changed since fetch
+        const { data, error } = await supabase
+          .from('storage')
+          .update({ 
+            value: finalValue, 
+            updated_at: new Date().toISOString() 
+          })
+          .eq('key', key)
+          .eq('updated_at', remoteItem.updated_at)
+          .select('key');
+          
+        if (!error && data && data.length > 0) {
+          return true;
+        }
+        
+        // Conflict detected or error occurred, wait and retry
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 80 * attempt));
+      } else {
+        // Try inserting if it doesn't exist
+        const { data, error } = await supabase
+          .from('storage')
+          .insert({ 
+            key: key, 
+            value: value, 
+            updated_at: new Date().toISOString() 
+          })
+          .select('key');
+          
+        if (!error && data && data.length > 0) {
+          return true;
+        }
+        
+        // Conflict on insert (another client inserted concurrently), wait and retry
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 80 * attempt));
+      }
+    }
+    
+    // Final fallback to standard upsert with latest merge to guarantee sync completion
+    const { data: remoteItem } = await supabase
       .from('storage')
       .select('value')
       .eq('key', key)
       .maybeSingle();
       
-    if (fetchError) {
-      // If table doesn't exist (42P01), we should probably stop trying to sync
-      if (fetchError.code === '42P01') {
-        console.warn('Supabase storage table not found. Please run the SQL schema script.');
-        return false;
-      }
-      console.error(`Error fetching remote value for key ${key}:`, fetchError);
-    }
-      
     const finalValue = remoteItem?.value ? mergeJSON(remoteItem.value, value) : value;
-
-    const { error } = await supabase
+    const { error: upsertError } = await supabase
       .from('storage')
       .upsert({ 
         key: key, 
@@ -124,8 +172,8 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
         updated_at: new Date().toISOString() 
       }, { onConflict: 'key' });
       
-    if (error) {
-      console.error(`Error syncing key ${key} to Supabase:`, error);
+    if (upsertError) {
+      console.error(`Error in fallback upsert for key ${key}:`, upsertError);
       return false;
     }
     return true;

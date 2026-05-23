@@ -4,6 +4,7 @@ import { MapPin, Navigation, Search, Layers, ZoomIn, ZoomOut, Filter, User as Us
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { ClientAccount, User } from '../types';
+import { dispatchStorageEvent } from '../utils/events';
 
 // Custom SVG Icon for Leaflet
 const createCustomIcon = (color: string, iconType: 'client' | 'user' = 'client') => {
@@ -33,6 +34,16 @@ const RecenterMap: React.FC<{ lat: number; lng: number }> = ({ lat, lng }) => {
 
 const GeographicMap: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'map' | 'report'>('map');
+  const [trajetsEnabled, setTrajetsEnabled] = useState(() => {
+    const savedConfig = localStorage.getItem('microfox_mf_config');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        return config.gpsTrackingEnabled !== false;
+      } catch (e) {}
+    }
+    return true;
+  });
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [map, setMap] = useState<L.Map | null>(null);
   const [clients, setClients] = useState<ClientAccount[]>([]);
@@ -44,6 +55,24 @@ const GeographicMap: React.FC = () => {
   const [journeys, setJourneys] = useState<any[]>([]);
   const [startDate, setStartDate] = useState<string>(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const savedConfig = localStorage.getItem('microfox_mf_config');
+      if (savedConfig) {
+        try {
+          const config = JSON.parse(savedConfig);
+          setTrajetsEnabled(config.gpsTrackingEnabled !== false);
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('microfox_storage' as any, handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('microfox_storage' as any, handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     // Load current user
@@ -218,27 +247,8 @@ const GeographicMap: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-[#121c32] p-1 rounded-2xl border border-gray-800">
-          <button 
-            onClick={() => setActiveTab('map')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'map' ? 'bg-[#00c896] text-white shadow-lg shadow-[#00c896]/20' : 'text-gray-400 hover:text-white'}`}
-          >
-            <MapIcon size={16} />
-            Carte
-          </button>
-          {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-            <button 
-              onClick={() => setActiveTab('report')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'report' ? 'bg-[#00c896] text-white shadow-lg shadow-[#00c896]/20' : 'text-gray-400 hover:text-white'}`}
-            >
-              <HistoryIcon size={16} />
-              Trajets
-            </button>
-          )}
-        </div>
-
         <div className="flex items-center gap-2">
-          {activeTab === 'map' && routeCoordinates && (
+          {routeCoordinates && (
             <button 
               onClick={() => setRouteCoordinates(null)}
               className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-colors shadow-sm"
@@ -250,7 +260,7 @@ const GeographicMap: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
             <input 
               type="text" 
-              placeholder={activeTab === 'map' ? "Nom, Compte, Tontine..." : "Rechercher un utilisateur..."}
+              placeholder="Nom, Compte, Tontine..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00c896] w-full sm:w-64 shadow-sm font-bold"
@@ -259,8 +269,7 @@ const GeographicMap: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'map' ? (
-        <div className="flex-1 bg-white rounded-[2rem] border border-gray-200 shadow-sm relative overflow-hidden min-h-[500px] z-0">
+      <div className="flex-1 bg-white rounded-[2rem] border border-gray-200 shadow-sm relative overflow-hidden min-h-[500px] z-0">
           <MapContainer 
             ref={setMap}
             center={userLocation ? [userLocation.lat, userLocation.lng] : [6.13, 1.22]} 
@@ -424,186 +433,7 @@ const GeographicMap: React.FC = () => {
             </button>
           </div>
         </div>
-      ) : (
-        <div className="flex-1 bg-white rounded-[2rem] border-2 border-[#121c32] shadow-2xl overflow-hidden flex flex-col">
-          <div className="p-3 sm:p-8 border-b-2 border-gray-100 bg-[#121c32] flex items-center justify-between">
-            <div>
-              <h3 className="text-lg sm:text-2xl font-black text-white uppercase tracking-tight">Rapport de Trajets</h3>
-              <p className="text-[9px] sm:text-xs font-bold text-emerald-400 uppercase tracking-[0.2em] mt-0.5">Suivi des déplacements (14j)</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <div className="flex items-center gap-2 bg-[#1a2642] px-3 py-2 rounded-xl border border-gray-700">
-                <Filter size={14} className="text-emerald-400" />
-                <input 
-                  type="date" 
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-transparent text-white text-[10px] font-black uppercase focus:outline-none [color-scheme:dark]"
-                />
-                <span className="text-gray-500 text-[10px]">au</span>
-                <input 
-                  type="date" 
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-transparent text-white text-[10px] font-black uppercase focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-              <div className="hidden lg:block bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
-                <p className="text-[10px] font-black text-[#121c32] uppercase">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-              </div>
-              {journeyList.length > 0 && (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-                <button 
-                  onClick={handleDeleteAllHistory}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                  title="Supprimer tout l'historique"
-                >
-                  <Trash2 size={20} />
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-8 custom-scrollbar bg-gray-50/30">
-            {journeyList.length > 0 ? (
-              <div className="space-y-4 sm:space-y-8">
-                {journeyList.map((journey: any) => (
-                  <div key={journey.userId} className="bg-white border-2 border-gray-200 rounded-[1.2rem] sm:rounded-[2.5rem] shadow-lg overflow-hidden flex flex-col">
-                    <div className="p-3 sm:p-6 border-b-2 border-gray-50 bg-gray-50/50 flex items-center justify-between">
-                      <div className="flex items-center gap-2 sm:gap-4">
-                        <div className="w-8 h-8 sm:w-12 h-12 rounded-lg sm:rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600">
-                          <UserIcon size={16} className="sm:w-6 sm:h-6" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs sm:text-base font-black text-[#121c32] uppercase leading-tight">{journey.userName}</h4>
-                          <p className="text-[8px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {journey.userId}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <span className="inline-block px-2 sm:px-4 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
-                          {journey.points.length} Pts
-                        </span>
-                        {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-                          <button 
-                            onClick={() => handleDeleteUserHistory(journey.userId)}
-                            className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
-                            title="Supprimer l'historique de cet utilisateur"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="p-0">
-                      {/* Desktop Table */}
-                      <div className="hidden md:block overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-gray-100/50 border-b-2 border-gray-100">
-                              <th className="px-8 py-4 text-[11px] font-black text-[#121c32] uppercase tracking-[0.2em]">Heure</th>
-                              <th className="px-8 py-4 text-[11px] font-black text-[#121c32] uppercase tracking-[0.2em]">Coordonnées Géographiques</th>
-                              <th className="px-8 py-4 text-right text-[11px] font-black text-[#121c32] uppercase tracking-[0.2em]">Localisation</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-50">
-                            {journey.points.map((point: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-8 py-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-purple-500 shadow-sm shadow-purple-200"></div>
-                                    <span className="text-xs font-black text-[#121c32]">
-                                      {new Date(point.timestamp).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="px-8 py-4">
-                                  <span className="text-xs font-bold text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded-lg">
-                                    {point.lat.toFixed(6)}, {point.lng.toFixed(6)}
-                                  </span>
-                                </td>
-                                <td className="px-8 py-4 text-right flex items-center justify-end gap-2">
-                                  <a 
-                                    href={`https://www.google.com/maps?q=${point.lat},${point.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest"
-                                  >
-                                    <MapPin size={14} />
-                                    Voir sur Maps
-                                  </a>
-                                  {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-                                    <button 
-                                      onClick={() => handleDeletePoint(point.userId, point.timestamp)}
-                                      className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"
-                                      title="Supprimer ce point"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Mobile List View */}
-                      <div className="md:hidden divide-y divide-gray-100">
-                        <div className="bg-gray-50/50 px-4 py-2 border-b border-gray-100">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Détails du trajet</p>
-                        </div>
-                        {journey.points.map((point: any, idx: number) => (
-                          <div key={idx} className="p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                                <span className="text-[10px] font-black text-[#121c32]">
-                                  {new Date(point.timestamp).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <a 
-                                  href={`https://www.google.com/maps?q=${point.lat},${point.lng}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"
-                                >
-                                  <MapPin size={12} />
-                                </a>
-                                {(currentUser?.role === 'administrateur' || currentUser?.role === 'directeur') && (
-                                  <button 
-                                    onClick={() => handleDeletePoint(point.userId, point.timestamp)}
-                                    className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 p-1.5 rounded-lg flex items-center justify-between">
-                              <span className="text-[9px] font-bold text-gray-400 uppercase">Coords</span>
-                              <span className="text-[10px] font-bold text-gray-700 font-mono">
-                                {point.lat.toFixed(4)}, {point.lng.toFixed(4)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                <div className="w-20 h-20 bg-white rounded-[2.5rem] flex items-center justify-center text-gray-200 mb-6 shadow-sm border border-gray-100">
-                  <HistoryIcon size={40} />
-                </div>
-                <p className="text-gray-400 font-black uppercase text-[10px] tracking-[0.3em]">Aucun trajet enregistré pour aujourd'hui</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
   );
 };
 

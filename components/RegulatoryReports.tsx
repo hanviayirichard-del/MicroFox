@@ -86,6 +86,7 @@ const RegulatoryReports: React.FC = () => {
       };
 
       allMembers.forEach((m: any) => {
+        if (m.isDeleted) return;
         // Calcul des commissions tontine (logique synchronisée avec Commissions.tsx)
         const tontineAccounts = m.tontineAccounts || [];
         tontineAccounts.forEach((acc: any) => {

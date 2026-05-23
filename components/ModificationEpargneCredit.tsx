@@ -31,6 +31,10 @@ const ModificationEpargneCredit: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editingOp, setEditingOp] = useState<OperationWithMember | null>(null);
   const [newAmount, setNewAmount] = useState<number>(0);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const loadData = () => {
     const savedMembers = localStorage.getItem('microfox_members_data');
@@ -191,7 +195,10 @@ const ModificationEpargneCredit: React.FC = () => {
                        (filterType === 'garantie' && op.account === 'garantie') ||
                        (filterType === 'frais' && op.account === 'frais');
     
-    return matchesSearch && matchesType;
+    const opDateStr = op.date.split('T')[0];
+    const matchesDate = !selectedDate || opDateStr === selectedDate;
+
+    return matchesSearch && matchesType && matchesDate;
   });
 
   return (
@@ -228,7 +235,7 @@ const ModificationEpargneCredit: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           <input 
@@ -255,6 +262,14 @@ const ModificationEpargneCredit: React.FC = () => {
             <option value="remboursement">Remboursements Crédit</option>
           </select>
         </div>
+        <div className="relative">
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-2xl font-bold outline-none focus:border-blue-500 transition-all text-sm text-[#121c32]"
+          />
+        </div>
       </div>
 
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -277,10 +292,21 @@ const ModificationEpargneCredit: React.FC = () => {
                       <span className="text-xs font-black text-[#121c32]">{new Date(op.date).toLocaleDateString()}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-[#121c32] uppercase">{op.memberName}</span>
-                        <span className="text-[10px] font-bold text-gray-400">{op.memberCode}</span>
-                      </div>
+                      {(() => {
+                        const m = members.find(member => member.id === op.memberId);
+                        const epNo = m?.epargneAccountNumber || '---';
+                        const tnNo = m?.tontineAccounts?.map(t => t.number).join(', ') || '---';
+                        return (
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black text-[#121c32] uppercase">{op.memberName}</span>
+                            <span className="text-[10px] font-bold text-gray-400">{op.memberCode}</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              <span className="text-[8px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded font-black uppercase">EP: {epNo}</span>
+                              <span className="text-[8px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded font-black uppercase">TN: {tnNo}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

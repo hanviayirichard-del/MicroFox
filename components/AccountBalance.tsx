@@ -11,7 +11,9 @@ const AccountBalance: React.FC = () => {
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
     if (saved) {
-      setMembers(JSON.parse(saved));
+      const parsed = JSON.parse(saved) as ClientAccount[];
+      const activeMembers = parsed.filter(m => !m.isDeleted);
+      setMembers(activeMembers);
     }
   };
 

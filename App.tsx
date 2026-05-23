@@ -5,8 +5,6 @@ import Dashboard from './components/Dashboard';
 import GeographicMap from './components/GeographicMap';
 import Members from './components/Members';
 import DailyTontine from './components/DailyTontine';
-import ValidateZoneCotisations from './components/ValidateZoneCotisations';
-import ValidatePreviousCotisations from './components/ValidatePreviousCotisations';
 import CancelCotisation from './components/CancelCotisation';
 import Commissions from './components/Commissions';
 import CreditManagement from './components/CreditManagement';
@@ -26,7 +24,6 @@ import PersonnelSalaries from './components/PersonnelSalaries';
 import FraisPartsSociales from './components/FraisPartsSociales';
 import AccountingAndStates from './components/AccountingAndStates';
 import RegulatoryReports from './components/RegulatoryReports';
-import AdhesionReport from './components/AdhesionReport';
 import Analyse from './components/Analyse';
 import Configuration from './components/Configuration';
 import UserManagement from './components/UserManagement';
@@ -178,20 +175,22 @@ try {
           if (!dirtyKeys.includes(fullKey)) {
             dirtyKeys.push(fullKey);
             nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+            if (prefix) {
+              nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify(dirtyKeys));
+            }
           }
         } catch (e) {
           nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
+          if (prefix) {
+            nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify([fullKey]));
+          }
         }
       }
 
       if (nativeGetItem('microfox_offline_mode') !== 'true' && !isBalanceKey) {
-        // Debounced sync logic to avoid hitting Supabase quota with rapid writes
-        const syncDebounceKey = `sync_timeout_${fullKey}`;
-        if ((window as any)[syncDebounceKey]) {
-          clearTimeout((window as any)[syncDebounceKey]);
-        }
-        
-        (window as any)[syncDebounceKey] = setTimeout(() => {
+        const isCriticalKey = key === 'microfox_agent_payments' || key.startsWith('microfox_agent_balance_');
+
+        if (isCriticalKey) {
           import('./utils/supabaseSync').then(async m => {
             const success = await m.syncToSupabase(fullKey, value);
             if (success) {
@@ -203,18 +202,62 @@ try {
                   if (updated.length === 0) {
                     nativeRemoveItem('microfox_dirty_keys');
                     nativeRemoveItem('microfox_pending_sync');
+                    if (prefix) {
+                      nativeRemoveItem(`${prefix}microfox_dirty_keys`);
+                      nativeRemoveItem(`${prefix}microfox_pending_sync`);
+                    }
                   } else {
                     nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                    if (prefix) {
+                      nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify(updated));
+                    }
                   }
                 }
               } catch (e) {}
             }
           });
-          delete (window as any)[syncDebounceKey];
-        }, 2000); // Wait 2 seconds of inactivity for this key before syncing
+        } else {
+          // Debounced sync logic to avoid hitting Supabase quota with rapid writes
+          const syncDebounceKey = `sync_timeout_${fullKey}`;
+          if ((window as any)[syncDebounceKey]) {
+            clearTimeout((window as any)[syncDebounceKey]);
+          }
+          
+          (window as any)[syncDebounceKey] = setTimeout(() => {
+            import('./utils/supabaseSync').then(async m => {
+              const success = await m.syncToSupabase(fullKey, value);
+              if (success) {
+                try {
+                  const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+                  let dirtyKeys = JSON.parse(dirtyKeysStr);
+                  if (Array.isArray(dirtyKeys)) {
+                    const updated = dirtyKeys.filter(k => k !== fullKey);
+                    if (updated.length === 0) {
+                      nativeRemoveItem('microfox_dirty_keys');
+                      nativeRemoveItem('microfox_pending_sync');
+                      if (prefix) {
+                        nativeRemoveItem(`${prefix}microfox_dirty_keys`);
+                        nativeRemoveItem(`${prefix}microfox_pending_sync`);
+                      }
+                    } else {
+                      nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                      if (prefix) {
+                        nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify(updated));
+                      }
+                    }
+                  }
+                } catch (e) {}
+              }
+            });
+            delete (window as any)[syncDebounceKey];
+          }, 2000); // Wait 2 seconds of inactivity for this key before syncing
+        }
       }
       if (key !== 'microfox_pending_sync' && !isBalanceKey) {
         nativeSetItem('microfox_pending_sync', 'true');
+        if (prefix) {
+          nativeSetItem(`${prefix}microfox_pending_sync`, 'true');
+        }
       }
     } else {
       nativeSetItem(key, value);
@@ -239,9 +282,15 @@ try {
           if (Array.isArray(dirtyKeys) && !dirtyKeys.includes(fullKey)) {
             dirtyKeys.push(fullKey);
             nativeSetItem('microfox_dirty_keys', JSON.stringify(dirtyKeys));
+            if (prefix) {
+              nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify(dirtyKeys));
+            }
           }
         } catch (e) {
           nativeSetItem('microfox_dirty_keys', JSON.stringify([fullKey]));
+          if (prefix) {
+            nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify([fullKey]));
+          }
         }
       }
 
@@ -264,8 +313,15 @@ try {
                     if (updated.length === 0) {
                       nativeRemoveItem('microfox_dirty_keys');
                       nativeRemoveItem('microfox_pending_sync');
+                      if (prefix) {
+                        nativeRemoveItem(`${prefix}microfox_dirty_keys`);
+                        nativeRemoveItem(`${prefix}microfox_pending_sync`);
+                      }
                     } else {
                       nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                      if (prefix) {
+                        nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify(updated));
+                      }
                     }
                   }
                 } catch (e) {}
@@ -277,6 +333,9 @@ try {
       }
       if (key !== 'microfox_pending_sync' && !isBalanceKey) {
         nativeSetItem('microfox_pending_sync', 'true');
+        if (prefix) {
+          nativeSetItem(`${prefix}microfox_pending_sync`, 'true');
+        }
       }
     } else {
       nativeRemoveItem(key);
@@ -308,9 +367,11 @@ const App: React.FC = () => {
     setIsSyncing(true);
     setIsBackgroundSyncing(false);
     
+    const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
     const isDirty = (key: string) => {
       try {
-        const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+        const dirtyKeysStr = nativeGetItem(prefix + 'microfox_dirty_keys') || nativeGetItem('microfox_dirty_keys') || '[]';
+        const dirtyKeys = JSON.parse(dirtyKeysStr);
         return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
       } catch (e) {
         return false;
@@ -322,9 +383,8 @@ const App: React.FC = () => {
         const { pullFromSupabase, syncToSupabase } = await import('./utils/supabaseSync');
         
         // Push local changes first to avoid overwriting them
-        if (nativeGetItem('microfox_pending_sync') === 'true') {
-          const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-          
+        const hasPendingSync = nativeGetItem(prefix + 'microfox_pending_sync') === 'true' || nativeGetItem('microfox_pending_sync') === 'true';
+        if (hasPendingSync) {
           const pushPromises: Promise<boolean>[] = [];
           
           // Push global data
@@ -359,11 +419,12 @@ const App: React.FC = () => {
             // Clear pending sync flag only if all pushed successfully or no sync configured
             nativeRemoveItem('microfox_pending_sync');
             nativeRemoveItem('microfox_dirty_keys');
+            nativeRemoveItem(prefix + 'microfox_pending_sync');
+            nativeRemoveItem(prefix + 'microfox_dirty_keys');
           }
         }
 
         // Récupérer les données globales et locataires en parallèle
-        const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
         const [globalChanged, tenantChanged] = await Promise.all([
           pullFromSupabase('microfox_', nativeSetItem, nativeGetItem, isDirty),
           pullFromSupabase(prefix, nativeSetItem, nativeGetItem, isDirty)
@@ -775,17 +836,30 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser || currentUser.role === 'administrateur') return;
 
-    // Check if GPS tracking is enabled in config
-    const savedConfig = localStorage.getItem('microfox_mf_config');
-    const config = savedConfig ? JSON.parse(savedConfig) : {};
-    if (config.gpsTrackingEnabled === false) return;
+    let intervalId: any = null;
 
     const trackLocation = () => {
+      // Check if GPS tracking is enabled in config
+      const savedConfig = localStorage.getItem('microfox_mf_config');
+      const config = savedConfig ? JSON.parse(savedConfig) : {};
+      if (config.gpsTrackingEnabled === false) {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+        return;
+      }
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             const { latitude, longitude } = position.coords;
             const timestamp = new Date().toISOString();
+
+            // Check config again to prevent race conditions during async geolocation callback
+            const lastConfigStr = localStorage.getItem('microfox_mf_config');
+            const lastConfig = lastConfigStr ? JSON.parse(lastConfigStr) : {};
+            if (lastConfig.gpsTrackingEnabled === false) return;
 
             // Update user in microfox_users
             const savedUsers = localStorage.getItem('microfox_users');
@@ -836,9 +910,36 @@ const App: React.FC = () => {
       }
     };
 
-    trackLocation();
-    const interval = setInterval(trackLocation, 300000); // Every 5 minutes
-    return () => clearInterval(interval);
+    const runTrackingIfEnabled = () => {
+      const savedConfig = localStorage.getItem('microfox_mf_config');
+      const config = savedConfig ? JSON.parse(savedConfig) : {};
+      if (config.gpsTrackingEnabled !== false) {
+        trackLocation();
+        if (!intervalId) {
+          intervalId = setInterval(trackLocation, 300000); // Every 5 minutes
+        }
+      } else {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }
+    };
+
+    runTrackingIfEnabled();
+
+    const handleStorageUpdate = () => {
+      runTrackingIfEnabled();
+    };
+
+    window.addEventListener('storage', handleStorageUpdate);
+    window.addEventListener('microfox_storage' as any, handleStorageUpdate);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      window.removeEventListener('storage', handleStorageUpdate);
+      window.removeEventListener('microfox_storage' as any, handleStorageUpdate);
+    };
   }, [currentUser]);
 
   const handleSelectSection = (id: string) => {
@@ -880,20 +981,12 @@ const App: React.FC = () => {
       return <DailyTontine />;
     }
 
-    if (activeSection === 'Validation Cotisations Zone') {
-      return <ValidateZoneCotisations />;
-    }
-
     if (activeSection === 'Annulation Cotisation') {
       return <CancelCotisation />;
     }
 
     if (activeSection === 'Demande de retrait tontine') {
       return <TontineWithdrawal />;
-    }
-
-    if (activeSection === 'Validation Cotisation antérieures et versement non effectué') {
-      return <ValidatePreviousCotisations />;
     }
 
     if (activeSection === 'Vérification de retrait tontine') {
@@ -954,10 +1047,6 @@ const App: React.FC = () => {
 
     if (activeSection === 'États Réglementaires') {
       return <RegulatoryReports />;
-    }
-
-    if (activeSection === 'Rapport Adhésions') {
-      return <AdhesionReport />;
     }
 
     if (activeSection === 'Analyse') {

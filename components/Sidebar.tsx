@@ -61,26 +61,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       const savedPerms = localStorage.getItem('microfox_permissions');
       
       const defaults: Record<string, string[]> = {
-        'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Rapport Adhésions', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Validation Cotisations Zone', 'Validation Cotisation antérieures et versement non effectué', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
-        'caissier': ['Accueil', 'Membres', 'Alerte Doublons', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Validation Cotisations Zone', 'Validation Cotisation antérieures et versement non effectué', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Stocks Livrets', 'Notification', 'Guide Pratique'],
+        'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
+        'caissier': ['Accueil', 'Membres', 'Alerte Doublons', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Stocks Livrets', 'Notification', 'Guide Pratique'],
         'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
-        'auditeur': ['Accueil', 'Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification', 'Guide Pratique', 'Validation Cotisation antérieures et versement non effectué'],
-        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Suivi des crédits', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Stocks Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique', 'Validation Cotisation antérieures et versement non effectué'],
-        'gestionnaire de crédit': ['Accueil', 'Membres', 'Rapport Adhésions', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Notification', 'Guide Pratique']
+        'auditeur': ['Accueil', 'Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification', 'Guide Pratique'],
+        'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Suivi des crédits', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Stocks Livrets', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
+        'gestionnaire de crédit': ['Accueil', 'Membres', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Notification', 'Guide Pratique']
       };
 
       if (savedPerms) {
         try {
           const parsed = JSON.parse(savedPerms);
-          const tabName = 'Validation Cotisation antérieures et versement non effectué';
           
-          // Force include the new tab for relevant roles if they have a saved permission list
-          ['directeur', 'caissier', 'agent commercial', 'auditeur'].forEach(role => {
-            if (parsed[role] && !parsed[role].includes(tabName)) {
-              parsed[role] = [...parsed[role], tabName];
-            }
-          });
-
           // S'assurer que le rôle agent commercial a ses accès par défaut si manquants
           const combined = { ...defaults, ...parsed };
           setPermissions(combined);
@@ -216,7 +208,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       title: "Gestion des Membres",
       items: [
         { id: 'Membres', label: 'Membres', icon: <Users size={20} /> },
-        { id: 'Rapport Adhésions', label: 'Rapport Adhésions', icon: <FileText size={20} /> },
         { id: 'Alerte Doublons', label: 'Alerte Doublons', icon: <AlertTriangle size={20} />, badge: 0 },
         { id: 'Réclamations Clients', label: 'Réclamations Clients', icon: <MessageSquare size={20} /> },
         { id: 'Demande de crédit', label: 'Demande de crédit', icon: <FileText size={20} /> },
@@ -229,8 +220,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       title: "Tontine & Collecte",
       items: [
         { id: 'Tontine Journalière', label: 'Tontine Journalière', icon: <Clock size={20} /> },
-        { id: 'Validation Cotisations Zone', label: 'Validation Cotisations Zone', icon: <ClipboardCheck size={20} /> },
-        { id: 'Validation Cotisation antérieures et versement non effectué', label: 'Validation Cotisation antérieures et versement non effectué', icon: <Clock size={20} /> },
         { id: 'Annulation Cotisation', label: 'Annulation Cotisation', icon: <RotateCcw size={20} /> },
         { id: 'Demande de retrait tontine', label: 'Demande de retrait tontine', icon: <RefreshCw size={20} /> },
         { id: 'Vérification de retrait tontine', label: 'Vérification de retrait tontine', icon: <FileCheck size={20} /> },

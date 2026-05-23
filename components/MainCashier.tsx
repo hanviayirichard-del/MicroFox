@@ -127,10 +127,21 @@ const MainCashier: React.FC = () => {
     };
     
     loadData();
+
+    // Trigger immediate pull from Supabase to fetch freshest agent payments
+    window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+
+    const syncInterval = setInterval(() => {
+      window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+    }, 12000);
+
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
-    return () => window.removeEventListener('storage', loadData);
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
+    };
   }, [selectedCaisse]);
 
   const handleAction = (paymentId: string, action: 'Validé' | 'Rejeté') => {
@@ -181,6 +192,85 @@ const MainCashier: React.FC = () => {
               observation: `Versement ${p.type} - ${p.agentName}`
             };
             localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...allTxs]));
+
+            // Automatic validation of client cotisations/conditions of concerned clients
+            try {
+              const savedMembers = localStorage.getItem('microfox_members_data');
+              if (savedMembers) {
+                const members = JSON.parse(savedMembers);
+                const validatedZonesSaved = localStorage.getItem('microfox_validated_zone_cotisations');
+                const validatedZones = validatedZonesSaved ? JSON.parse(validatedZonesSaved) : {};
+                const validationTimestamp = new Date().toISOString();
+                const currentUserIdent = JSON.parse(localStorage.getItem('microfox_current_user') || '{}').identifiant || 'System';
+
+                const pendingByDay: Record<string, { total: number, count: number, zone: string }> = {};
+
+                members.forEach((m: any) => {
+                  const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+                  let history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+                  
+                  let historyChanged = false;
+
+                  history = history.map((tx: any) => {
+                    const isCotisation = (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine';
+                    if (isCotisation && !tx.isDeleted && tx.type !== 'annulation') {
+                      const isCollectedByAgent = String(tx.userId) === String(p.agentId) || 
+                                                 (tx.description && tx.description.toLowerCase().includes(`agent ${p.agentName.toLowerCase()}`)) ||
+                                                 (tx.cashierName === p.agentName);
+                      const isInAgentZone = p.zone && m.zone === p.zone;
+
+                      if (isCollectedByAgent || isInAgentZone) {
+                        const txDate = tx.date ? new Date(tx.date) : null;
+                        if (txDate && !isNaN(txDate.getTime())) {
+                          const txDay = txDate.toISOString().split('T')[0];
+                          const targetZone = m.zone || p.zone || 'N/A';
+                          const validationKey = `${txDay}_${targetZone}`;
+                          const zoneValidation = validatedZones[validationKey];
+                          const isTxValidated = tx.isValidated === true || (zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime());
+
+                          if (!isTxValidated) {
+                            tx.isValidated = true;
+                            historyChanged = true;
+
+                            if (!pendingByDay[validationKey]) {
+                              pendingByDay[validationKey] = { total: 0, count: 0, zone: targetZone };
+                            }
+                            pendingByDay[validationKey].total += tx.amount;
+                            pendingByDay[validationKey].count += 1;
+                          }
+                        }
+                      }
+                    }
+                    return tx;
+                  });
+
+                  if (historyChanged) {
+                    localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(history));
+                  }
+                });
+
+                let zonesValidatedCount = 0;
+                Object.keys(pendingByDay).forEach(key => {
+                  const { total, count } = pendingByDay[key];
+                  const prevTotal = validatedZones[key]?.totalAmount || 0;
+                  const prevCount = validatedZones[key]?.count || 0;
+
+                  validatedZones[key] = {
+                    validatedAt: validationTimestamp,
+                    validatedBy: currentUserIdent,
+                    totalAmount: prevTotal + total,
+                    count: prevCount + count
+                  };
+                  zonesValidatedCount++;
+                });
+
+                if (zonesValidatedCount > 0) {
+                  localStorage.setItem('microfox_validated_zone_cotisations', JSON.stringify(validatedZones));
+                }
+              }
+            } catch (e) {
+              console.error("Error auto-validating cotisations:", e);
+            }
             
             if (gap !== 0) {
               const savedGaps = localStorage.getItem('microfox_all_gaps');

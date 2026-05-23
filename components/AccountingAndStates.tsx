@@ -235,7 +235,8 @@ const AccountingAndStates: React.FC = () => {
       // 5. Tontine Withdrawals (Validated)
       const savedValidatedWithdrawals = localStorage.getItem('microfox_validated_withdrawals');
       if (savedValidatedWithdrawals) {
-        const withdrawals = JSON.parse(savedValidatedWithdrawals).filter((w: any) => !w.isDeleted);
+        const activeMemberIds = new Set(parsed.filter((m: any) => !m.isDeleted).map((m: any) => m.id));
+        const withdrawals = JSON.parse(savedValidatedWithdrawals).filter((w: any) => !w.isDeleted && activeMemberIds.has(w.clientId));
         withdrawals.forEach((w: any) => {
           const wDate = new Date(w.validationDate);
           if (wDate >= start && wDate <= end) {

@@ -5,11 +5,11 @@ const GlobalJournal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    return now.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    return now.toISOString().split('T')[0];
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -28,7 +28,7 @@ const GlobalJournal: React.FC = () => {
       
       const savedUsers = localStorage.getItem('microfox_users');
       const users = savedUsers ? JSON.parse(savedUsers) : [];
-      setAvailableUsers(users);
+      setAvailableUsers(users.filter((u: any) => !u.isDeleted));
       const userCaisseMap = users.reduce((acc: any, u: any) => {
         acc[u.id] = u.caisse;
         return acc;

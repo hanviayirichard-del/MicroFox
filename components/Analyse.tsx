@@ -144,6 +144,7 @@ const Analyse: React.FC = () => {
     });
 
     commissions.forEach(c => {
+      if (c.isDeleted) return;
       const cDate = c.date.split('T')[0];
       if (cDate >= startDate && cDate <= endDate) {
         result.commissionsTontine += Number(c.amount) || 0;
@@ -317,6 +318,7 @@ const Analyse: React.FC = () => {
     });
 
     commissions.forEach(c => {
+      if (c.isDeleted) return;
       const date = new Date(c.date);
       let key = '';
       if (groupingType === 'day') key = c.date.split('T')[0];
