@@ -61,6 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
       const savedPerms = localStorage.getItem('microfox_permissions');
       
       const defaults: Record<string, string[]> = {
+        'administrateur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Analyse', 'Alerte Doublons', 'Réclamations Clients', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Reçu de caisse', 'Comptabilité & États', 'Balance des comptes', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Modifications Epargne & Crédit', 'Conformité (Ratios & LAB)', 'Suivi des Activités', 'Gestion des Utilisateurs', 'Permission', 'Conseils & Formation', 'Configuration', 'Notification', 'Guide Pratique'],
         'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
         'caissier': ['Accueil', 'Membres', 'Alerte Doublons', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Stocks Livrets', 'Notification', 'Guide Pratique'],
         'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
@@ -319,13 +320,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
 
       <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
         {categories
-          .filter(cat => cat.title !== "Support & Système" || (JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role === 'administrateur'))
           .map((category) => {
             const userRole = JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role;
             const filteredItems = category.items.filter(item => {
               // Search filter
               if (searchTerm && !item.label.toLowerCase().includes(searchTerm.toLowerCase())) {
                 return false;
+              }
+
+              // Check permissions first! If the permissions object has this role's configuration,
+              // check if the tab is permitted.
+              if (permissions[userRole]) {
+                return permissions[userRole].includes(item.id);
               }
 
               if (item.id === 'Tableau de Bord') {
@@ -337,10 +343,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeId, onSelect, onClose, onLogout
               if (userRole === 'agent commercial') {
                 const restrictedTabs = ['Analyse', 'Reçu de caisse'];
                 if (restrictedTabs.includes(item.id)) return false;
-              }
-
-              if (permissions[userRole]) {
-                return permissions[userRole].includes(item.id);
               }
 
               // If no permissions stored yet, return false to avoid showing unauthorized tabs

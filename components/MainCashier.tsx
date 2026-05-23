@@ -131,14 +131,9 @@ const MainCashier: React.FC = () => {
     // Trigger immediate pull from Supabase to fetch freshest agent payments
     window.dispatchEvent(new CustomEvent('request_supabase_sync'));
 
-    const syncInterval = setInterval(() => {
-      window.dispatchEvent(new CustomEvent('request_supabase_sync'));
-    }, 12000);
-
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
     return () => {
-      clearInterval(syncInterval);
       window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
     };

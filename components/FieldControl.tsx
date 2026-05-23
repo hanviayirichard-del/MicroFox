@@ -65,7 +65,9 @@ const FieldControl: React.FC = () => {
   }, []);
 
   const filteredClients = clients.filter(c => {
-    const matchesSearch = c.tontineAccounts.length > 0 && (
+    if (c.isDeleted) return false;
+    const activeTontines = c.tontineAccounts.filter(acc => !acc.isDeleted);
+    const matchesSearch = activeTontines.length > 0 && (
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       c.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -587,7 +589,7 @@ const FieldControl: React.FC = () => {
                     <p className="text-xs font-black text-[#121c32] uppercase">{client.name}</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       <span className="text-[9px] font-black bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded uppercase tracking-tighter">CLT: {client.code}</span>
-                      {client.tontineAccounts.map(acc => (
+                      {client.tontineAccounts.filter(acc => !acc.isDeleted).map(acc => (
                         <span key={acc.id} className="text-[9px] font-black bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded uppercase tracking-tighter">TONTINE: {acc.number}</span>
                       ))}
                     </div>
@@ -621,7 +623,7 @@ const FieldControl: React.FC = () => {
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block ml-2">Sélectionner le compte tontine</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedClient.tontineAccounts.map(acc => (
+                      {selectedClient.tontineAccounts.filter(acc => !acc.isDeleted).map(acc => (
                         <button
                           key={acc.id}
                           onClick={() => setSelectedTontine(acc)}

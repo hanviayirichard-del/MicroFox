@@ -63,7 +63,7 @@ const ALL_TABS = [
 ];
 
 const Permissions: React.FC = () => {
-  const [selectedRole, setSelectedRole] = useState(ROLES[1]); // Default to second role as admin has all
+  const [selectedRole, setSelectedRole] = useState(ROLES[0]); // Default to administrateur
   const [permissions, setPermissions] = useState<Record<string, string[]>>({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +71,7 @@ const Permissions: React.FC = () => {
   useEffect(() => {
     const saved = localStorage.getItem('microfox_permissions');
     const defaults: Record<string, string[]> = {
+      'administrateur': [...ALL_TABS],
       'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
       'caissier': ['Accueil', 'Membres', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification', 'Guide Pratique'],
       'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
@@ -137,7 +138,7 @@ const Permissions: React.FC = () => {
         <div className="space-y-4">
           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Sélectionner un Rôle</label>
           <div className="flex flex-wrap gap-2">
-            {ROLES.filter(r => r !== 'administrateur').map(role => (
+            {ROLES.map(role => (
               <button
                 key={role}
                 onClick={() => setSelectedRole(role)}

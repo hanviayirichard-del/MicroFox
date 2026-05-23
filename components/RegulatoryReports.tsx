@@ -16,11 +16,16 @@ import * as XLSX from 'xlsx';
 const RegulatoryReports: React.FC = () => {
   const [startDate, setStartDate] = useState<string>(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
   });
   const [endDate, setEndDate] = useState<string>(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
   const [members, setMembers] = useState<any[]>([]);
   
@@ -73,9 +78,12 @@ const RegulatoryReports: React.FC = () => {
       const allMembers = JSON.parse(saved);
       setMembers(allMembers);
 
-      const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const end = endDate ? new Date(endDate) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-      end.setHours(23, 59, 59, 999);
+      const now = new Date();
+      const year = now.getFullYear();
+      const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+      const lastDayStr = String(new Date(year, now.getMonth() + 1, 0).getDate()).padStart(2, '0');
+      const start = startDate ? new Date(startDate + 'T00:00:00.000Z') : new Date(`${year}-${monthStr}-01T00:00:00.000Z`);
+      const end = endDate ? new Date(endDate + 'T23:59:59.999Z') : new Date(`${year}-${monthStr}-${lastDayStr}T23:59:59.999Z`);
 
       const data = {
         produits: { carnetsTontine: 0, carnetsMembre: 0, commissionsTontine: 0, fraisDossier: 0, interetsCredit: 0, droitAdhesion: 0, partSociale: 0, total: 0 },

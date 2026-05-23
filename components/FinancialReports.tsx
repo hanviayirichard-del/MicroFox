@@ -5,11 +5,11 @@ import { Search, Calendar, Download, Printer, FileText, TrendingUp, Wallet, Cred
 const FinancialReports: React.FC = () => {
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    return now.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    return now.toISOString().split('T')[0];
   });
 
   const [currentUser, setCurrentUser] = useState<any>(null);

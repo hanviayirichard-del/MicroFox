@@ -7,11 +7,16 @@ const GapsReport: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
   });
   const [endDate, setEndDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -34,10 +39,12 @@ const GapsReport: React.FC = () => {
     const savedUsers = localStorage.getItem('microfox_users');
     let usersList = savedUsers ? JSON.parse(savedUsers) : [];
     
+    // Filter out deleted users for the selection list
+    let dropdownUsers = usersList.filter((u: any) => !u.isDeleted);
     if (currentUser?.role === 'agent commercial') {
-      usersList = usersList.filter((u: any) => u.id === currentUser.id);
+      dropdownUsers = dropdownUsers.filter((u: any) => u.id === currentUser.id);
     }
-    setAllUsers(usersList);
+    setAllUsers(dropdownUsers);
 
     const selectedUser = usersList.find((u: any) => u.id === selectedUserId);
     const selectedUserName = selectedUser?.identifiant;
@@ -269,8 +276,9 @@ const GapsReport: React.FC = () => {
           </thead>
           <tbody>
             ${gaps.map(g => {
-              const agentName = allUsers.find(u => u.id === g.userId)?.identifiant || g.sourceName;
-              const validatorName = allUsers.find(u => u.id === g.validatorId)?.identifiant || '-';
+              const fullUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+              const agentName = fullUsers.find((u: any) => u.id === g.userId)?.identifiant || g.sourceName;
+              const validatorName = fullUsers.find((u: any) => u.id === g.validatorId)?.identifiant || '-';
               
               return `
               <tr>
@@ -444,7 +452,19 @@ const GapsReport: React.FC = () => {
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent focus:border-red-500 rounded-2xl outline-none text-sm font-bold text-[#121c32] shadow-sm appearance-none cursor-pointer transition-all"
               >
                 <option value="all">Toutes les caisses</option>
-                {Array.from(new Set([...allUsers.filter((u: any) => u.role === 'caissier' && u.caisse).map((u: any) => u.caisse), 'CAISSE 1', 'CAISSE 2'])).map(c => (
+                {Array.from(new Set([
+                  'CAISSE PRINCIPALE',
+                  'CAISSE 1',
+                  'CAISSE 2',
+                  'CAISSE 3',
+                  'CAISSE 4',
+                  ...JSON.parse(localStorage.getItem('microfox_users') || '[]')
+                    .filter((u: any) => u.role === 'caissier' && u.caisse)
+                    .map((u: any) => u.caisse),
+                  ...JSON.parse(localStorage.getItem('microfox_all_gaps') || '[]')
+                    .map((g: any) => g.caisse)
+                    .filter(Boolean)
+                ])).map(c => (
                   <option key={c as string} value={c as string}>{c as string}</option>
                 ))}
               </select>
