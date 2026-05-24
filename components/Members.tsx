@@ -2461,6 +2461,56 @@ const Members: React.FC = () => {
   };
   const [isEditingCredit, setIsEditingCredit] = useState<boolean>(false);
   const [creditFormData, setCreditFormData] = useState<any>({});
+  const [showClotureConfirm, setShowClotureConfirm] = useState<boolean>(false);
+
+  const handleClotureCycle = () => {
+    if (!selectedClient || !activeTontine) return;
+
+    const newTransaction: Transaction = {
+      id: `clot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      type: 'cloture_cycle',
+      account: 'tontine',
+      amount: 0,
+      date: new Date().toISOString(),
+      description: `Clôture anticipée manuelle du cycle ${activeTontineStats?.cycles || ''}`,
+      userId: currentUser?.id,
+      cashierName: currentUser?.identifiant || 'Système',
+      caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A')),
+      balance: activeTontine.balance,
+      balanceBefore: activeTontine.balance,
+      isValidated: true,
+      tontineAccountId: activeTontine.id,
+      tontineAccountNumber: activeTontine.number
+    };
+
+    const newHistory = [newTransaction, ...selectedClient.history];
+    localStorage.setItem(`microfox_history_${selectedClient.id}`, JSON.stringify(newHistory));
+
+    const updated = clients.map(c => {
+      if (c.id === selectedClient.id) {
+        return {
+          ...c,
+          history: newHistory,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return c;
+    });
+
+    setClients(updated);
+    localStorage.setItem('microfox_members_data', JSON.stringify(updated));
+    localStorage.setItem('microfox_pending_sync', 'true');
+    recordAuditLog('MODIFICATION', 'TONTINE', `Clôture manuelle du cycle tontine du client ${selectedClient.name} (${selectedClient.code})`);
+    
+    // Update selectedClient state as well
+    const updatedClient = updated.find(c => c.id === selectedClient.id);
+    if (updatedClient) {
+      // Direct set is safest
+      selectedClient.history = newHistory;
+    }
+    
+    setShowClotureConfirm(false);
+  };
   
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [capturedSignature, setCapturedSignature] = useState<string | null>(null);
@@ -2546,6 +2596,7 @@ const Members: React.FC = () => {
     
     const accountHistory = (history || [])
       .filter(h => (
+        h.type === 'cloture_cycle' ||
         (h.account === 'tontine' && (
           h.tontineAccountId === accountId || 
           h.tontineAccountNumber === accountNumber ||
@@ -2713,6 +2764,40 @@ const Members: React.FC = () => {
           encounteredWithdrawalIds.add(w.id);
         }
       });
+
+      if (tx.type === 'cloture_cycle') {
+        if (currentCycleFirstDepositDate !== null) {
+          const comm = currentCycleAmount > 0 ? dailyMiseValue : 0;
+          const netCycleAmount = Math.max(0, currentCycleAmount - comm);
+          let isRetire = false;
+          let retraitDate = null;
+          let mRetire = 0;
+
+          cycleDetails.push({
+            index: cycleIdx,
+            amount: currentCycleAmount,
+            disponible: Math.max(0, netCycleAmount - mRetire),
+            commission: comm,
+            decaissable: Math.max(0, netCycleAmount - mRetire),
+            cases: currentCycleCases,
+            period: `${fmt(currentCycleFirstDepositDate!)} au ${fmt(txDate)} (Clôturé)`,
+            isRetire: isRetire,
+            isManualClosed: true,
+            dateRetrait: null,
+            retraitDate: null,
+            montantRetire: 0,
+            dates: [...currentCycleDates]
+          });
+          totalComm += comm;
+          cycleIdx++;
+          currentCycleCases = 0;
+          currentCycleAmount = 0;
+          currentCycleDates = [];
+          currentCycleFullDates = [];
+          currentCycleFirstDepositDate = null;
+        }
+        return;
+      }
       
       let remainingAmount = Number(tx.amount);
 
@@ -4759,10 +4844,50 @@ const Members: React.FC = () => {
                       <div id="grille-cases" className="bg-[#121c32] rounded-[2rem] p-6 border border-white/5 shadow-sm relative overflow-hidden">
                         <div className="flex items-center justify-between mb-6">
                           <h4 className="text-sm font-black text-white uppercase tracking-tight">Cycle Temporel en cours</h4>
-                          <span className="text-emerald-400 bg-emerald-500/10 text-[10px] font-black px-2 py-1 rounded-md uppercase">
-                            {`Cycle ${activeTontineStats.cycles} • Case ${activeTontineStats.currentCycleCases}/31`}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-400 bg-emerald-500/10 text-[10px] font-black px-2 py-1 rounded-md uppercase">
+                              {`Cycle ${activeTontineStats.cycles} • Case ${activeTontineStats.currentCycleCases}/31`}
+                            </span>
+                            <button
+                              onClick={() => setShowClotureConfirm(true)}
+                              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black px-2.5 py-1 rounded-md border border-red-500/20 uppercase transition-all shadow-sm active:scale-95 cursor-pointer"
+                            >
+                              Clôturer le cycle
+                            </button>
+                          </div>
                         </div>
+
+                        {showClotureConfirm && (
+                          <div className="absolute inset-0 bg-[#0a1226]/95 flex items-center justify-center backdrop-blur-md z-30">
+                            <div className="flex flex-col items-center gap-4 bg-[#121c32] px-8 py-6 rounded-[2.5rem] shadow-2xl border border-red-500/30 max-w-[90%] text-center animate-in zoom-in duration-300">
+                              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-1">
+                                <ShieldAlert size={28} />
+                              </div>
+                              <div>
+                                <h5 className="text-sm font-black text-white uppercase tracking-tight">Clôturer le cycle ?</h5>
+                                <p className="text-[11px] font-bold text-gray-400 mt-2">
+                                  Voulez-vous vraiment clôturer manuellement le cycle {activeTontineStats.cycles} de ce client ? Les prochaines cotisations débuteront un nouveau cycle.
+                                </p>
+                              </div>
+                              <div className="flex gap-3 w-full">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowClotureConfirm(false)}
+                                  className="flex-1 py-2.5 bg-white/5 border border-white/5 text-gray-400 px-4 rounded-xl text-xs font-black uppercase hover:bg-white/10 hover:text-white transition-all whitespace-nowrap cursor-pointer"
+                                >
+                                  Annuler
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleClotureCycle}
+                                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white px-4 rounded-xl text-xs font-black uppercase transition-all shadow-lg active:scale-95 whitespace-nowrap cursor-pointer"
+                                >
+                                  Clôturer
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         <div className="grid grid-cols-7 sm:grid-cols-10 gap-2 sm:gap-3">
                           {Array.from({ length: 31 }).map((_, i) => {
                             const caseNum = i + 1;

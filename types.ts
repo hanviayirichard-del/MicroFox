@@ -56,7 +56,7 @@ export interface TontineAccount {
 
 export interface Transaction {
   id: string;
-  type: 'depot' | 'retrait' | 'cotisation' | 'remboursement' | 'transfert' | 'deblocage';
+  type: 'depot' | 'retrait' | 'cotisation' | 'remboursement' | 'transfert' | 'deblocage' | 'cloture_cycle';
   account: 'epargne' | 'tontine' | 'credit' | 'garantie' | 'partSociale' | 'frais';
   tontineAccountId?: string;
   tontineAccountIds?: string[];

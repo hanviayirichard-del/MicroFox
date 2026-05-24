@@ -20,14 +20,14 @@ const TontineWithdrawal: React.FC = () => {
     if (isNaN(dailyMise) || dailyMise <= 0) dailyMise = 500;
     
     const accountHistory = (history || [])
-      .filter(h => ((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (
+      .filter(h => h.type === 'cloture_cycle' || (((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (
         h.tontineAccountId === accountId || 
         h.tontineAccountNumber === accountNumber ||
         (!h.tontineAccountId && !h.tontineAccountNumber && (
           (isFirstAccount && (!h.description?.includes('Compte:') || (accountNumber && h.description?.includes(accountNumber)))) ||
           (accountNumber && h.description?.includes(accountNumber))
         ))
-      ) && h.description?.toLowerCase().includes('livret') !== true)
+      ) && h.description?.toLowerCase().includes('livret') !== true))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     // Merge history withdrawals with pending withdrawals to correctly split cycles
@@ -173,6 +173,41 @@ const TontineWithdrawal: React.FC = () => {
           lastWithdrawalDate = new Date(w.date).toLocaleDateString('fr-FR');
         }
       });
+
+      if (tx.type === 'cloture_cycle') {
+        if (currentCycleFirstDepositDate !== null) {
+          const comm = currentCycleAmount > 0 ? dailyMiseValue : 0;
+          const netCycleAmount = Math.max(0, currentCycleAmount - comm);
+          let isRetire = false;
+          let retraitDate = null;
+          let mRetire = 0;
+
+          cycleDetails.push({
+            index: cycleIdx,
+            amount: currentCycleAmount,
+            disponible: Math.max(0, netCycleAmount - mRetire),
+            commission: comm,
+            decaissable: Math.max(0, netCycleAmount - mRetire),
+            cases: currentCycleCases,
+            period: `${fmt(currentCycleFirstDepositDate!)} au ${fmt(txDate)} (Clôturé)`,
+            isRetire: isRetire,
+            isManualClosed: true,
+            dateRetrait: null,
+            retraitDate: null,
+            montantRetire: 0,
+            dates: [...currentCycleDates]
+          });
+          totalComm += comm;
+          cycleIdx++;
+          currentCycleCases = 0;
+          currentCycleAmount = 0;
+          currentCycleDates = [];
+          currentCycleFullDates = [];
+          currentCycleFirstDepositDate = null;
+        }
+        return;
+      }
+      
       let remainingAmount = Number(tx.amount);
 
       while (remainingAmount > 0 && dailyMiseValue > 0 && totalSafety < 20000) {

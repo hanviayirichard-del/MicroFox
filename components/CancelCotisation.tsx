@@ -57,6 +57,7 @@ const CancelCotisation: React.FC = () => {
     const validatedZones = savedValidatedZones ? JSON.parse(savedValidatedZones) : {};
     
     allMembers.forEach((m: any) => {
+      if (m.isDeleted) return;
       const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
       const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
       
