@@ -3263,6 +3263,11 @@ const Members: React.FC = () => {
   }, []);
 
   const handleRegister = (newClient: ClientAccount) => {
+    // Add updatedAt if not present before stringifying and saving
+    if (!newClient.updatedAt) {
+      newClient.updatedAt = new Date().toISOString();
+    }
+    
     const saved = localStorage.getItem('microfox_members_data');
     const allMembers = saved ? JSON.parse(saved) : clients;
     const updatedClients = [newClient, ...allMembers];
@@ -3270,11 +3275,6 @@ const Members: React.FC = () => {
     localStorage.setItem('microfox_members_data', JSON.stringify(updatedClients));
     localStorage.setItem('microfox_pending_sync', 'true');
     recordAuditLog('CREATION', 'MEMBRES', `Création du nouveau membre: ${newClient.name} (Code: ${newClient.code})`);
-    
-    // Add updatedAt if not present
-    if (!newClient.updatedAt) {
-      newClient.updatedAt = new Date().toISOString();
-    }
     
     setSelectedClientId(newClient.id);
     setIsSidebarCollapsed(true);
