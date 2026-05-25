@@ -356,7 +356,7 @@ const App: React.FC = () => {
   });
   const mfCodeRef = React.useRef<string | null>(localStorage.getItem('microfox_current_mf'));
 
-  const pullData = async (mfCode: string) => {
+  const pullData = async (mfCode: string, isSilent: boolean = false) => {
     if (isOfflineMode) {
       console.log('Skipping sync due to offline mode');
       return;
@@ -364,8 +364,12 @@ const App: React.FC = () => {
     if (isSyncingRef.current) return;
     
     isSyncingRef.current = true;
-    setIsSyncing(true);
-    setIsBackgroundSyncing(false);
+    if (!isSilent) {
+      setIsSyncing(true);
+      setIsBackgroundSyncing(false);
+    } else {
+      setIsBackgroundSyncing(true);
+    }
     
     const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
     const isDirty = (key: string) => {
@@ -751,7 +755,7 @@ const App: React.FC = () => {
 
     const handlePullRequest = () => {
       const mfCode = localStorage.getItem('microfox_current_mf');
-      if (mfCode) pullData(mfCode);
+      if (mfCode) pullData(mfCode, true);
     };
 
     window.addEventListener('request_supabase_sync', handlePullRequest);

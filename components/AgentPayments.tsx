@@ -35,6 +35,13 @@ const AgentPayments: React.FC = () => {
   const [authCode, setAuthCode] = useState('');
   const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+  useEffect(() => {
+    setBilletage({
+      '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '250': 0, '200': 0, '100': 0, '50': 0, '25': 0, '10': 0, '5': 0, 'monnaie': 0
+    });
+  }, [selectedDate]);
 
   const physicalBalance = (Number(billetage['10000']) * 10000) + 
                          (Number(billetage['5000']) * 5000) + 
@@ -78,7 +85,9 @@ const AgentPayments: React.FC = () => {
       let nbLivrets = 0;
       let todayTotal = 0;
       let todayTxs: any[] = [];
-      const today = new Date().toDateString();
+      const targetDate = new Date(selectedDate);
+      const today = targetDate.toDateString();
+      const targetDateYMD = selectedDate;
 
       if (savedMembers) {
         const allMembers = JSON.parse(savedMembers);
@@ -98,7 +107,7 @@ const AgentPayments: React.FC = () => {
               const isValidType = tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'remboursement' || tx.type === 'complement';
               
               if (isValidType) {
-                const isTxToday = new Date(tx.date).toDateString() === today || (tx.date && tx.date.split('T')[0] === new Date().toISOString().split('T')[0]);
+                const isTxToday = new Date(tx.date).toDateString() === today || (tx.date && tx.date.split('T')[0] === targetDateYMD);
                 if (isTxToday) {
                   todayTotal += amount;
                   todayTxs.push({ ...tx, clientName: m.name, clientCode: m.code });
@@ -124,8 +133,8 @@ const AgentPayments: React.FC = () => {
       if (savedPayments) {
         const allPayments = JSON.parse(savedPayments);
         allPayments.forEach((p: any) => {
-          // Soustraire les versements de la date d'aujourd'hui
-          const isPaymentToday = new Date(p.date).toDateString() === today || (p.date && p.date.split('T')[0] === new Date().toISOString().split('T')[0]);
+          // Soustraire les versements de la date cible
+          const isPaymentToday = new Date(p.date).toDateString() === today || (p.date && p.date.split('T')[0] === targetDateYMD);
           if (String(p.agentId) === String(user.id) && isPaymentToday && (p.status === 'Validé' || p.status === 'En attente')) {
             paidCotisations += Number(p.amountCotisations || 0);
             paidLivrets += Number(p.amountLivrets || 0);
@@ -204,7 +213,7 @@ const AgentPayments: React.FC = () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('microfox_storage' as any, handleStorage);
     };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedDate]);
 
   const handleVersement = () => {
     const totalAmount = physicalBalance; // Use physical balance as the amount to deposit
@@ -214,16 +223,20 @@ const AgentPayments: React.FC = () => {
       return;
     }
 
+    const targetDate = new Date(selectedDate);
+    const targetDateStr = targetDate.toDateString();
+    const targetDateYMD = selectedDate;
+
     // Prevent duplicate payments (same amount, same agent, pending, same day)
     const isDuplicate = paymentsHistory.some(p => 
       p.agentId === currentUser?.id && 
       p.totalAmount === totalAmount && 
       p.status === 'En attente' &&
-      new Date(p.date).toDateString() === new Date().toDateString()
+      (new Date(p.date).toDateString() === targetDateStr || (p.date && p.date.split('T')[0] === targetDateYMD))
     );
 
     if (isDuplicate) {
-      setErrorMessage("Un versement identique est déjà en attente pour aujourd'hui.");
+      setErrorMessage(`Un versement identique est déjà en attente pour cette date (${new Date(selectedDate).toLocaleDateString()}).`);
       setTimeout(() => setErrorMessage(null), 4000);
       return;
     }
@@ -247,7 +260,16 @@ const AgentPayments: React.FC = () => {
         physicalBalance: physicalBalance,
         gap: gap,
         billetage: billetage,
-        date: new Date().toISOString(),
+        date: (() => {
+          const todayYMD = new Date().toISOString().split('T')[0];
+          if (selectedDate === todayYMD) {
+            return new Date().toISOString();
+          } else {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
+            return `${selectedDate}T${timeStr}.${now.getMilliseconds().toString().padStart(3, '0')}Z`;
+          }
+        })(),
         status: 'En attente',
         caisse: selectedCaisse,
         authorizedBy: gap < 0 ? 'Directeur/Admin (Code: ' + authCode + ')' : null
@@ -348,7 +370,7 @@ const AgentPayments: React.FC = () => {
                   <TrendingUp size={16} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Collecté ce Jour</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Collecté le {new Date(selectedDate).toLocaleDateString()}</p>
                   <p className="text-sm font-black text-indigo-600">{todayCollected.toLocaleString()} FCFA</p>
                 </div>
               </div>
@@ -360,6 +382,16 @@ const AgentPayments: React.FC = () => {
           </div>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Choisir la Date de collecte</label>
+              <input 
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none text-sm font-black text-[#121c32] focus:border-emerald-500 transition-all uppercase tracking-tight"
+              />
+            </div>
+
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Choisir la Caisse de versement</label>
               <select 
@@ -510,7 +542,7 @@ const AgentPayments: React.FC = () => {
           )}
           {(totalCotisations + totalLivrets === 0) && (
             <p className="mt-2 text-[10px] font-black text-gray-400 text-center uppercase tracking-tight">
-              Validation impossible : aucun montant à verser aujourd'hui.
+              Validation impossible : aucun montant à verser pour cette date.
             </p>
           )}
 
@@ -519,7 +551,7 @@ const AgentPayments: React.FC = () => {
             <div className="mt-8 pt-8 border-t border-gray-100 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Détail des Collectes du jour</h3>
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Détail des Collectes du {new Date(selectedDate).toLocaleDateString()}</h3>
                   <p className="text-[9px] font-bold text-indigo-600 uppercase">Total: {todayCollected.toLocaleString()} F</p>
                 </div>
                 <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{todayTransactions.length}</span>
