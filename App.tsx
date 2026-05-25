@@ -732,9 +732,10 @@ const App: React.FC = () => {
         };
 
         import('./utils/supabaseSync').then(async (m) => {
-          const globalChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty);
+          const globalUsersChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty);
+          const globalPermsChanged = await m.pullFromSupabase('microfox_permissions', nativeSetItem, nativeGetItem, isDirty);
           const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem, isDirty);
-          if (globalChanged || tenantChanged) {
+          if (globalUsersChanged || globalPermsChanged || tenantChanged) {
             setSyncVersion(v => v + 1);
             dispatchStorageEvent();
           }
@@ -768,6 +769,7 @@ const App: React.FC = () => {
       // Pull only global data if not logged in (background)
       import('./utils/supabaseSync').then(m => {
         m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem);
+        m.pullFromSupabase('microfox_permissions', nativeSetItem, nativeGetItem);
       }).catch(err => console.error('Failed to load sync module:', err));
     }
 
