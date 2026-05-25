@@ -27,6 +27,10 @@ const CancelCotisation: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mfConfig] = useState(() => {
+    const saved = localStorage.getItem('microfox_mf_config');
+    return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
+  });
 
   useEffect(() => {
     const user = localStorage.getItem('microfox_current_user');
@@ -198,29 +202,225 @@ const CancelCotisation: React.FC = () => {
 
   const totalFilteredAmount = filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
+  const generateReportHTML = (isForPrinting: boolean = false) => {
+    const listHtml = filteredTransactions.map((tx, index) => {
+      const formattedDate = new Date(tx.date).toLocaleDateString('fr-FR');
+      const formattedTime = new Date(tx.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      return `
+        <tr>
+          <td style="text-align: center; font-weight: bold; padding: 3px 5px; border: 1px solid #cbd5e1;">${index + 1}</td>
+          <td style="padding: 3px 5px; border: 1px solid #cbd5e1;">${formattedDate} ${formattedTime}</td>
+          <td style="padding: 3px 5px; border: 1px solid #cbd5e1;">
+            <strong style="text-transform: uppercase;">${tx.clientName}</strong><br/>
+            <span style="color: #64748b; font-size: 7.5px;">Code: ${tx.clientCode} ${tx.tontineAccountNumber ? `| Compte: ${tx.tontineAccountNumber}` : ''}</span>
+          </td>
+          <td style="padding: 3px 5px; border: 1px solid #cbd5e1; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tx.description || 'N/A'}</td>
+          <td style="padding: 3px 5px; border: 1px solid #cbd5e1;">${tx.recordedBy && tx.recordedBy.toLowerCase() === 'sena' ? 'SENA KOFFI' : (tx.recordedBy || 'N/A')}</td>
+          <td style="text-align: center; padding: 3px 5px; border: 1px solid #cbd5e1;">
+            <span style="display: inline-block; padding: 1px 4px; border-radius: 2px; font-size: 7.5px; font-weight: bold; text-transform: uppercase; ${
+              tx.isValidated ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'
+            }">
+              ${tx.isValidated ? 'Versé' : 'En attente'}
+            </span>
+          </td>
+          <td style="text-align: right; font-weight: bold; padding: 3px 5px; border: 1px solid #cbd5e1;">${tx.amount.toLocaleString()} F</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="utf-8">
+        <title>Rapport d'Annulation de Cotisations</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 6mm 6mm 8mm 6mm;
+          }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+            line-height: 1.15;
+            font-size: 9px;
+            background-color: #ffffff;
+          }
+          .header {
+            border-bottom: 2px solid #111827;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+          }
+          .header-left h1 {
+            font-size: 15px;
+            margin: 0 0 1px 0;
+            text-transform: uppercase;
+            font-weight: 800;
+          }
+          .header-left p {
+            margin: 0;
+            font-size: 8.5px;
+            color: #4b5563;
+          }
+          .header-right {
+            text-align: right;
+          }
+          .header-right h2 {
+            font-size: 11px;
+            margin: 0 0 3px 0;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #b91c1c;
+          }
+          .header-right p {
+            margin: 0;
+            font-size: 8px;
+            color: #374151;
+          }
+          .summary-banner {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 5px 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8.5px;
+          }
+          .summary-item strong {
+            font-size: 9.5px;
+            color: #111827;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8px;
+          }
+          th {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            color: #334155;
+            text-transform: uppercase;
+            font-size: 7.5px;
+            border: 1px solid #cbd5e1;
+            padding: 3px 5px;
+            text-align: left;
+          }
+          tr:nth-child(even) {
+            background-color: #f8fafc;
+          }
+          .signatures {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            page-break-inside: avoid;
+          }
+          .signature-box {
+            width: 180px;
+            border-top: 1px dashed #64748b;
+            margin-top: 25px;
+            text-align: center;
+            font-size: 7.5px;
+            padding-top: 2px;
+            color: #475569;
+          }
+          .footer {
+            margin-top: 15px;
+            font-size: 7.5px;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="header-left">
+            <h1>${mfConfig.nom || 'MicroFox'}</h1>
+            <p>${mfConfig.adresse || ''} ${mfConfig.telephone ? `| Tél: ${mfConfig.telephone}` : ''}</p>
+          </div>
+          <div class="header-right">
+            <h2>Annulation de Cotisations</h2>
+            <p>Période du <strong>${new Date(startDate).toLocaleDateString('fr-FR')}</strong> au <strong>${new Date(endDate).toLocaleDateString('fr-FR')}</strong></p>
+          </div>
+        </div>
+
+        <div class="summary-banner">
+          <div class="summary-item">Généré le: <strong>${new Date().toLocaleString('fr-FR')}</strong></div>
+          <div class="summary-item">Nombre de transactions: <strong>${filteredTransactions.length}</strong></div>
+          <div class="summary-item">Total des cotisations: <strong style="color: #b91c1c; font-size: 10px;">${totalFilteredAmount.toLocaleString()} FCFA</strong></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 3%; text-align: center;">N°</th>
+              <th style="width: 14%;">Date & Heure</th>
+              <th style="width: 25%;">Client</th>
+              <th style="width: 28%;">Description / Motif</th>
+              <th style="width: 15%;">Enregistré par</th>
+              <th style="width: 7%; text-align: center;">Statut</th>
+              <th style="width: 8%; text-align: right;">Montant</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredTransactions.length > 0 ? listHtml : '<tr><td colspan="7" style="text-align: center; padding: 15px; color: #64748b; font-style: italic;">Aucune cotisation trouvée pour cette période.</td></tr>'}
+          </tbody>
+        </table>
+
+        ${filteredTransactions.length > 0 ? `
+        <div class="signatures">
+          <div>
+            <p><strong>Caisse de Saisie / Agent:</strong></p>
+            <div class="signature-box">Nom et Signature</div>
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Agent commercial:</strong></p>
+            <div class="signature-box" style="margin-left: auto;">Nom, Date et Signature</div>
+          </div>
+        </div>
+        ` : ''}
+
+        <div class="footer">
+          <span>Système de Gestion MicroFox Premium</span>
+          <span>© MicroFox</span>
+        </div>
+        ${isForPrinting ? `
+        <script>
+          window.onload = () => {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          };
+        </script>
+        ` : ''}
+      </body>
+      </html>
+    `;
+  };
+
   const handlePrint = () => {
-    window.print();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const htmlContent = generateReportHTML(true);
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handleExport = () => {
     if (filteredTransactions.length === 0) return;
-    
-    const headers = ["Date", "Client", "Code", "Description", "Montant", "Statut"];
-    const rows = filteredTransactions.map(tx => [
-      new Date(tx.date).toLocaleDateString(),
-      tx.clientName,
-      tx.clientCode,
-      tx.description.replace(/,/g, ' '),
-      tx.amount.toString(),
-      tx.isValidated ? "Versé" : "En attente"
-    ]);
-    
-    const csvContent = "\ufeff" + [headers, ...rows].map(e => e.join(";")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const htmlContent = generateReportHTML(false);
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `annulations_cotisations_${startDate}_au_${endDate}.csv`);
+    link.setAttribute("download", `annulations_cotisations_${startDate}_au_${endDate}.html`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
