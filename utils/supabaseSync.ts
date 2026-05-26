@@ -196,11 +196,12 @@ export const pullFromSupabase = async (
     let from = 0;
     const batchSize = 1000;
     let hasMore = true;
+    let safetyIterations = 0;
 
     // Use incremental sync to protect the database Disk I/O budget
     const lastPullTime = localStorage.getItem(`microfox_last_pulled_${prefix}`);
 
-    while (hasMore) {
+    while (hasMore && safetyIterations++ < 100) {
       let query = supabase
         .from('storage')
         .select('key, value, updated_at')

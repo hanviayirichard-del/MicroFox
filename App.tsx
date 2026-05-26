@@ -102,6 +102,17 @@ const nativeSetItem = (key: string, value: string) => {
 };
 const nativeRemoveItem = (key: string) => Storage.prototype.removeItem.call(localStorage, key);
 
+// Caching structure to avoid costly synchronous O(N^2) parsing during page navigation/renders
+let cachedMembersKey: string | null = null;
+let cachedMembersValue: string | null = null;
+let cachedRehydratedValue: string | null = null;
+
+const clearMembersCache = () => {
+  cachedMembersKey = null;
+  cachedMembersValue = null;
+  cachedRehydratedValue = null;
+};
+
 // Variable globale pour stocker le code MF courant afin que les surcharges y aient accès immédiatement
 let globalMfCode = nativeGetItem('microfox_current_mf');
 
@@ -123,6 +134,9 @@ try {
 
     // Optimization: Rehydrate history for members_data if it was stripped
     if (key === 'microfox_members_data' && value) {
+      if (cachedMembersKey === fullKey && cachedMembersValue === value && cachedRehydratedValue !== null) {
+        return cachedRehydratedValue;
+      }
       try {
         const members = JSON.parse(value);
         if (Array.isArray(members)) {
@@ -142,7 +156,11 @@ try {
             }
             return { ...m, history: m.history || [] };
           });
-          return JSON.stringify(rehydrated);
+          const resultString = JSON.stringify(rehydrated);
+          cachedMembersKey = fullKey;
+          cachedMembersValue = value;
+          cachedRehydratedValue = resultString;
+          return resultString;
         }
       } catch (e) {}
     }
@@ -151,6 +169,9 @@ try {
   };
 
   (localStorage as any).setItem = (key: string, value: string) => {
+    if (key === 'microfox_members_data' || key.endsWith('microfox_members_data') || key.includes('microfox_history_')) {
+      clearMembersCache();
+    }
     if (key === 'microfox_current_mf') {
       globalMfCode = value;
     }
@@ -270,6 +291,9 @@ try {
   };
 
   (localStorage as any).removeItem = (key: string) => {
+    if (key === 'microfox_members_data' || key.endsWith('microfox_members_data') || key.includes('microfox_history_')) {
+      clearMembersCache();
+    }
     const mfCode = nativeGetItem('microfox_current_mf');
     const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
 
