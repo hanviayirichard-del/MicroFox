@@ -55,6 +55,9 @@ import { dispatchStorageEvent } from './utils/events';
 // Capture des méthodes de stockage natives au chargement du module
 const nativeGetItem = (key: string) => Storage.prototype.getItem.call(localStorage, key);
 const nativeSetItem = (key: string, value: string) => {
+  if (key === 'microfox_members_data' || key.endsWith('microfox_members_data') || key.includes('microfox_history_')) {
+    clearMembersCache();
+  }
   let finalValue = value;
   // Optimization: Strip redundant history from members_data as it's stored in microfox_history_${id}
   if (key.endsWith('microfox_members_data')) {
@@ -100,7 +103,10 @@ const nativeSetItem = (key: string, value: string) => {
     }
   }
 };
-const nativeRemoveItem = (key: string) => Storage.prototype.removeItem.call(localStorage, key);
+const nativeRemoveItem = (key: string) => {
+  clearMembersCache();
+  Storage.prototype.removeItem.call(localStorage, key);
+};
 
 // Caching structure to avoid costly synchronous O(N^2) parsing during page navigation/renders
 let cachedMembersKey: string | null = null;
@@ -134,7 +140,7 @@ try {
 
     // Optimization: Rehydrate history for members_data if it was stripped
     if (key === 'microfox_members_data' && value) {
-      if (cachedMembersKey === fullKey && cachedMembersValue === value && cachedRehydratedValue !== null) {
+      if (cachedMembersKey === fullKey && cachedRehydratedValue !== null) {
         return cachedRehydratedValue;
       }
       try {
@@ -845,6 +851,9 @@ const App: React.FC = () => {
     };
 
     const handleStorageChange = (e: StorageEvent) => {
+      if (!e.key || e.key === 'microfox_members_data' || e.key.endsWith('microfox_members_data') || e.key.includes('microfox_history_')) {
+        clearMembersCache();
+      }
       if (e.key === 'microfox_offline_mode') {
         setIsOfflineMode(e.newValue === 'true');
       }
