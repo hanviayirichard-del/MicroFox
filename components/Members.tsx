@@ -2152,6 +2152,8 @@ const OpenEpargneModal: React.FC<{
   );
 };
 
+const globalTontineStatsCache = new Map<string, any>();
+
 const Members: React.FC = () => {
   const [clients, setClients] = useState<ClientAccount[]>(() => {
     const saved = localStorage.getItem('microfox_members_data');
@@ -2594,6 +2596,30 @@ const Members: React.FC = () => {
   });
 
   const getTontineStats = (grossBalance: number, dailyMise: number, history: Transaction[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
+    const lastHistory = history && history.length > 0 ? history[history.length - 1] : null;
+    const lastPending = pendingWithdrawals && pendingWithdrawals.length > 0 ? pendingWithdrawals[pendingWithdrawals.length - 1] : null;
+    const cacheKey = [
+      accountId,
+      grossBalance,
+      dailyMise,
+      history?.length || 0,
+      lastHistory ? `${lastHistory.id}_${lastHistory.date}_${lastHistory.amount}` : '',
+      pendingWithdrawals?.length || 0,
+      lastPending ? `${lastPending.id}_${lastPending.status || ''}_${lastPending.isDeleted || ''}` : '',
+      isFirstAccount ? '1' : '0',
+      accountNumber || ''
+    ].join('|');
+
+    if (globalTontineStatsCache.has(cacheKey)) {
+      return globalTontineStatsCache.get(cacheKey);
+    }
+
+    const result = calculateTontineStatsInternal(grossBalance, dailyMise, history, accountId, pendingWithdrawals, isFirstAccount, accountNumber);
+    globalTontineStatsCache.set(cacheKey, result);
+    return result;
+  };
+
+  const calculateTontineStatsInternal = (grossBalance: number, dailyMise: number, history: Transaction[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
     if (dailyMise <= 0) dailyMise = 500; 
     
     const accountHistory = (history || [])

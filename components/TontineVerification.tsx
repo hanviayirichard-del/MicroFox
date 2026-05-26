@@ -22,6 +22,8 @@ import {
   Download
 } from 'lucide-react';
 
+const verificationStatsCache = new Map<string, any>();
+
 const TontineVerification: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
@@ -44,6 +46,30 @@ const TontineVerification: React.FC = () => {
   const [selectedZone, setSelectedZone] = useState('all');
 
   const getTontineStats = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
+    const lastHistory = history && history.length > 0 ? history[history.length - 1] : null;
+    const lastPending = pendingWithdrawals && pendingWithdrawals.length > 0 ? pendingWithdrawals[pendingWithdrawals.length - 1] : null;
+    const cacheKey = [
+      accountId,
+      grossBalance,
+      dailyMise,
+      history?.length || 0,
+      lastHistory ? `${lastHistory.id}_${lastHistory.date}_${lastHistory.amount}` : '',
+      pendingWithdrawals?.length || 0,
+      lastPending ? `${lastPending.id}_${lastPending.status || ''}_${lastPending.isDeleted || ''}` : '',
+      isFirstAccount ? '1' : '0',
+      accountNumber || ''
+    ].join('|');
+
+    if (verificationStatsCache.has(cacheKey)) {
+      return verificationStatsCache.get(cacheKey);
+    }
+
+    const result = calculateTontineStatsInternal(grossBalance, dailyMise, history, accountId, pendingWithdrawals, isFirstAccount, accountNumber);
+    verificationStatsCache.set(cacheKey, result);
+    return result;
+  };
+
+  const calculateTontineStatsInternal = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
     if (dailyMise <= 0) dailyMise = 500;
     
     const accountHistory = (history || [])

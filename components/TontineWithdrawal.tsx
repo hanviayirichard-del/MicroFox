@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Wallet, Cloud, RefreshCw, AlertCircle, CheckCircle, FileText, User, Trash2, X, ChevronRight, LayoutGrid, History as HistoryIcon, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
+const withdrawalStatsCache = new Map<string, any>();
+
 const TontineWithdrawal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [clients, setClients] = useState<any[]>([]);
@@ -16,6 +18,30 @@ const TontineWithdrawal: React.FC = () => {
 
   // Logique de calcul du solde net (Disponible = Cotisé - Commission)
   const getTontineStats = (grossBalance: number, dailyMiseInput: any, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
+    const lastHistory = history && history.length > 0 ? history[history.length - 1] : null;
+    const lastPending = pendingWithdrawals && pendingWithdrawals.length > 0 ? pendingWithdrawals[pendingWithdrawals.length - 1] : null;
+    const cacheKey = [
+      accountId,
+      grossBalance,
+      dailyMiseInput,
+      history?.length || 0,
+      lastHistory ? `${lastHistory.id}_${lastHistory.date}_${lastHistory.amount}` : '',
+      pendingWithdrawals?.length || 0,
+      lastPending ? `${lastPending.id}_${lastPending.status || ''}_${lastPending.isDeleted || ''}` : '',
+      isFirstAccount ? '1' : '0',
+      accountNumber || ''
+    ].join('|');
+
+    if (withdrawalStatsCache.has(cacheKey)) {
+      return withdrawalStatsCache.get(cacheKey);
+    }
+
+    const result = calculateTontineStatsInternal(grossBalance, dailyMiseInput, history, accountId, pendingWithdrawals, isFirstAccount, accountNumber);
+    withdrawalStatsCache.set(cacheKey, result);
+    return result;
+  };
+
+  const calculateTontineStatsInternal = (grossBalance: number, dailyMiseInput: any, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
     let dailyMise = Number(dailyMiseInput);
     if (isNaN(dailyMise) || dailyMise <= 0) dailyMise = 500;
     
