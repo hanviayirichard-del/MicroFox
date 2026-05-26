@@ -2242,8 +2242,10 @@ const Members: React.FC = () => {
   useEffect(() => {
     window.addEventListener('storage', reloadClients);
     window.addEventListener('microfox_storage' as any, reloadClients);
-    return () => window.removeEventListener('storage', reloadClients);
+    return () => {
+      window.removeEventListener('storage', reloadClients);
       window.removeEventListener('microfox_storage' as any, reloadClients);
+    };
   }, []);
 
   useEffect(() => {

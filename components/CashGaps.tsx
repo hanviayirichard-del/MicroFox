@@ -192,8 +192,10 @@ const CashGaps: React.FC = () => {
     loadGaps();
     window.addEventListener('storage', loadGaps);
     window.addEventListener('microfox_storage' as any, loadGaps);
-    return () => window.removeEventListener('storage', loadGaps);
+    return () => {
+      window.removeEventListener('storage', loadGaps);
       window.removeEventListener('microfox_storage' as any, loadGaps);
+    };
   }, [startDate, endDate, selectedUserId, selectedCaisse]);
 
   const generateHTMLContent = (isForPrint = false) => {

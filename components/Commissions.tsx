@@ -241,8 +241,10 @@ const Commissions: React.FC = () => {
     calculateCommissions();
     window.addEventListener('storage', calculateCommissions);
     window.addEventListener('microfox_storage' as any, calculateCommissions);
-    return () => window.removeEventListener('storage', calculateCommissions);
+    return () => {
+      window.removeEventListener('storage', calculateCommissions);
       window.removeEventListener('microfox_storage' as any, calculateCommissions);
+    };
   }, [startDate, endDate, selectedZone]);
 
   const filteredList = stats.list

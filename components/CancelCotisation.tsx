@@ -38,8 +38,10 @@ const CancelCotisation: React.FC = () => {
     loadTransactions();
     window.addEventListener('storage', loadTransactions);
     window.addEventListener('microfox_storage' as any, loadTransactions);
-    return () => window.removeEventListener('storage', loadTransactions);
+    return () => {
+      window.removeEventListener('storage', loadTransactions);
       window.removeEventListener('microfox_storage' as any, loadTransactions);
+    };
   }, []);
 
   const loadTransactions = () => {

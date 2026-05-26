@@ -163,7 +163,12 @@ try {
       
       nativeSetItem(fullKey, value);
 
-      const isBalanceKey = key === 'microfox_vault_balance' || key === 'microfox_bank_balance' || key.startsWith('microfox_cash_balance_');
+      const isBalanceKey = key === 'microfox_vault_balance' || 
+                           key === 'microfox_bank_balance' || 
+                           key.startsWith('microfox_cash_balance_') ||
+                           key === 'microfox_tontine_clients' ||
+                           key === 'microfox_total_encaisse_jour' ||
+                           key.startsWith('microfox_last_pulled_');
 
       // Mark as dirty
       if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys' && !isBalanceKey) {

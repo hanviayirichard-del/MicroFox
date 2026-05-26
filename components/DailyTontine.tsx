@@ -421,8 +421,10 @@ const DailyTontine: React.FC = () => {
     loadTontineClients();
     window.addEventListener('storage', loadTontineClients);
     window.addEventListener('microfox_storage' as any, loadTontineClients);
-    return () => window.removeEventListener('storage', loadTontineClients);
+    return () => {
+      window.removeEventListener('storage', loadTontineClients);
       window.removeEventListener('microfox_storage' as any, loadTontineClients);
+    };
   }, []);
 
   // Mise à jour de localStorage lors des changements d'état

@@ -85,8 +85,10 @@ const FraisPartsSociales: React.FC = () => {
     loadData();
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
-    return () => window.removeEventListener('storage', loadData);
+    return () => {
+      window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
+    };
   }, [selectedMonth, selectedYear]);
 
   const [selectedMember, setSelectedMember] = useState<any | null>(null);

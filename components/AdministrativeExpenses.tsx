@@ -75,8 +75,10 @@ const AdministrativeExpenses: React.FC = () => {
     loadExpenses();
     window.addEventListener('storage', loadExpenses);
     window.addEventListener('microfox_storage' as any, loadExpenses);
-    return () => window.removeEventListener('storage', loadExpenses);
+    return () => {
+      window.removeEventListener('storage', loadExpenses);
       window.removeEventListener('microfox_storage' as any, loadExpenses);
+    };
   }, []);
 
   const handleSave = () => {
