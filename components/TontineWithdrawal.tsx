@@ -342,7 +342,7 @@ const TontineWithdrawal: React.FC = () => {
           currentCycleFullDates = [];
         }
 
-        let amountToCompleteCycle = (31 * dailyMiseValue) - currentCycleAmount;
+        let amountToCompleteCycle = Math.max(1, (31 * dailyMiseValue) - currentCycleAmount);
         const oldCases = currentCycleCases;
 
         if (remainingAmount >= amountToCompleteCycle) {
@@ -443,7 +443,8 @@ const TontineWithdrawal: React.FC = () => {
 
       if (isLastOfToday) {
         let sameDayWithdrawal;
-        while (sameDayWithdrawal = allWithdrawals.find(w => {
+        let sameDaySafety = 0;
+        while (sameDaySafety++ < 200 && (sameDayWithdrawal = allWithdrawals.find(w => {
           const d = new Date(w.date);
           if (d.toDateString() !== txDate.toDateString()) return false;
           if (d <= txDate) return false; // Déjà géré par priorWithdrawal ou durant le cycle
@@ -454,7 +455,7 @@ const TontineWithdrawal: React.FC = () => {
             return indices.includes(cycleIdx);
           }
           return true;
-        })) {
+        }))) {
           usedWithdrawalIds.add(sameDayWithdrawal.id);
           const retraitDate = new Date(sameDayWithdrawal.date).toLocaleDateString('fr-FR');
           const comm = currentCycleAmount > 0 ? dailyMiseValue : 0;

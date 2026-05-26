@@ -234,15 +234,17 @@ const TontineVerification: React.FC = () => {
       
       let remainingAmount = Number(tx.amount);
 
-      while (remainingAmount > 0 && Number(dailyMise) > 0) {
+      let mainSafety = 0;
+      while (remainingAmount > 0 && Number(dailyMise) > 0 && mainSafety++ < 1000) {
         if (currentCycleFirstDepositDate === null) {
           let priorWithdrawal;
-          while (priorWithdrawal = allWithdrawals.find(w => {
+          let priorSafety = 0;
+          while (priorSafety++ < 100 && (priorWithdrawal = allWithdrawals.find(w => {
             if (usedWithdrawalIds.has(w.id)) return false;
             const wDate = new Date(w.date);
             const txDateObj = new Date(tx.date);
             return wDate <= txDateObj;
-          })) {
+          }))) {
             usedWithdrawalIds.add(priorWithdrawal.id);
             if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
               if (!priorWithdrawal.description.includes('Cycles:')) {
@@ -359,7 +361,7 @@ const TontineVerification: React.FC = () => {
           currentCycleFirstDepositDate = txDate;
         }
 
-        const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+        const amountToCompleteCycle = Math.max(1, (31 * Number(dailyMise)) - currentCycleAmount);
         const oldCases = currentCycleCases;
 
         if (remainingAmount >= amountToCompleteCycle) {
@@ -459,7 +461,8 @@ const TontineVerification: React.FC = () => {
 
       if (isLastOfToday) {
         let sameDayWithdrawal;
-        while (sameDayWithdrawal = allWithdrawals.find(w => {
+        let sameDaySafety = 0;
+        while (sameDaySafety++ < 200 && (sameDayWithdrawal = allWithdrawals.find(w => {
           const d = new Date(w.date);
           if (d.toDateString() !== txDate.toDateString()) return false;
           if (d <= txDate) return false; // Déjà géré par priorWithdrawal ou durant le cycle
@@ -470,7 +473,7 @@ const TontineVerification: React.FC = () => {
             return indices.includes(cycleIdx);
           }
           return true;
-        })) {
+        }))) {
           usedWithdrawalIds.add(sameDayWithdrawal.id);
           const retraitDate = new Date(sameDayWithdrawal.date).toLocaleDateString('fr-FR');
           const comm = currentCycleAmount > 0 ? Number(dailyMise) : 0;
@@ -591,7 +594,8 @@ const TontineVerification: React.FC = () => {
     }
 
     // Gérer les retraits restants qui n'ont pas de dépôts associés
-    while (allWithdrawals.some(w => !usedWithdrawalIds.has(w.id))) {
+    let finalSafety = 0;
+    while (finalSafety++ < 500 && allWithdrawals.some(w => !usedWithdrawalIds.has(w.id))) {
       const nextW = allWithdrawals.find(w => !usedWithdrawalIds.has(w.id));
       if (!nextW) break;
       

@@ -203,11 +203,13 @@ const DailyTontine: React.FC = () => {
                   });
                   let remainingAmount = Number(tx.amount);
 
-                  while (remainingAmount > 0 && dailyMise > 0) {
+                  let loopSafety1 = 0;
+                  while (remainingAmount > 0 && dailyMise > 0 && loopSafety1++ < 1000) {
                     if (currentCycleFirstDepositDate === null) {
                       // Gérer les retraits qui ont eu lieu AVANT ce dépôt et qui doivent clôturer les cycles précédents
                       let priorWithdrawal;
-                      while (priorWithdrawal = accountWithdrawals.find((w: any) => {
+                      let loopSafety2 = 0;
+                      while (loopSafety2++ < 100 && (priorWithdrawal = accountWithdrawals.find((w: any) => {
                         if (usedWithdrawalIds.has(w.id)) return false;
                         const wDate = new Date(w.date);
                         if (wDate > txDate) return false;
@@ -221,7 +223,7 @@ const DailyTontine: React.FC = () => {
                           return indices.includes(cycleIdx);
                         }
                         return true;
-                      })) {
+                      }))) {
                         usedWithdrawalIds.add(priorWithdrawal.id);
                         if (!encounteredWithdrawalIds.has(priorWithdrawal.id)) {
                           remainingWithdrawals += priorWithdrawal.amount;
@@ -233,7 +235,7 @@ const DailyTontine: React.FC = () => {
                       currentCycleFirstDepositDate = txDate;
                     }
                     // On traite d'abord l'ajout du montant au cycle en cours
-                    const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+                    const amountToCompleteCycle = Math.max(1, (31 * Number(dailyMise)) - currentCycleAmount);
                     const oldCases = currentCycleCases;
 
                     if (remainingAmount >= amountToCompleteCycle) {

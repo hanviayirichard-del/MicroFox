@@ -96,7 +96,8 @@ const Commissions: React.FC = () => {
             const agentParts = tx.description.split(' - Agent ');
             const currentAgent = agentParts.length > 1 ? `Agent ${agentParts[1]}` : 'Agent J04';
 
-            while (remainingAmount > 0) {
+            let loopSafety = 0;
+            while (remainingAmount > 0 && loopSafety++ < 1000) {
               // Nouveau cycle temporel (début de tontine)
               if (currentCycleFirstDepositDate === null) {
                 currentCycleFirstDepositDate = txDate;
@@ -120,7 +121,7 @@ const Commissions: React.FC = () => {
                 continue;
               }
 
-              const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+              const amountToCompleteCycle = Math.max(1, (31 * Number(dailyMise)) - currentCycleAmount);
 
               // La transaction complète un cycle de 31 cases
               if (remainingAmount >= amountToCompleteCycle) {

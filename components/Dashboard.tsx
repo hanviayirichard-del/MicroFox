@@ -91,8 +91,9 @@ const Dashboard: React.FC = () => {
           }
         });
         let remainingAmount = Number(tx.amount);
+        let mainSafety = 0;
 
-        while (remainingAmount > 0) {
+        while (remainingAmount > 0 && mainSafety++ < 1000) {
           if (currentCycleFirstDepositDate === null) {
             // Gérer les retraits qui ont eu lieu AVANT ce dépôt
             let priorWithdrawal: any;
@@ -187,7 +188,8 @@ const Dashboard: React.FC = () => {
           const isLastOfToday = !nextTx || new Date(nextTx.date).toDateString() !== txDate.toDateString();
           if (isLastOfToday) {
             let sameDayWithdrawal: any;
-            while (sameDayWithdrawal = accountWithdrawals.find((w: any) => {
+            let sameDaySafety = 0;
+            while (sameDaySafety++ < 200 && (sameDayWithdrawal = accountWithdrawals.find((w: any) => {
               const d = new Date(w.date);
               if (d.toDateString() !== txDate.toDateString()) return false;
               if (d < txDate) return false;
@@ -198,7 +200,7 @@ const Dashboard: React.FC = () => {
                 return indices.includes(cycleIdx);
               }
               return true;
-            })) {
+            }))) {
               usedWithdrawalIds.add(sameDayWithdrawal.id);
               const comm = currentCycleAmount > 0 ? Number(dailyMise) : 0;
               const netCycleAmount = Math.max(0, currentCycleAmount - comm);
@@ -211,7 +213,7 @@ const Dashboard: React.FC = () => {
             }
           }
 
-          const amountToCompleteCycle = (31 * Number(dailyMise)) - currentCycleAmount;
+          const amountToCompleteCycle = Math.max(1, (31 * Number(dailyMise)) - currentCycleAmount);
 
           if (remainingAmount >= amountToCompleteCycle) {
             currentCycleAmount = Number(currentCycleAmount) + amountToCompleteCycle;

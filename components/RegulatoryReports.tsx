@@ -119,7 +119,8 @@ const RegulatoryReports: React.FC = () => {
             const txDate = new Date(tx.date);
             let remainingAmount = Number(tx.amount);
 
-            while (remainingAmount > 0) {
+            let loopSafety = 0;
+            while (remainingAmount > 0 && loopSafety++ < 1000) {
               if (currentCycleFirstDepositDate === null) {
                 currentCycleFirstDepositDate = txDate;
                 if (txDate >= start && txDate <= end) {
@@ -147,7 +148,7 @@ const RegulatoryReports: React.FC = () => {
                 continue;
               }
 
-              const amountToCompleteCycle = (31 * dailyMise) - currentCycleAmount;
+              const amountToCompleteCycle = Math.max(1, (31 * dailyMise) - currentCycleAmount);
               if (remainingAmount >= amountToCompleteCycle) {
                 remainingAmount -= amountToCompleteCycle;
                 currentCycleAmount = 0;
