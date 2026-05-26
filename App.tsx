@@ -916,13 +916,15 @@ const App: React.FC = () => {
       }
     };
 
-    const runTrackingIfEnabled = () => {
+    const runTrackingIfEnabled = (isInitial: boolean = false) => {
       const savedConfig = localStorage.getItem('microfox_mf_config');
       const config = savedConfig ? JSON.parse(savedConfig) : {};
       if (config.gpsTrackingEnabled !== false) {
-        trackLocation();
         if (!intervalId) {
+          trackLocation();
           intervalId = setInterval(trackLocation, 300000); // Every 5 minutes
+        } else if (isInitial) {
+          trackLocation();
         }
       } else {
         if (intervalId) {
@@ -932,10 +934,10 @@ const App: React.FC = () => {
       }
     };
 
-    runTrackingIfEnabled();
+    runTrackingIfEnabled(true);
 
     const handleStorageUpdate = () => {
-      runTrackingIfEnabled();
+      runTrackingIfEnabled(false);
     };
 
     window.addEventListener('storage', handleStorageUpdate);
