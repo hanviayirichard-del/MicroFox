@@ -518,7 +518,8 @@ const DailyTontine: React.FC = () => {
     const savedMembers = localStorage.getItem('microfox_members_data');
     if (savedMembers) {
       const allMembers = JSON.parse(savedMembers);
-      const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+      const savedUsersList = JSON.parse(localStorage.getItem('microfox_users') || '[]');
+      const savedUsers = savedUsersList.filter((u: any) => !currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF);
       const agentForZone = savedUsers.find((u: any) => {
         if (u.role !== 'agent commercial') return false;
         const agentZones = u.zonesCollecte || (u.zoneCollecte ? [u.zoneCollecte] : []);

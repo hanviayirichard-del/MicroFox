@@ -901,14 +901,15 @@ const TontineVerification: React.FC = () => {
 
       const savedUsers = localStorage.getItem('microfox_users');
       const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
+      const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
       const zoneAgent = allUsers.find((u: any) => {
         if (u.role !== 'agent commercial') return false;
+        if (currentUser.codeMF && currentUser.codeMF !== 'GLOBAL' && u.codeMF !== currentUser.codeMF) return false;
         const agentZones = u.zonesCollecte || (u.zoneCollecte ? [u.zoneCollecte] : []);
         return agentZones.includes(clientZone);
       });
       const responsibleUserId = zoneAgent?.id || request.userId;
 
-      const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
       const newGapEntry = {
         id: `gap_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         date: new Date().toISOString(),

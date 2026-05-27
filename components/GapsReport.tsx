@@ -40,7 +40,7 @@ const GapsReport: React.FC = () => {
     let usersList = savedUsers ? JSON.parse(savedUsers) : [];
     
     // Filter out deleted users for the selection list
-    let dropdownUsers = usersList.filter((u: any) => !u.isDeleted);
+    let dropdownUsers = usersList.filter((u: any) => !u.isDeleted && (!currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF));
     if (currentUser?.role === 'agent commercial') {
       dropdownUsers = dropdownUsers.filter((u: any) => u.id === currentUser.id);
     }
@@ -461,7 +461,7 @@ const GapsReport: React.FC = () => {
                   'CAISSE 3',
                   'CAISSE 4',
                   ...JSON.parse(localStorage.getItem('microfox_users') || '[]')
-                    .filter((u: any) => u.role === 'caissier' && u.caisse)
+                    .filter((u: any) => u.role === 'caissier' && u.caisse && (!currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF))
                     .map((u: any) => u.caisse),
                   ...JSON.parse(localStorage.getItem('microfox_all_gaps') || '[]')
                     .map((g: any) => g.caisse)

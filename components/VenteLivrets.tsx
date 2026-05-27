@@ -54,11 +54,11 @@ const VenteLivrets: React.FC = () => {
       if (savedUsers) {
         const usersList = JSON.parse(savedUsers);
         if (user.role === 'caissier') {
-          // Un caissier voit son propre stock et celui des agents commerciaux
-          setAgents(usersList.filter((u: any) => !u.isDeleted && (u.role === 'agent commercial' || u.id === user.id)));
+          // Un caissier voit son propre stock et celui des agents commerciaux de sa microfinance
+          setAgents(usersList.filter((u: any) => !u.isDeleted && (user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF) && (u.role === 'agent commercial' || u.id === user.id)));
         } else {
-          // Administrateur/Directeur voient tout
-          setAgents(usersList.filter((u: any) => !u.isDeleted && (u.role === 'agent commercial' || u.role === 'caissier')));
+          // Administrateur/Directeur voient tout de leur microfinance (ou global si Richard)
+          setAgents(usersList.filter((u: any) => !u.isDeleted && (user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF) && (u.role === 'agent commercial' || u.role === 'caissier')));
         }
       }
     }

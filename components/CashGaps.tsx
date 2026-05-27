@@ -30,7 +30,8 @@ const CashGaps: React.FC = () => {
 
   const loadGaps = () => {
     const savedUsers = localStorage.getItem('microfox_users');
-    const usersList = savedUsers ? JSON.parse(savedUsers) : [];
+    const usersList = (savedUsers ? JSON.parse(savedUsers) : [])
+      .filter((u: any) => !currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF);
     setAllUsers(usersList);
 
     const selectedUser = usersList.find((u: any) => u.id === selectedUserId);

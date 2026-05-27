@@ -3674,7 +3674,7 @@ const Members: React.FC = () => {
             });
 
             const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
-            const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === c.zone);
+            const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === c.zone && (!currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF));
             const agentName = agentForZone ? agentForZone.identifiant : (currentUser?.identifiant || 'N/A');
 
             // Pour chaque compte impliqué, effectuer le débit et créer une transaction
@@ -3826,7 +3826,7 @@ const Members: React.FC = () => {
           : (newBalances[op.account as keyof typeof newBalances] || 0);
 
         const savedUsers = JSON.parse(localStorage.getItem('microfox_users') || '[]');
-        const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === c.zone);
+        const agentForZone = savedUsers.find((u: any) => u.role === 'agent commercial' && u.zoneCollecte === c.zone && (!currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF));
         const agentName = agentForZone ? agentForZone.identifiant : (currentUser?.identifiant || 'N/A');
 
         const newTransaction: Transaction = {

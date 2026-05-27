@@ -125,7 +125,10 @@ const ValidatePreviousCotisations: React.FC = () => {
     const saved = localStorage.getItem('microfox_users');
     if (saved) {
       try {
-        setUsers(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        const userStr = localStorage.getItem('microfox_current_user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        setUsers(parsed.filter((u: any) => !user || user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF));
       } catch (e) {}
     }
   };

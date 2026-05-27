@@ -28,7 +28,7 @@ const GlobalJournal: React.FC = () => {
       
       const savedUsers = localStorage.getItem('microfox_users');
       const users = savedUsers ? JSON.parse(savedUsers) : [];
-      setAvailableUsers(users.filter((u: any) => !u.isDeleted));
+      setAvailableUsers(users.filter((u: any) => !u.isDeleted && (user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF)));
       const userCaisseMap = users.reduce((acc: any, u: any) => {
         acc[u.id] = u.caisse;
         return acc;

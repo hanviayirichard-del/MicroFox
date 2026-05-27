@@ -130,7 +130,9 @@ const StocksLivrets: React.FC = () => {
 
     const savedUsers = localStorage.getItem('microfox_users');
     if (savedUsers) {
-      setUsers(JSON.parse(savedUsers).filter((u: any) => !u.isDeleted));
+      const userStr = localStorage.getItem('microfox_current_user');
+      const user = userStr ? JSON.parse(userStr) : {};
+      setUsers(JSON.parse(savedUsers).filter((u: any) => !u.isDeleted && (user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF)));
     }
 
     const savedPrices = localStorage.getItem('microfox_livret_prices');

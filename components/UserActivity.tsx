@@ -48,7 +48,10 @@ const UserActivity: React.FC = () => {
     }
     const savedUsers = localStorage.getItem('microfox_users');
     if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
+      const parsed = JSON.parse(savedUsers);
+      const userStr = localStorage.getItem('microfox_current_user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      setUsers(parsed.filter((u: any) => !user || user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF));
     }
   };
 

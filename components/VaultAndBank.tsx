@@ -310,7 +310,8 @@ const VaultAndBank: React.FC = () => {
 
       const savedUsers = localStorage.getItem('microfox_users');
       if (savedUsers) {
-        const parsedUsers = JSON.parse(savedUsers);
+        const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+        const parsedUsers = JSON.parse(savedUsers).filter((u: any) => !currentUser.id || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF);
         const userCaisses = parsedUsers
           .filter((u: any) => u.role === 'caissier' && u.caisse)
           .map((u: any) => u.caisse.toUpperCase());

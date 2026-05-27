@@ -115,7 +115,8 @@ const GeographicMap: React.FC = () => {
             u.role !== 'administrateur' && 
             u.id !== user.id && 
             u.latitude !== null && 
-            u.latitude !== undefined
+            u.latitude !== undefined &&
+            (user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF)
           ));
         }
       } catch (e) {

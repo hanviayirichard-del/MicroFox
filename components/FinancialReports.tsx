@@ -16,11 +16,12 @@ const FinancialReports: React.FC = () => {
   const [selectedCaisse, setSelectedCaisse] = useState<string[]>(['all']);
 
   const savedUsers = localStorage.getItem('microfox_users');
-  const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
+  const rawUsers = savedUsers ? JSON.parse(savedUsers) : [];
   
   const userStr = localStorage.getItem('microfox_current_user');
   const user = userStr ? JSON.parse(userStr) : null;
   const isAdminOrDirector = user?.role === 'administrateur' || user?.role === 'directeur';
+  const allUsers = rawUsers.filter((u: any) => !user || user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF);
 
   const availableCaisses = Array.from(new Set([
     ...(isAdminOrDirector ? ['CAISSE PRINCIPALE'] : []),

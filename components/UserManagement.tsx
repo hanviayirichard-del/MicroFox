@@ -246,8 +246,14 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const currentUser = React.useMemo(() => {
+    const saved = localStorage.getItem('microfox_current_user');
+    return saved ? JSON.parse(saved) : null;
+  }, []);
+
   const filteredUsers = users.filter(u => 
-    !u.isDeleted && (
+    !u.isDeleted && 
+    (!currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF) && (
       u.identifiant.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.microfinance.toLowerCase().includes(searchTerm.toLowerCase())
     )
