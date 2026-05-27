@@ -8,7 +8,7 @@ import ConfirmModal from './ConfirmModal';
 const MainCashier: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('Tous');
+  const [filterStatus, setFilterStatus] = useState('En attente');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferType, setTransferType] = useState<'total' | 'partial'>('total');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);

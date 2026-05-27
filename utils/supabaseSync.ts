@@ -95,10 +95,18 @@ export const mergeJSON = (json1: string, json2: string): string => {
 };
 
 export const syncToSupabase = async (key: string, value: string): Promise<boolean> => {
+  if (
+    key === 'microfox_current_user' || 
+    key === 'microfox_current_mf' || 
+    key === 'microfox_session_active' || 
+    key === 'microfox_offline_mode'
+  ) {
+    return true;
+  }
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
-    const maxRetries = 5;
+    const maxRetries = 40;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Fetch current remote value to merge and avoid overwriting other devices' data
       const { data: remoteItem, error: fetchError } = await supabase
@@ -134,8 +142,9 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
           return true;
         }
         
-        // Conflict detected or error occurred, wait and retry
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 80 * attempt));
+        // Conflict detected or error occurred, wait and retry with jittered backoff
+        const delay = Math.floor(Math.random() * 100) + (attempt * 40);
+        await new Promise(resolve => setTimeout(resolve, delay));
       } else {
         // Try inserting if it doesn't exist
         const { data, error } = await supabase
@@ -151,8 +160,9 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
           return true;
         }
         
-        // Conflict on insert (another client inserted concurrently), wait and retry
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 80 * attempt));
+        // Conflict on insert (another client inserted concurrently), wait and retry with jittered backoff
+        const delay = Math.floor(Math.random() * 100) + (attempt * 40);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
@@ -246,7 +256,15 @@ export const pullFromSupabase = async (
           maxUpdatedAt = item.updated_at;
         }
 
-        if (item.key.includes('microfox_vault_balance') || item.key.includes('microfox_bank_balance') || item.key.includes('microfox_cash_balance_')) {
+        if (
+          item.key.includes('microfox_vault_balance') || 
+          item.key.includes('microfox_bank_balance') || 
+          item.key.includes('microfox_cash_balance_') ||
+          item.key === 'microfox_current_user' ||
+          item.key === 'microfox_current_mf' ||
+          item.key === 'microfox_session_active' ||
+          item.key === 'microfox_offline_mode'
+        ) {
           return;
         }
         const localValue = originalGetItem(item.key);

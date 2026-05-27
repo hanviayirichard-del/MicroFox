@@ -1189,6 +1189,35 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (user: User) => {
+    try {
+      const prevUserStr = localStorage.getItem('microfox_current_user');
+      if (prevUserStr) {
+        const prevUser = JSON.parse(prevUserStr);
+        if (prevUser && prevUser.id !== user.id) {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) {
+              if (key.startsWith('mf_') || 
+                  (key.startsWith('microfox_') && 
+                   key !== 'microfox_users' && 
+                   key !== 'microfox_permissions' && 
+                   key !== 'microfox_offline_mode')) {
+                keysToRemove.push(key);
+              }
+            }
+          }
+          keysToRemove.forEach(k => {
+            try {
+              nativeRemoveItem(k);
+            } catch (e) {}
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
     localStorage.setItem('microfox_current_mf', user.codeMF);
     localStorage.setItem('microfox_current_user', JSON.stringify(user));
     sessionStorage.setItem('microfox_session_active', 'true');
@@ -1206,6 +1235,26 @@ const App: React.FC = () => {
     
     // Use native methods to ensure cleanup works even if overrides are broken
     sessionStorage.removeItem('microfox_session_active');
+
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        if (key.startsWith('mf_') || 
+            (key.startsWith('microfox_') && 
+             key !== 'microfox_users' && 
+             key !== 'microfox_permissions' && 
+             key !== 'microfox_offline_mode')) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    keysToRemove.forEach(k => {
+      try {
+        nativeRemoveItem(k);
+      } catch (e) {}
+    });
+
     nativeRemoveItem('microfox_current_mf');
     nativeRemoveItem('microfox_current_user');
     
