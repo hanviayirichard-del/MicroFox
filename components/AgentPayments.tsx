@@ -204,7 +204,7 @@ const AgentPayments: React.FC = () => {
 
     const syncInterval = setInterval(() => {
       window.dispatchEvent(new CustomEvent('request_supabase_sync'));
-    }, 12000);
+    }, 5000);
 
     window.addEventListener('storage', handleStorage);
     window.addEventListener('microfox_storage' as any, handleStorage);

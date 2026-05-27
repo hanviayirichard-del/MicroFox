@@ -778,7 +778,7 @@ const App: React.FC = () => {
           setIsBackgroundSyncing(false);
         });
       }
-    }, 30000); // Every 30 seconds
+    }, 5000); // Every 5 seconds
 
     return () => {
       supabase.removeChannel(channel);
@@ -1228,11 +1228,30 @@ const App: React.FC = () => {
     setCurrentUser(user);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (currentUser) {
       recordAuditLog('DECONNEXION', 'AUTHENTIFICATION', `Déconnexion de ${currentUser.identifiant}`);
     }
     
+    setIsSyncing(true);
+    
+    // Flush dirty keys to Supabase before logging out to prevent losing local changes
+    const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+    try {
+      const dirtyKeys = JSON.parse(dirtyKeysStr);
+      if (Array.isArray(dirtyKeys) && dirtyKeys.length > 0) {
+        const { syncToSupabase } = await import('./utils/supabaseSync');
+        await Promise.all(dirtyKeys.map(async (key) => {
+          const value = nativeGetItem(key);
+          if (value) {
+            await syncToSupabase(key, value);
+          }
+        }));
+      }
+    } catch (e) {
+      console.error('Error flushing dirty keys on logout:', e);
+    }
+
     // Use native methods to ensure cleanup works even if overrides are broken
     sessionStorage.removeItem('microfox_session_active');
 
