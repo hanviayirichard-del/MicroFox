@@ -391,7 +391,7 @@ const App: React.FC = () => {
   });
   const mfCodeRef = React.useRef<string | null>(localStorage.getItem('microfox_current_mf'));
 
-  const pullData = async (mfCode: string, isSilent: boolean = false) => {
+  const pullData = async (mfCode: string, isSilent: boolean = false, hasCachedData: boolean = true) => {
     if (isOfflineMode) {
       console.log('Skipping sync due to offline mode');
       return;
@@ -483,8 +483,10 @@ const App: React.FC = () => {
       }
     })();
 
+    // Dynamic timeout: if we have zero cached data, we wait longer (15s) to guarantee tables populate, otherwise we timeout fast (3s) to show local copy
+    const timeoutDuration = hasCachedData ? 3000 : 15000;
     const timeoutPromise = new Promise((resolve) => 
-      setTimeout(() => resolve('timeout'), 3000)
+      setTimeout(() => resolve('timeout'), timeoutDuration)
     );
 
     try {
@@ -503,10 +505,10 @@ const App: React.FC = () => {
   };
 
   // Isolation du stockage multi-locataire
-  const setupStorageIsolation = async (mfCode: string, isSilent: boolean = false) => {
+  const setupStorageIsolation = async (mfCode: string, isSilent: boolean = false, hasCachedData: boolean = true) => {
     globalMfCode = mfCode;
     mfCodeRef.current = mfCode;
-    await pullData(mfCode, isSilent);
+    await pullData(mfCode, isSilent, hasCachedData);
   };
 
   const [activeSection, setActiveSection] = useState<string>('Accueil');
@@ -754,29 +756,7 @@ const App: React.FC = () => {
     const pullInterval = setInterval(() => {
       const currentMfCode = localStorage.getItem('microfox_current_mf');
       if (currentMfCode) {
-        const currentPrefix = `mf_${currentMfCode.toLowerCase().replace(/\s+/g, '_')}_`;
-        setIsBackgroundSyncing(true);
-        
-        const isDirty = (key: string) => {
-          try {
-            const dirtyKeys = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
-            return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
-          } catch (e) {
-            return false;
-          }
-        };
-
-        import('./utils/supabaseSync').then(async (m) => {
-          const globalUsersChanged = await m.pullFromSupabase('microfox_users', nativeSetItem, nativeGetItem, isDirty);
-          const globalPermsChanged = await m.pullFromSupabase('microfox_permissions', nativeSetItem, nativeGetItem, isDirty);
-          const tenantChanged = await m.pullFromSupabase(currentPrefix, nativeSetItem, nativeGetItem, isDirty);
-          if (globalUsersChanged || globalPermsChanged || tenantChanged) {
-            setSyncVersion(v => v + 1);
-            dispatchStorageEvent();
-          }
-        }).finally(() => {
-          setIsBackgroundSyncing(false);
-        });
+        pullData(currentMfCode, true);
       }
     }, 5000); // Every 5 seconds
 
@@ -801,7 +781,7 @@ const App: React.FC = () => {
     if (mfCodeOnLoad) {
       const prefix = `mf_${mfCodeOnLoad.toLowerCase().replace(/\s+/g, '_')}_`;
       const hasCachedData = !!localStorage.getItem(prefix + 'microfox_members_data') || !!localStorage.getItem('microfox_members_data');
-      setupStorageIsolation(mfCodeOnLoad, hasCachedData);
+      setupStorageIsolation(mfCodeOnLoad, hasCachedData, hasCachedData);
     } else {
       // Pull only global data if not logged in (background)
       import('./utils/supabaseSync').then(m => {
@@ -1223,7 +1203,7 @@ const App: React.FC = () => {
     sessionStorage.setItem('microfox_session_active', 'true');
     const prefix = `mf_${user.codeMF.toLowerCase().replace(/\s+/g, '_')}_`;
     const hasCachedData = !!localStorage.getItem(prefix + 'microfox_members_data') || !!localStorage.getItem('microfox_members_data');
-    setupStorageIsolation(user.codeMF, hasCachedData); // Apply isolation immediately without reload
+    setupStorageIsolation(user.codeMF, hasCachedData, hasCachedData); // Apply isolation immediately without reload
     recordAuditLog('CONNEXION', 'AUTHENTIFICATION', `Connexion réussie de ${user.identifiant} (Code MF: ${user.codeMF})`, 'SUCCES', user);
     setWelcomeMessage(`Bienvenue ${user.identifiant}`);
     setTimeout(() => setWelcomeMessage(null), 3000);
@@ -1231,15 +1211,21 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
+    // Explicitly reset sync state immediately to prevent loader from rendering during reload state
+    setIsSyncing(false);
+    isSyncingRef.current = false;
+
     if (currentUser) {
       recordAuditLog('DECONNEXION', 'AUTHENTIFICATION', `Déconnexion de ${currentUser.identifiant}`);
     }
     
     // Flush dirty keys to Supabase before logging out to prevent losing local changes in a fast-timeout race (max 500ms)
+    // ONLY attempt to flush if we are online
+    const isOffline = localStorage.getItem('microfox_offline_mode') === 'true';
     const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
     try {
       const dirtyKeys = JSON.parse(dirtyKeysStr);
-      if (Array.isArray(dirtyKeys) && dirtyKeys.length > 0) {
+      if (Array.isArray(dirtyKeys) && dirtyKeys.length > 0 && !isOffline) {
         const { syncToSupabase } = await import('./utils/supabaseSync');
         const syncPromise = Promise.all(dirtyKeys.map(async (key) => {
           const value = nativeGetItem(key);

@@ -199,6 +199,11 @@ const Configuration: React.FC = () => {
     setIsOfflineMode(newValue);
     localStorage.setItem('microfox_offline_mode', String(newValue));
     dispatchStorageEvent();
+    
+    // Immediately trigger a sync when turning offline mode off to push offline modifications
+    if (newValue === false) {
+      window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+    }
   };
 
   const handleBackup = () => {
