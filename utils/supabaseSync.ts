@@ -208,6 +208,8 @@ export const pullFromSupabase = async (
     let hasMore = true;
     let safetyIterations = 0;
 
+    const currentPullTime = new Date().toISOString();
+
     // Use incremental sync to protect the database Disk I/O budget
     const lastPullTime = localStorage.getItem(`microfox_last_pulled_${prefix}`);
 
@@ -220,9 +222,9 @@ export const pullFromSupabase = async (
         .range(from, from + batchSize - 1);
 
       if (lastPullTime) {
-        // Subtract 24 hours of clock skew buffer to handle desynchronized PC clocks
+        // Subtract 5 minutes of clock skew buffer to handle minor clock desynchronization
         const lastPullDate = new Date(lastPullTime);
-        const safePullTime = new Date(lastPullDate.getTime() - 24 * 60 * 60 * 1000).toISOString();
+        const safePullTime = new Date(lastPullDate.getTime() - 5 * 60 * 1000).toISOString();
         query = query.gt('updated_at', safePullTime);
       }
 
@@ -249,13 +251,8 @@ export const pullFromSupabase = async (
     
     if (data) {
       let changed = false;
-      let maxUpdatedAt = lastPullTime || new Date(0).toISOString();
 
       data.forEach(item => {
-        if (item.updated_at && item.updated_at > maxUpdatedAt) {
-          maxUpdatedAt = item.updated_at;
-        }
-
         if (
           item.key.includes('microfox_vault_balance') || 
           item.key.includes('microfox_bank_balance') || 
@@ -289,11 +286,7 @@ export const pullFromSupabase = async (
         }
       });
 
-      if (data.length > 0) {
-        localStorage.setItem(`microfox_last_pulled_${prefix}`, maxUpdatedAt);
-      } else if (!lastPullTime) {
-        localStorage.setItem(`microfox_last_pulled_${prefix}`, new Date().toISOString());
-      }
+      localStorage.setItem(`microfox_last_pulled_${prefix}`, currentPullTime);
 
       return changed;
     }
