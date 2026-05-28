@@ -106,7 +106,7 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
-    const maxRetries = 40;
+    const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Fetch current remote value to merge and avoid overwriting other devices' data
       const { data: remoteItem, error: fetchError } = await supabase
