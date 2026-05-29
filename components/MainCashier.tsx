@@ -437,38 +437,42 @@ const MainCashier: React.FC = () => {
 
     // Enregistrer la transaction
     const newTxs = [];
-    const newTx = {
-      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type: 'Versement Caisse',
-      from: selectedCaisse,
-      to: targetDestination,
-      amount: physicalAmount,
-      theoreticalAmount: theoreticalAmount,
-      gap: gap,
-      date: new Date().toISOString(),
-      userId: currentUser.id,
-      cashierName: currentUser.identifiant
-    };
-    newTxs.push(newTx);
-
-    if (transferType === 'total' && gap !== 0) {
-      const gapTx = {
-        id: `${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'Régularisation Écart',
+    if (isMainCaisse) {
+      const newTx = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'Versement Caisse',
         from: selectedCaisse,
-        to: 'ÉCART',
-        amount: -gap,
+        to: targetDestination,
+        amount: physicalAmount,
+        theoreticalAmount: theoreticalAmount,
+        gap: gap,
         date: new Date().toISOString(),
         userId: currentUser.id,
-        cashierName: currentUser.identifiant,
-        observation: `Régularisation automatique lors du versement total (${selectedCaisse})`
+        cashierName: currentUser.identifiant
       };
-      newTxs.push(gapTx);
+      newTxs.push(newTx);
+
+      if (transferType === 'total' && gap !== 0) {
+        const gapTx = {
+          id: `${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'Régularisation Écart',
+          from: selectedCaisse,
+          to: 'ÉCART',
+          amount: -gap,
+          date: new Date().toISOString(),
+          userId: currentUser.id,
+          cashierName: currentUser.identifiant,
+          observation: `Régularisation automatique lors du versement total (${selectedCaisse})`
+        };
+        newTxs.push(gapTx);
+      }
     }
 
-    const transactionsSaved = localStorage.getItem('microfox_vault_transactions');
-    const transactions = transactionsSaved ? JSON.parse(transactionsSaved) : [];
-    localStorage.setItem('microfox_vault_transactions', JSON.stringify([...newTxs, ...transactions]));
+    if (newTxs.length > 0) {
+      const transactionsSaved = localStorage.getItem('microfox_vault_transactions');
+      const transactions = transactionsSaved ? JSON.parse(transactionsSaved) : [];
+      localStorage.setItem('microfox_vault_transactions', JSON.stringify([...newTxs, ...transactions]));
+    }
     localStorage.setItem('microfox_pending_sync', 'true');
 
     setCashBalance(newCashBalance);
