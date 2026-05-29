@@ -165,14 +165,16 @@ const MainCashier: React.FC = () => {
           const gap = finalAmount - theoretical;
 
           if (action === 'Validé' && p.status !== 'Validé') {
-            const targetCaisse = selectedCaisse; // The cashier's active caisse physically receiving the money
+            const targetCaisse = p.caisse || selectedCaisse; // The destination caisse physically receiving the money
             const balanceKey = `microfox_cash_balance_${targetCaisse}`;
             const savedBal = localStorage.getItem(balanceKey);
             const currentBal = savedBal !== null ? Number(savedBal) : 0;
             const newBal = currentBal + finalAmount;
             localStorage.setItem(balanceKey, newBal.toString());
             
-            setCashBalance(newBal); // Update cashier balance immediately
+            if (targetCaisse === selectedCaisse) {
+              setCashBalance(newBal); // Update cashier balance immediately
+            }
 
             // Record in general history
             const txsSaved = localStorage.getItem('microfox_vault_transactions');
