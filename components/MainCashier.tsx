@@ -487,6 +487,9 @@ const MainCashier: React.FC = () => {
   };
 
    const filteredPayments = payments.filter(p => {
+    if (currentUser.role === 'caissier' && p.type === 'CASHIER_TRANSFER') {
+      return false;
+    }
     const matchesSearch = p.agentName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'Tous' || p.status === filterStatus;
     
@@ -912,7 +915,11 @@ const MainCashier: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          {p.status === 'En attente' && (['administrateur', 'directeur', 'caissier'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)) && (
+                          {p.status === 'En attente' && (
+                            p.type === 'CASHIER_TRANSFER'
+                              ? ['administrateur', 'directeur'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)
+                              : ['administrateur', 'directeur', 'caissier'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)
+                          ) && (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleAction(p.id, 'Validé')}
