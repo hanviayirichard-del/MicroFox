@@ -9,6 +9,7 @@ const MainCashier: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('En attente');
+  const [paymentCaisseFilter, setPaymentCaisseFilter] = useState('Tous');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferType, setTransferType] = useState<'total' | 'partial'>('total');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -164,19 +165,14 @@ const MainCashier: React.FC = () => {
           const gap = finalAmount - theoretical;
 
           if (action === 'Validé' && p.status !== 'Validé') {
-            const targetCaisse = p.caisse || 'CAISSE PRINCIPALE';
+            const targetCaisse = selectedCaisse; // The cashier's active caisse physically receiving the money
             const balanceKey = `microfox_cash_balance_${targetCaisse}`;
             const savedBal = localStorage.getItem(balanceKey);
             const currentBal = savedBal !== null ? Number(savedBal) : 0;
             const newBal = currentBal + finalAmount;
             localStorage.setItem(balanceKey, newBal.toString());
             
-            if (targetCaisse === selectedCaisse) {
-              setCashBalance(newBal);
-            } else {
-              const savedSelectedBal = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-              setCashBalance(savedSelectedBal !== null ? Number(savedSelectedBal) : 0);
-            }
+            setCashBalance(newBal); // Update cashier balance immediately
 
             // Record in general history
             const txsSaved = localStorage.getItem('microfox_vault_transactions');
@@ -319,7 +315,14 @@ const MainCashier: React.FC = () => {
             
             recordAuditLog('MODIFICATION', 'CAISSE', `Versement de ${p.agentName} REJETÉ (${p.totalAmount} FCFA)`);
           }
-          return { ...p, status: action, caisse: p.caisse || 'CAISSE PRINCIPALE', observedAmount: finalAmount, gap: gap, validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id };
+          return { 
+            ...p, 
+            status: action, 
+            caisse: action === 'Validé' ? selectedCaisse : (p.caisse || 'CAISSE PRINCIPALE'), 
+            observedAmount: finalAmount, 
+            gap: gap, 
+            validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id 
+          };
         }
         return p;
       });
@@ -479,13 +482,15 @@ const MainCashier: React.FC = () => {
     showAlert("Succès", `Versement de ${physicalAmount.toLocaleString()} F effectué. Écart: ${gap.toLocaleString()} F.`, "success");
   };
 
-  const filteredPayments = payments.filter(p => {
+   const filteredPayments = payments.filter(p => {
     const matchesSearch = p.agentName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'Tous' || p.status === filterStatus;
+    
+    const itemCaisse = p.caisse || 'CAISSE PRINCIPALE';
     const matchesCaisse = 
-      (p.caisse?.toLowerCase() === selectedCaisse?.toLowerCase()) || 
-      (!p.caisse && selectedCaisse === 'CAISSE PRINCIPALE') ||
-      (p.type === 'CASHIER_TRANSFER' && p.agentName?.toLowerCase() === selectedCaisse?.toLowerCase());
+      paymentCaisseFilter === 'Tous' ||
+      (itemCaisse.toLowerCase() === paymentCaisseFilter.toLowerCase()) || 
+      (p.type === 'CASHIER_TRANSFER' && p.agentName?.toLowerCase() === paymentCaisseFilter.toLowerCase());
     
     const txDate = p.date.split('T')[0];
     const matchesDate = (!startDate || txDate >= startDate) && (!endDate || txDate <= endDate);
@@ -745,6 +750,20 @@ const MainCashier: React.FC = () => {
                   {status}
                 </button>
               ))}
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Filtrer par Caisse</p>
+              <select
+                value={paymentCaisseFilter}
+                onChange={(e) => setPaymentCaisseFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-[#121c32] outline-none focus:border-blue-400 transition-all uppercase tracking-tight"
+              >
+                <option value="Tous">Toutes les caisses</option>
+                {['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2 pt-2">

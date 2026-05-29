@@ -383,6 +383,7 @@ try {
 const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = React.useRef(false);
+  const [syncStatusText, setSyncStatusText] = useState('Mise à jour de vos données...');
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [syncVersion, setSyncVersion] = useState(0);
   const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
@@ -400,6 +401,7 @@ const App: React.FC = () => {
     
     isSyncingRef.current = true;
     if (!isSilent) {
+      setSyncStatusText('Mise à jour de vos données...');
       setIsSyncing(true);
       setIsBackgroundSyncing(false);
     } else {
@@ -1211,29 +1213,93 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    // Explicitly reset sync state immediately to prevent loader from rendering during reload state
-    setIsSyncing(false);
-    isSyncingRef.current = false;
+    // Show the synchronization loader immediately to prevent user interaction and show progress
+    setIsSyncing(true);
+    isSyncingRef.current = true;
 
     if (currentUser) {
       recordAuditLog('DECONNEXION', 'AUTHENTIFICATION', `Déconnexion de ${currentUser.identifiant}`);
     }
     
-    // Flush dirty keys to Supabase before logging out to prevent losing local changes in a fast-timeout race (max 500ms)
+    // Flush dirty keys to Supabase before logging out to prevent losing local changes in a fast-timeout race
     // ONLY attempt to flush if we are online
     const isOffline = localStorage.getItem('microfox_offline_mode') === 'true';
     const dirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+    let dirtyKeys: string[] = [];
     try {
-      const dirtyKeys = JSON.parse(dirtyKeysStr);
+      dirtyKeys = JSON.parse(dirtyKeysStr);
+      if (!Array.isArray(dirtyKeys)) dirtyKeys = [];
+    } catch (e) {
+      dirtyKeys = [];
+    }
+
+    const getTreatmentLabel = (key: string): string => {
+      if (key.includes('microfox_agent_payments')) return 'versements des agents';
+      if (key.includes('microfox_validated_zone_cotisations')) return 'validation des cotisations';
+      if (key.includes('microfox_members_data')) return 'données des membres';
+      if (key.includes('microfox_vault_transactions')) return 'transactions de caisse';
+      if (key.includes('microfox_users')) return 'utilisateurs';
+      if (key.includes('microfox_permissions')) return 'autorisations';
+      return 'modifications locales';
+    };
+
+    let activeSyncs = [...dirtyKeys];
+    const updateSyncText = (remainingKeys: string[]) => {
+      if (remainingKeys.length > 0) {
+        const uniqueLabels = Array.from(new Set(remainingKeys.map(getTreatmentLabel)));
+        setSyncStatusText(`Traitement en cours : synchronisation de (${uniqueLabels.join(', ')}) avant déconnexion...`);
+      } else {
+        setSyncStatusText('Déconnexion en cours...');
+      }
+    };
+
+    if (dirtyKeys.length > 0 && !isOffline) {
+      updateSyncText(dirtyKeys);
+    } else {
+      setSyncStatusText('Déconnexion en cours...');
+    }
+
+    try {
       if (Array.isArray(dirtyKeys) && dirtyKeys.length > 0 && !isOffline) {
         const { syncToSupabase } = await import('./utils/supabaseSync');
         const syncPromise = Promise.all(dirtyKeys.map(async (key) => {
           const value = nativeGetItem(key);
           if (value) {
-            await syncToSupabase(key, value);
+            const success = await syncToSupabase(key, value);
+            activeSyncs = activeSyncs.filter(k => k !== key);
+            updateSyncText(activeSyncs);
+            if (success) {
+              // Successfully synced! Remove it from locally dirty registry
+              try {
+                const currentDirtyStr = nativeGetItem('microfox_dirty_keys') || '[]';
+                const currentDirty = JSON.parse(currentDirtyStr);
+                if (Array.isArray(currentDirty)) {
+                  const updated = currentDirty.filter(k => k !== key);
+                  if (updated.length === 0) {
+                    nativeRemoveItem('microfox_dirty_keys');
+                    const mfCode = nativeGetItem('microfox_current_mf');
+                    if (mfCode) {
+                      const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+                      nativeRemoveItem(`${prefix}microfox_dirty_keys`);
+                      nativeRemoveItem(`${prefix}microfox_pending_sync`);
+                    }
+                    nativeRemoveItem('microfox_pending_sync');
+                  } else {
+                    nativeSetItem('microfox_dirty_keys', JSON.stringify(updated));
+                    const mfCode = nativeGetItem('microfox_current_mf');
+                    if (mfCode) {
+                      const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+                      nativeSetItem(`${prefix}microfox_dirty_keys`, JSON.stringify(updated));
+                    }
+                  }
+                }
+              } catch (innerErr) {}
+            }
           }
         }));
-        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 500));
+        
+        // Give up to 6 seconds for safety
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 6000));
         await Promise.race([syncPromise, timeoutPromise]);
       }
     } catch (e) {
@@ -1243,15 +1309,28 @@ const App: React.FC = () => {
     // Use native methods to ensure cleanup works even if overrides are broken
     sessionStorage.removeItem('microfox_session_active');
 
+    // Fetch refreshed dirty keys to ensure we do NOT delete them on logout
+    const finalDirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
+    let finalDirtyKeys: string[] = [];
+    try {
+      finalDirtyKeys = JSON.parse(finalDirtyKeysStr);
+      if (!Array.isArray(finalDirtyKeys)) finalDirtyKeys = [];
+    } catch (e) {
+      finalDirtyKeys = [];
+    }
+
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key) {
-        if (key.startsWith('mf_') || 
+        const isDirty = finalDirtyKeys.includes(key);
+        // CRITICAL: Skip deletion of any dirty keys (unsynced offline data) so they are kept safe
+        if (!isDirty && (key.startsWith('mf_') || 
             (key.startsWith('microfox_') && 
              key !== 'microfox_users' && 
              key !== 'microfox_permissions' && 
-             key !== 'microfox_offline_mode')) {
+             key !== 'microfox_offline_mode' &&
+             key !== 'microfox_dirty_keys'))) {
           keysToRemove.push(key);
         }
       }
@@ -1334,7 +1413,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[300] bg-[#0a1226]/80 flex flex-col items-center justify-center text-white p-6 text-center backdrop-blur-sm">
           <Loader2 className="w-12 h-12 text-[#00c896] animate-spin mb-4" />
           <h2 className="text-xl font-black uppercase tracking-widest mb-2">Synchronisation</h2>
-          <p className="text-gray-400 text-sm max-w-xs">Mise à jour de vos données...</p>
+          <p className="text-gray-400 text-sm max-w-xs font-medium">{syncStatusText}</p>
         </div>
       )}
       {welcomeMessage && (
