@@ -130,6 +130,7 @@ try {
     if (mfCode && typeof mfCode === 'string' && key.startsWith('microfox_') && 
         key !== 'microfox_current_mf' && 
         key !== 'microfox_current_user' && 
+        key !== 'microfox_session_active' && 
         key !== 'microfox_users' && 
         key !== 'microfox_permissions') {
       const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
@@ -184,7 +185,7 @@ try {
     const mfCode = globalMfCode;
     const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
     
-    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_session_active' && (isGlobal || mfCode)) {
       const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
       const fullKey = isGlobal ? key : prefix + key;
       
@@ -303,7 +304,7 @@ try {
     const mfCode = nativeGetItem('microfox_current_mf');
     const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
 
-    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && (isGlobal || mfCode)) {
+    if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_session_active' && (isGlobal || mfCode)) {
       const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
       const fullKey = isGlobal ? key : prefix + key;
       nativeRemoveItem(fullKey);
@@ -516,7 +517,7 @@ const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string>('Accueil');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(window.innerWidth >= 1024);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    if (sessionStorage.getItem('microfox_session_active') !== 'true') return null;
+    if (sessionStorage.getItem('microfox_session_active') !== 'true' && localStorage.getItem('microfox_session_active') !== 'true') return null;
     try {
       const saved = localStorage.getItem('microfox_current_user');
       return saved ? JSON.parse(saved) : null;
@@ -1203,6 +1204,7 @@ const App: React.FC = () => {
     localStorage.setItem('microfox_current_mf', user.codeMF);
     localStorage.setItem('microfox_current_user', JSON.stringify(user));
     sessionStorage.setItem('microfox_session_active', 'true');
+    localStorage.setItem('microfox_session_active', 'true');
     const prefix = `mf_${user.codeMF.toLowerCase().replace(/\s+/g, '_')}_`;
     const hasCachedData = !!localStorage.getItem(prefix + 'microfox_members_data') || !!localStorage.getItem('microfox_members_data');
     setupStorageIsolation(user.codeMF, hasCachedData, hasCachedData); // Apply isolation immediately without reload
@@ -1308,6 +1310,7 @@ const App: React.FC = () => {
 
     // Use native methods to ensure cleanup works even if overrides are broken
     sessionStorage.removeItem('microfox_session_active');
+    localStorage.removeItem('microfox_session_active');
 
     // Fetch refreshed dirty keys to ensure we do NOT delete them on logout
     const finalDirtyKeysStr = nativeGetItem('microfox_dirty_keys') || '[]';
