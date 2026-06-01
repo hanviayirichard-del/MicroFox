@@ -14,7 +14,7 @@ const MainCashier: React.FC = () => {
     if (userStr) {
       const u = JSON.parse(userStr);
       if (u.role === 'caissier' && u.caisse) {
-        return u.caisse;
+        return u.caisse.trim();
       }
     }
     return 'Tous';
@@ -70,7 +70,7 @@ const MainCashier: React.FC = () => {
     if (userStr) {
       const user = JSON.parse(userStr);
       if (user.role === 'caissier' && user.caisse) {
-        return user.caisse;
+        return user.caisse.trim();
       }
     }
     return 'CAISSE PRINCIPALE';
@@ -81,7 +81,7 @@ const MainCashier: React.FC = () => {
     if (userStr) {
       const user = JSON.parse(userStr);
       if (user.role === 'caissier' && user.caisse) {
-        initialCaisse = user.caisse;
+        initialCaisse = user.caisse.trim();
       }
     }
     const saved = localStorage.getItem(`microfox_cash_balance_${initialCaisse}`);
@@ -504,11 +504,11 @@ const MainCashier: React.FC = () => {
     const matchesSearch = (p.agentName || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'Tous' || p.status === filterStatus;
     
-    const itemCaisse = p.caisse || 'CAISSE PRINCIPALE';
+    const itemCaisse = (p.caisse || 'CAISSE PRINCIPALE').trim();
     const matchesCaisse = 
-      paymentCaisseFilter === 'Tous' ||
-      (itemCaisse.toLowerCase() === paymentCaisseFilter.toLowerCase()) || 
-      (p.type === 'CASHIER_TRANSFER' && p.agentName?.toLowerCase() === paymentCaisseFilter.toLowerCase());
+      paymentCaisseFilter.trim().toLowerCase() === 'tous' ||
+      (itemCaisse.toLowerCase() === paymentCaisseFilter.trim().toLowerCase()) || 
+      (p.type === 'CASHIER_TRANSFER' && p.agentName?.trim().toLowerCase() === paymentCaisseFilter.trim().toLowerCase());
     
     const txDate = p.date ? p.date.split('T')[0].split(' ')[0] : '';
     const matchesDate = (!startDate || txDate >= startDate) && (!endDate || txDate <= endDate);

@@ -95,11 +95,19 @@ const UserManagement: React.FC = () => {
 
   const handleOpenCreateModal = () => {
     setEditingUser(null);
+    const curr = (() => {
+      try {
+        const saved = localStorage.getItem('microfox_current_user');
+        return saved ? JSON.parse(saved) : null;
+      } catch (e) {
+        return null;
+      }
+    })();
     setFormData({
       identifiant: '',
       role: 'agent commercial',
-      microfinance: '',
-      codeMF: '',
+      microfinance: curr?.codeMF === 'GLOBAL' ? '' : (curr?.microfinance || ''),
+      codeMF: curr?.codeMF === 'GLOBAL' ? '' : (curr?.codeMF || ''),
       motDePasse: '',
       zoneCollecte: '',
       zonesCollecte: [],
@@ -247,15 +255,19 @@ const UserManagement: React.FC = () => {
   };
 
   const currentUser = React.useMemo(() => {
-    const saved = localStorage.getItem('microfox_current_user');
-    return saved ? JSON.parse(saved) : null;
-  }, []);
+    try {
+      const saved = localStorage.getItem('microfox_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  }, [users]);
 
   const filteredUsers = users.filter(u => 
     !u.isDeleted && 
-    (!currentUser || currentUser.codeMF === 'GLOBAL' || u.codeMF === currentUser.codeMF) && (
-      u.identifiant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.microfinance.toLowerCase().includes(searchTerm.toLowerCase())
+    (!currentUser || currentUser.codeMF === 'GLOBAL' || (u.codeMF || '').trim().toUpperCase() === (currentUser.codeMF || '').trim().toUpperCase()) && (
+      (u.identifiant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.microfinance || '').toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
 

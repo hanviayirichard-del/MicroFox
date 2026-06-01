@@ -483,6 +483,7 @@ const App: React.FC = () => {
         throw error;
       } finally {
         setIsBackgroundSyncing(false);
+        isSyncingRef.current = false;
       }
     })();
 
@@ -503,7 +504,6 @@ const App: React.FC = () => {
       console.error('Error during initial sync:', error);
     } finally {
       setIsSyncing(false);
-      isSyncingRef.current = false;
     }
   };
 
