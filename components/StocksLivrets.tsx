@@ -13,6 +13,7 @@ interface StockDistribution {
   type: 'epargne' | 'tontine';
   quantity: number;
   status: 'En attente' | 'Validé';
+  isDeleted?: boolean;
 }
 
 interface StockReturn {
@@ -23,6 +24,7 @@ interface StockReturn {
   type: 'epargne' | 'tontine';
   quantity: number;
   status: 'En attente' | 'Validé';
+  isDeleted?: boolean;
 }
 
 interface StockPurchase {

@@ -831,7 +831,7 @@ const FinancialReports: React.FC = () => {
               reportName = "Versement des Agents Commerciaux";
               break;
             case 'tontine_depots':
-              if (id === 'all') break;
+              if ((id as string) === 'all') break;
               Object.entries(data.tontineDepotsByZone).forEach(([zone, list]) => {
                 if (selectedZone === 'all' || selectedZone === zone) {
                   (list as any[]).forEach(tx => listToExport.push({ ...tx, zone }));
@@ -840,7 +840,7 @@ const FinancialReports: React.FC = () => {
               reportName = "Dépôts Tontine par Zone";
               break;
             case 'tontine_retraits':
-              if (id === 'all') break;
+              if ((id as string) === 'all') break;
               Object.entries(data.tontineRetraitsByZone).forEach(([zone, list]) => {
                 if (selectedZone === 'all' || selectedZone === zone) {
                   (list as any[]).forEach(tx => listToExport.push({ ...tx, zone }));
@@ -849,7 +849,7 @@ const FinancialReports: React.FC = () => {
               reportName = "Retraits Tontine par Zone";
               break;
             case 'vente_livrets':
-              if (id === 'all') break;
+              if ((id as string) === 'all') break;
               listToExport = [...data.livretsEpargne];
               Object.entries(data.livretsTontineByZone).forEach(([zone, list]) => {
                 if (selectedZone === 'all' || selectedZone === zone) {

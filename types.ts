@@ -56,7 +56,7 @@ export interface TontineAccount {
 
 export interface Transaction {
   id: string;
-  type: 'depot' | 'retrait' | 'cotisation' | 'remboursement' | 'transfert' | 'deblocage' | 'cloture_cycle';
+  type: 'depot' | 'retrait' | 'cotisation' | 'remboursement' | 'transfert' | 'deblocage' | 'cloture_cycle' | 'annulation';
   account: 'epargne' | 'tontine' | 'credit' | 'garantie' | 'partSociale' | 'frais';
   tontineAccountId?: string;
   tontineAccountIds?: string[];
@@ -120,6 +120,7 @@ export interface ClientAccount {
   refCaution?: string;
   telRefCaution?: string;
   creditStatus?: 'Sain' | 'Retard' | 'Contentieux';
+  statusDossier?: string;
   isEpargneBlocked?: boolean;
   isEpargneInvisible?: boolean;
   lastCreditDetails?: {

@@ -163,7 +163,7 @@ const OperationForm: React.FC<{
                            (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && isEpargneBlockedByAdmin);
   
   const selectedTontines = tontineAccounts.filter(a => selectedTontineIds.includes(a.id));
-  const isTontineBlocked = (account === 'tontine' || (type === 'transfert' && account === 'tontine')) && selectedTontines.some(a => a.isBlocked);
+  const isTontineBlocked = (((account as string) === 'tontine' || (type === 'transfert' && (account as string) === 'tontine')) && selectedTontines.some(a => a.isBlocked));
   
   const [validatedRequests, setValidatedRequests] = useState<any[]>([]);
   const [selectedValidatedIds, setSelectedValidatedIds] = useState<string[]>([]);
@@ -258,7 +258,7 @@ const OperationForm: React.FC<{
       return;
     }
 
-    if ((account === 'tontine' || (type === 'transfert' && account === 'tontine')) && isTontineBlocked && selectedValidatedIds.length === 0) {
+    if (((account as string) === 'tontine' || (type === 'transfert' && (account as string) === 'tontine')) && isTontineBlocked && selectedValidatedIds.length === 0) {
       setStatusMessage({ text: "Opération impossible : Le compte tontine est bloqué.", type: 'error' });
       return;
     }

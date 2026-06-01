@@ -1381,14 +1381,14 @@ const TontineVerification: React.FC = () => {
                               className="p-1.5 lg:p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                               title="Rejeter"
                             >
-                              <XCircle size={18} lg:size={22} />
+                              <XCircle className="w-[18px] h-[18px] lg:w-[22px] lg:h-[22px]" />
                             </button>
                             <button 
                               onClick={() => handleApprove(request)}
                               className="p-1.5 lg:p-2 text-gray-300 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
                               title="Valider pour paiement"
                             >
-                              <CheckCircle size={18} lg:size={22} />
+                              <CheckCircle className="w-[18px] h-[18px] lg:w-[22px] lg:h-[22px]" />
                             </button>
                           </div>
                         </td>
