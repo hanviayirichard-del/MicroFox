@@ -84,6 +84,10 @@ const VaultAndBank: React.FC = () => {
         return;
       }
 
+      if (tx.type === "Versement Agent") {
+        return;
+      }
+
       if (fromCaisse === 'COFFRE') {
         theoretical['COFFRE'] -= tx.amount;
       } else if (theoretical[fromCaisse] !== undefined) {
@@ -109,13 +113,15 @@ const VaultAndBank: React.FC = () => {
     payments.forEach((p: any) => {
       if (p.type === 'CASHIER_TRANSFER') {
         const sourceCaisse = (p.agentId || '').toUpperCase();
+        const targetCaisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+
         if (theoretical[sourceCaisse] !== undefined) {
-          if (p.status === 'En attente') {
-            const theoreticalAmt = p.totalAmount - (p.gap || 0);
-            theoretical[sourceCaisse] -= theoreticalAmt;
-          } else if (p.status === 'Validé') {
-            theoretical[sourceCaisse] += (p.gap || 0);
-          }
+          const theoreticalAmt = p.totalAmount - (p.gap || 0);
+          theoretical[sourceCaisse] -= theoreticalAmt;
+        }
+
+        if (p.status === 'Validé' && theoretical[targetCaisse] !== undefined) {
+          theoretical[targetCaisse] += (p.observedAmount || p.totalAmount);
         }
       } else {
         if (p.status === 'Validé') {

@@ -31,6 +31,11 @@ const VenteLivrets: React.FC = () => {
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
 
+  const isEditingPriceRef = React.useRef(isEditingPrice);
+  React.useEffect(() => {
+    isEditingPriceRef.current = isEditingPrice;
+  }, [isEditingPrice]);
+
   const loadData = () => {
     const saved = localStorage.getItem('microfox_members_data');
     const membersData = saved ? JSON.parse(saved) : [];
@@ -39,8 +44,10 @@ const VenteLivrets: React.FC = () => {
     if (savedPrices) {
       const p = JSON.parse(savedPrices);
       setPrices(p);
-      setTempPriceEpargne(p.epargne);
-      setTempPriceTontine(p.tontine);
+      if (!isEditingPriceRef.current) {
+        setTempPriceEpargne(p.epargne);
+        setTempPriceTontine(p.tontine);
+      }
     }
 
     const savedUser = localStorage.getItem('microfox_current_user');
@@ -388,9 +395,24 @@ const VenteLivrets: React.FC = () => {
     const newPrices = { epargne: tempPriceEpargne, tontine: tempPriceTontine };
     setPrices(newPrices);
     localStorage.setItem('microfox_livret_prices', JSON.stringify(newPrices));
+
+    // Mettre à jour la configuration générale de la microfinance pour synchroniser le prix des livrets
+    const savedConfig = localStorage.getItem('microfox_mf_config');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        config.prixLivretCompte = tempPriceEpargne;
+        config.prixLivretTontine = tempPriceTontine;
+        localStorage.setItem('microfox_mf_config', JSON.stringify(config));
+      } catch (e) {
+        console.error("Error updating mf config prices:", e);
+      }
+    }
+
     setIsEditingPrice(false);
     setSuccessMessage("Prix des livrets mis à jour !");
     setTimeout(() => setSuccessMessage(null), 3000);
+    dispatchStorageEvent();
   };
 
   const filteredMembers = members.filter(m => {
