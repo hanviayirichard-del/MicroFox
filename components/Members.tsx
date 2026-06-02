@@ -3490,11 +3490,14 @@ const Members: React.FC = () => {
 
   const handleOpenEpargne = (info: { number: string; adhesion: number; livret: number; partSociale: number; depot: number }) => {
     if (!selectedClientId) return;
+    const currentUser = JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
     const saved = localStorage.getItem('microfox_members_data');
     const allMembers = saved ? JSON.parse(saved) : clients;
+    let finalHistory: any[] = [];
     const updated = allMembers.map((c: any) => {
       if (c.id === selectedClientId) {
-        const history = [...c.history];
+        const savedHistoryStr = localStorage.getItem(`microfox_history_${c.id}`);
+        const history = savedHistoryStr ? JSON.parse(savedHistoryStr) : [...(c.history || [])];
         const now = new Date().toISOString();
         
         if (info.partSociale > 0) {
@@ -3552,6 +3555,8 @@ const Members: React.FC = () => {
           });
         }
 
+        finalHistory = history;
+
         return {
           ...c,
           epargneAccountNumber: info.number,
@@ -3566,6 +3571,11 @@ const Members: React.FC = () => {
       }
       return c;
     });
+
+    if (finalHistory.length > 0) {
+      localStorage.setItem(`microfox_history_${selectedClientId}`, JSON.stringify(finalHistory));
+    }
+
     setClients(updated);
     localStorage.setItem('microfox_members_data', JSON.stringify(updated));
     localStorage.setItem('microfox_pending_sync', 'true');

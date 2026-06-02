@@ -24,15 +24,31 @@ const recalculateMicrofoxBalances = () => {
 
     const chronoVaultTxs = [...vaultTxs].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+    const savedUsers = localStorage.getItem('microfox_users');
+    const usersList = savedUsers ? JSON.parse(savedUsers) : [];
+    const defaultCaisses = ['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'];
+    
+    const caisseKeysToUpdate = new Set<string>();
+    defaultCaisses.forEach(c => {
+      caisseKeysToUpdate.add(c);
+      caisseKeysToUpdate.add(c.toUpperCase());
+    });
+    
+    usersList.forEach((usr: any) => {
+      if (usr.caisse) {
+        caisseKeysToUpdate.add(usr.caisse.trim());
+        caisseKeysToUpdate.add(usr.caisse.trim().toUpperCase());
+      }
+    });
+
     const theoretical: Record<string, number> = {
       'COFFRE': 0,
       'BANQUE': storedBanque,
-      'CAISSE PRINCIPALE': 0,
-      'CAISSE 1': 0,
-      'CAISSE 2': 0,
-      'CAISSE 3': 0,
-      'CAISSE 4': 0,
     };
+    
+    caisseKeysToUpdate.forEach(c => {
+      theoretical[c.toUpperCase()] = 0;
+    });
 
     chronoVaultTxs.forEach((tx: any) => {
       if (tx.type === "Initialisation Coffre Fort") {
@@ -43,15 +59,25 @@ const recalculateMicrofoxBalances = () => {
     });
 
     members.forEach((m: any) => {
-      if (m.history) {
-        m.history.forEach((tx: any) => {
+      const savedHistoryStr = localStorage.getItem(`microfox_history_${m.id}`);
+      const memberHistory = savedHistoryStr ? JSON.parse(savedHistoryStr) : (m.history || []);
+      if (memberHistory) {
+        memberHistory.forEach((tx: any) => {
           if (tx.isDeleted || tx.type === 'annulation' || tx.status === 'deleted') {
             return;
           }
           const txCaisse = (tx.caisse || '').toUpperCase();
           if (txCaisse && theoretical[txCaisse] !== undefined) {
-            const isCredit = tx.type === 'deposit' || tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
-            const isDebit = tx.type === 'retrait' || tx.type === 'transfert' || tx.type === 'deblocage';
+            const isCredit = [
+              'deposit', 'depot', 'cotisation', 'remboursement',
+              'parts_sociales_frais', 'frais_adhesion', 'adhesion',
+              'part_sociale', 'vente_livret', 'credit'
+            ].includes(tx.type);
+            const isDebit = [
+              'retrait', 'transfert', 'deblocage', 'debit',
+              'dépense', 'depense'
+            ].includes(tx.type);
+            
             if (isCredit) {
               theoretical[txCaisse] += tx.amount;
             } else if (isDebit) {
@@ -124,11 +150,11 @@ const recalculateMicrofoxBalances = () => {
 
     localStorage.setItem('microfox_vault_balance', theoretical['COFFRE'].toString());
     localStorage.setItem('microfox_bank_balance', theoretical['BANQUE'].toString());
-    localStorage.setItem('microfox_cash_balance_CAISSE PRINCIPALE', theoretical['CAISSE PRINCIPALE'].toString());
-    localStorage.setItem('microfox_cash_balance_CAISSE 1', theoretical['CAISSE 1'].toString());
-    localStorage.setItem('microfox_cash_balance_CAISSE 2', theoretical['CAISSE 2'].toString());
-    localStorage.setItem('microfox_cash_balance_CAISSE 3', theoretical['CAISSE 3'].toString());
-    localStorage.setItem('microfox_cash_balance_CAISSE 4', theoretical['CAISSE 4'].toString());
+    
+    caisseKeysToUpdate.forEach(c => {
+      const balance = theoretical[c.toUpperCase()] || 0;
+      localStorage.setItem(`microfox_cash_balance_${c}`, balance.toString());
+    });
   } catch (error) {
     console.error('Error in automatic balance recalculation:', error);
   }

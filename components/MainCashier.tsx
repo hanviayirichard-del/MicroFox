@@ -175,8 +175,15 @@ const MainCashier: React.FC = () => {
         }
         const txCaisse = (tx.caisse || '').toUpperCase();
         if (txCaisse === targetCaisseUpper) {
-          const isCredit = ['deposit', 'depot', 'cotisation', 'remboursement', 'parts_sociales_frais', 'frais_adhesion', 'credit'].includes(tx.type);
-          const isDebit = ['retrait', 'transfert', 'deblocage', 'debit'].includes(tx.type);
+          const isCredit = [
+            'deposit', 'depot', 'cotisation', 'remboursement',
+            'parts_sociales_frais', 'frais_adhesion', 'adhesion',
+            'part_sociale', 'vente_livret', 'credit'
+          ].includes(tx.type);
+          const isDebit = [
+            'retrait', 'transfert', 'deblocage', 'debit',
+            'dépense', 'depense'
+          ].includes(tx.type);
           if (isCredit || isDebit) {
             let label = tx.type;
             if (tx.type === 'deposit' || tx.type === 'depot') label = "Dépôt Épargne";
