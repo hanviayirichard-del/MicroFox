@@ -40,14 +40,35 @@ const VenteLivrets: React.FC = () => {
     const saved = localStorage.getItem('microfox_members_data');
     const membersData = saved ? JSON.parse(saved) : [];
 
-    const savedPrices = localStorage.getItem('microfox_livret_prices');
-    if (savedPrices) {
-      const p = JSON.parse(savedPrices);
-      setPrices(p);
-      if (!isEditingPriceRef.current) {
-        setTempPriceEpargne(p.epargne);
-        setTempPriceTontine(p.tontine);
+    // Prioritize prices from synchronized general microfinance config if defined
+    const savedConfig = localStorage.getItem('microfox_mf_config');
+    let p = { epargne: 300, tontine: 500 };
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        if (config.prixLivretCompte !== undefined && Number(config.prixLivretCompte) > 0) {
+          p.epargne = Number(config.prixLivretCompte);
+        }
+        if (config.prixLivretTontine !== undefined && Number(config.prixLivretTontine) > 0) {
+          p.tontine = Number(config.prixLivretTontine);
+        }
+      } catch (e) {}
+    } else {
+      const savedPrices = localStorage.getItem('microfox_livret_prices');
+      if (savedPrices) {
+        try {
+          const lp = JSON.parse(savedPrices);
+          if (lp.epargne) p.epargne = lp.epargne;
+          if (lp.tontine) p.tontine = lp.tontine;
+        } catch (e) {}
       }
+    }
+
+    localStorage.setItem('microfox_livret_prices', JSON.stringify(p));
+    setPrices(p);
+    if (!isEditingPriceRef.current) {
+      setTempPriceEpargne(p.epargne);
+      setTempPriceTontine(p.tontine);
     }
 
     const savedUser = localStorage.getItem('microfox_current_user');
@@ -398,15 +419,14 @@ const VenteLivrets: React.FC = () => {
 
     // Mettre à jour la configuration générale de la microfinance pour synchroniser le prix des livrets
     const savedConfig = localStorage.getItem('microfox_mf_config');
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        config.prixLivretCompte = tempPriceEpargne;
-        config.prixLivretTontine = tempPriceTontine;
-        localStorage.setItem('microfox_mf_config', JSON.stringify(config));
-      } catch (e) {
-        console.error("Error updating mf config prices:", e);
-      }
+    const existingConfig = savedConfig ? JSON.parse(savedConfig) : { nom: "MicroFoX", adresse: "", code: "" };
+    try {
+      existingConfig.prixLivretCompte = tempPriceEpargne;
+      existingConfig.prixLivretTontine = tempPriceTontine;
+      localStorage.setItem('microfox_mf_config', JSON.stringify(existingConfig));
+      localStorage.setItem('microfox_pending_sync', 'true');
+    } catch (e) {
+      console.error("Error updating mf config prices:", e);
     }
 
     setIsEditingPrice(false);

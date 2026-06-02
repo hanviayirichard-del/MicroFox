@@ -45,6 +45,9 @@ const recalculateMicrofoxBalances = () => {
     members.forEach((m: any) => {
       if (m.history) {
         m.history.forEach((tx: any) => {
+          if (tx.isDeleted || tx.type === 'annulation' || tx.status === 'deleted') {
+            return;
+          }
           const txCaisse = (tx.caisse || '').toUpperCase();
           if (txCaisse && theoretical[txCaisse] !== undefined) {
             const isCredit = tx.type === 'deposit' || tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
@@ -68,6 +71,14 @@ const recalculateMicrofoxBalances = () => {
       }
 
       if (tx.type === "Versement Agent") {
+        return;
+      }
+
+      // Skip cashier-to-main cashier transfers and regular cashier agent deposits here,
+      // as they are handled in the payments loop to prevent double-counting.
+      const isCashierTransfer = tx.type === "Versement Caisse Principale" && fromCaisse !== 'COFFRE';
+      const isRegularVersement = tx.type === "Versement Caisse";
+      if (isCashierTransfer || isRegularVersement) {
         return;
       }
 
@@ -95,22 +106,17 @@ const recalculateMicrofoxBalances = () => {
 
     payments.forEach((p: any) => {
       if (p.type === 'CASHIER_TRANSFER') {
-        const sourceCaisse = (p.agentId || '').toUpperCase();
-        const targetCaisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+        if (p.status !== 'Rejeté' && p.status !== 'Annulé' && p.status !== 'Extourné') {
+          const sourceCaisse = (p.agentId || '').toUpperCase();
+          const targetCaisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
 
-        if (theoretical[sourceCaisse] !== undefined) {
-          const theoreticalAmt = p.totalAmount - (p.gap || 0);
-          theoretical[sourceCaisse] -= theoreticalAmt;
-        }
+          if (theoretical[sourceCaisse] !== undefined) {
+            const theoreticalAmt = p.totalAmount - (p.gap || 0);
+            theoretical[sourceCaisse] -= theoreticalAmt;
+          }
 
-        if (p.status === 'Validé' && theoretical[targetCaisse] !== undefined) {
-          theoretical[targetCaisse] += (p.observedAmount || p.totalAmount);
-        }
-      } else {
-        if (p.status === 'Validé') {
-          const caisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
-          if (theoretical[caisse] !== undefined) {
-            theoretical[caisse] += (p.observedAmount || p.totalAmount);
+          if (p.status === 'Validé' && theoretical[targetCaisse] !== undefined) {
+            theoretical[targetCaisse] += (p.observedAmount || p.totalAmount);
           }
         }
       }
