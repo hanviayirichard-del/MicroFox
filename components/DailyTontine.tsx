@@ -127,21 +127,22 @@ const DailyTontine: React.FC = () => {
 
             if (grossBalance > 0) {
               const accountHistory = clientHistory
-                .filter((h: any) => ((h.account === 'tontine' && (
-                  h.tontineAccountId === accountId || 
-                  h.tontineAccountNumber === acc.number ||
-                  (!h.tontineAccountId && !h.tontineAccountNumber && (
-                    (isFirstAccount && (!h.description?.includes('Compte:') || (acc.number && h.description?.includes(acc.number)))) ||
-                    (acc.number && h.description?.includes(acc.number))
-                  ))
-                ) && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine' && (
-                  h.tontineAccountId === accountId || 
-                  h.tontineAccountNumber === acc.number ||
-                  (!h.tontineAccountId && !h.tontineAccountNumber && (
-                    (isFirstAccount && (!h.description?.includes('Compte:') || (acc.number && h.description?.includes(acc.number)))) ||
-                    (acc.number && h.description?.includes(acc.number))
-                  ))
-                ))) && !h.description?.toLowerCase().includes('livret'))
+                .filter((h: any) => {
+                  const isAccountMatch = h.tontineAccountId === accountId || 
+                    h.tontineAccountNumber === acc.number ||
+                    (!h.tontineAccountId && !h.tontineAccountNumber && (
+                      (isFirstAccount && (!h.description?.includes('Compte:') || (acc.number && h.description?.includes(acc.number)))) ||
+                      (acc.number && h.description?.includes(acc.number))
+                    ));
+
+                  if (h.type === 'cloture_cycle') {
+                    return isAccountMatch;
+                  }
+
+                  return (((h.account === 'tontine' && isAccountMatch && (h.type === 'cotisation' || h.type === 'depot')) || 
+                    (h.type === 'transfert' && h.destinationAccount === 'tontine' && isAccountMatch)
+                  ) && !h.description?.toLowerCase().includes('livret'));
+                })
                 .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
               const accountWithdrawalsRaw = [
@@ -201,6 +202,22 @@ const DailyTontine: React.FC = () => {
                       encounteredWithdrawalIds.add(w.id);
                     }
                   });
+
+                  if (tx.type === 'cloture_cycle') {
+                    if (currentCycleFirstDepositDate !== null) {
+                      const comm = currentCycleAmount > 0 ? dailyMise : 0;
+                      totalCommissionsPaid += comm;
+                      const netCycleAmount = Math.max(0, currentCycleAmount - comm);
+                      totalDecaissable += netCycleAmount;
+                      
+                      cycleIdx++;
+                      currentCycleCases = 0;
+                      currentCycleAmount = 0;
+                      currentCycleFirstDepositDate = null;
+                    }
+                    continue;
+                  }
+
                   let remainingAmount = Number(tx.amount);
 
                   let loopSafety1 = 0;
@@ -373,7 +390,9 @@ const DailyTontine: React.FC = () => {
                   const currentMonth = now.getMonth();
                   const currentYear = now.getFullYear();
                   
-                  if (startMonth !== currentMonth || startYear !== currentYear) {
+                  if (currentCycleCases === 0) {
+                    canChangeMise = true;
+                  } else if (startMonth !== currentMonth || startYear !== currentYear) {
                     canChangeMise = false;
                   }
                 }
