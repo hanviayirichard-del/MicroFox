@@ -127,6 +127,194 @@ const MainCashier: React.FC = () => {
 
   const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
 
+  const [activePage, setActivePage] = useState<'versements' | 'details'>('versements');
+
+  const getCaisseTransactionsDetails = () => {
+    const details: any[] = [];
+    const targetCaisseUpper = selectedCaisse.toUpperCase();
+
+    // 1. Initialisations from vault transactions
+    const savedVault = localStorage.getItem('microfox_vault_transactions');
+    const vaultTxs = savedVault ? JSON.parse(savedVault) : [];
+    
+    // 2. Member history transactions
+    const savedMembers = localStorage.getItem('microfox_members_data');
+    const members = savedMembers ? JSON.parse(savedMembers) : [];
+    
+    // 3. Admin expenses
+    const savedExpenses = localStorage.getItem('microfox_admin_expenses');
+    const expenses = savedExpenses ? JSON.parse(savedExpenses) : [];
+    
+    // 4. Cashier transfers
+    const savedPayments = localStorage.getItem('microfox_agent_payments');
+    const payments = savedPayments ? JSON.parse(savedPayments) : [];
+
+    // Initialisation
+    vaultTxs.forEach((tx: any) => {
+      if (tx.type === "Initialisation Caisse Principale" && targetCaisseUpper === 'CAISSE PRINCIPALE') {
+        details.push({
+          id: tx.id || `init_cp_${tx.date}`,
+          date: tx.date,
+          type: "Initialisation Caisse Principale",
+          description: "Solde initial d'ouverture",
+          amount: tx.amount,
+          category: 'credit',
+          rawTx: tx
+        });
+      }
+    });
+
+    // Member transactions
+    members.forEach((m: any) => {
+      const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+      const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+      
+      history.forEach((tx: any) => {
+        if (tx.isDeleted || tx.type === 'annulation' || tx.status === 'deleted') {
+          return;
+        }
+        const txCaisse = (tx.caisse || '').toUpperCase();
+        if (txCaisse === targetCaisseUpper) {
+          const isCredit = ['deposit', 'depot', 'cotisation', 'remboursement', 'parts_sociales_frais', 'frais_adhesion', 'credit'].includes(tx.type);
+          const isDebit = ['retrait', 'transfert', 'deblocage', 'debit'].includes(tx.type);
+          if (isCredit || isDebit) {
+            let label = tx.type;
+            if (tx.type === 'deposit' || tx.type === 'depot') label = "Dépôt Épargne";
+            else if (tx.type === 'cotisation') label = "Cotisation Tontine";
+            else if (tx.type === 'remboursement') label = "Remboursement Crédit";
+            else if (tx.type === 'retrait') label = "Retrait";
+            else if (tx.type === 'transfert') label = "Transfert";
+            else if (tx.type === 'deblocage') label = "Déblocage Crédit";
+            else if (tx.type === 'parts_sociales_frais' || tx.type === 'frais_adhesion') label = "Frais d'Adhésion / Parts Sociales";
+
+            details.push({
+              id: tx.id || `m_tx_${tx.date || Date.now()}_${Math.random()}`,
+              date: tx.date || new Date().toISOString(),
+              type: label,
+              description: `Membre: ${m.nom || ''} ${m.prenom || ''} (${m.codeAdherent || m.id || ''})`,
+              amount: tx.amount,
+              category: isCredit ? 'credit' : 'debit',
+              rawTx: tx
+            });
+          }
+        }
+      });
+    });
+
+    // Vault transactions
+    const chronoVaultTxs = [...vaultTxs].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    chronoVaultTxs.forEach((tx: any) => {
+      if (tx.type === "Initialisation Coffre Fort" || tx.type === "Initialisation Caisse Principale") {
+        return;
+      }
+      if (tx.type === "Versement Agent") {
+        return;
+      }
+      const fromCaisse = (tx.from || '').toUpperCase();
+      const toCaisse = (tx.to || '').toUpperCase();
+
+      const isCashierTransfer = tx.type === "Versement Caisse Principale" && fromCaisse !== 'COFFRE';
+      const isRegularVersement = tx.type === "Versement Caisse";
+      if (isCashierTransfer || isRegularVersement) {
+        return;
+      }
+
+      if (fromCaisse === targetCaisseUpper) {
+        details.push({
+          id: tx.id || `v_tx_from_${tx.date}`,
+          date: tx.date,
+          type: tx.type,
+          description: `Vers: ${tx.to} ${tx.observation ? `(${tx.observation})` : ''}`,
+          amount: tx.amount,
+          category: 'debit',
+          rawTx: tx
+        });
+      }
+
+      if (toCaisse === targetCaisseUpper) {
+        details.push({
+          id: tx.id || `v_tx_to_${tx.date}`,
+          date: tx.date,
+          type: tx.type,
+          description: `De: ${tx.from} ${tx.observation ? `(${tx.observation})` : ''}`,
+          amount: tx.amount,
+          category: 'credit',
+          rawTx: tx
+        });
+      }
+    });
+
+    // Expenses
+    expenses.forEach((e: any) => {
+      if (!e.isDeleted) {
+        const caisse = (e.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+        if (caisse === targetCaisseUpper) {
+          details.push({
+            id: e.id || `exp_${e.date || Date.now()}`,
+            date: e.date || new Date().toISOString(),
+            type: "Dépense Administrative",
+            description: `${e.motif || 'Dépense'} ${e.beneficiaire ? `- Récipiendaire: ${e.beneficiaire}` : ''}`,
+            amount: e.amount,
+            category: 'debit',
+            rawTx: e
+          });
+        }
+      }
+    });
+
+    // Cashier transfers
+    payments.forEach((p: any) => {
+      if (p.type === 'CASHIER_TRANSFER') {
+        if (p.status !== 'Rejeté' && p.status !== 'Annulé' && p.status !== 'Extourné') {
+          const sourceCaisse = (p.agentId || '').toUpperCase();
+          const targetCaisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+
+          if (sourceCaisse === targetCaisseUpper) {
+            const theoreticalAmt = p.totalAmount - (p.gap || 0);
+            details.push({
+              id: p.id || `ct_src_${p.date || Date.now()}`,
+              date: p.date || new Date().toISOString(),
+              type: "Versement Caisse Principale",
+              description: `Versement vers ${targetCaisse} (${p.status})`,
+              amount: theoreticalAmt,
+              category: 'debit',
+              rawTx: p
+            });
+          }
+
+          if (p.status === 'Validé' && targetCaisse === targetCaisseUpper) {
+            details.push({
+              id: p.id || `ct_tgt_${p.date || Date.now()}`,
+              date: p.date || new Date().toISOString(),
+              type: "Entrée versement Caisse",
+              description: `Reçu de la caisse subordonnée ${sourceCaisse}`,
+              amount: p.observedAmount || p.totalAmount,
+              category: 'credit',
+              rawTx: p
+            });
+          }
+        }
+      }
+    });
+
+    // Sort chronologically (oldest first) to compute running balances correctly
+    details.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let running = 0;
+    details.forEach(item => {
+      if (item.category === 'credit') {
+        running += item.amount;
+      } else {
+        running -= item.amount;
+      }
+      item.runningBalance = running;
+    });
+
+    // Show newest first
+    details.reverse();
+    return details;
+  };
+
   useEffect(() => {
     const loadData = () => {
       const savedPayments = localStorage.getItem('microfox_agent_payments');
@@ -742,37 +930,64 @@ const MainCashier: React.FC = () => {
         </div>
       )}
 
+      <div className="flex bg-white p-2 rounded-2xl border border-gray-100 shadow-sm gap-2">
+        <button 
+          onClick={() => setActivePage('versements')}
+          className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activePage === 'versements' 
+              ? 'bg-blue-600 text-white shadow-md' 
+              : 'text-gray-500 hover:text-[#121c32]'
+          }`}
+        >
+          Versements Agents
+        </button>
+        <button 
+          onClick={() => setActivePage('details')}
+          className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activePage === 'details' 
+              ? 'bg-blue-600 text-white shadow-md' 
+              : 'text-gray-500 hover:text-[#121c32]'
+          }`}
+        >
+          Justificatif du Solde Caisse
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
             <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Filtres</h3>
             
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Rechercher Agent..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold outline-none focus:border-blue-400 transition-all"
-              />
-            </div>
+            {activePage === 'versements' && (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher Agent..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold outline-none focus:border-blue-400 transition-all"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              {['Tous', 'En attente', 'Validé', 'Rejeté'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-black uppercase tracking-tight transition-all ${
-                    filterStatus === status 
-                      ? 'bg-blue-600 text-white shadow-md' 
-                      : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+                <div className="space-y-2">
+                  {['Tous', 'En attente', 'Validé', 'Rejeté'].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setFilterStatus(status)}
+                      className={`w-full text-left px-4 py-3 rounded-xl text-xs font-black uppercase tracking-tight transition-all ${
+                        filterStatus === status 
+                          ? 'bg-blue-600 text-white shadow-md' 
+                          : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             <div className="space-y-2 pt-2">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Filtrer par Caisse</p>
@@ -823,158 +1038,227 @@ const MainCashier: React.FC = () => {
         </div>
 
         <div className="lg:col-span-3">
-          <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full min-w-[1000px] text-left">
-                <thead>
-                  <tr className="bg-gray-50/50 border-b border-gray-100">
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer">Agent / Date</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Cotisations</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Livrets</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Écart</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Solde Observé</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Statut</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filteredPayments.length > 0 ? (
-                    filteredPayments.map((p, idx) => (
-                      <tr 
-                        key={`${p.id}_${idx}`} 
-                        className="hover:bg-gray-50/50 transition-colors cursor-pointer"
-                        onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}
-                      >
-                        <td className="px-6 py-5">
-                          <p className="text-xs font-black text-[#121c32] uppercase">
-                            {p.agentName} {p.zone ? `(ZONE ${p.zone})` : ''} - VERSEMENT
-                            {p.cashierName && <span className="block text-[9px] text-gray-400 lowercase italic">par {p.cashierName}</span>}
-                          </p>
-                          <p className="text-[10px] font-bold text-gray-400 mb-2">{new Date(p.date).toLocaleString()}</p>
-                          {p.billetage && (p.status === 'En attente' || expandedPaymentId === p.id) && (
-                            <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                              <div className="mb-2 border-b border-gray-200 pb-2">
-                                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Détails du Versement</p>
-                                <p className="text-[10px] font-bold text-[#121c32] mt-1">Agent: {p.agentName}</p>
-                                <p className="text-[10px] font-bold text-[#121c32]">Date: {new Date(p.date).toLocaleString()}</p>
+          {activePage === 'versements' ? (
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full min-w-[1000px] text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer">Agent / Date</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Cotisations</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Livrets</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Écart</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Solde Observé</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Statut</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredPayments.length > 0 ? (
+                      filteredPayments.map((p, idx) => (
+                        <tr 
+                          key={`${p.id}_${idx}`} 
+                          className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                          onClick={() => setExpandedPaymentId(expandedPaymentId === p.id ? null : p.id)}
+                        >
+                          <td className="px-6 py-5">
+                            <p className="text-xs font-black text-[#121c32] uppercase">
+                              {p.agentName} {p.zone ? `(ZONE ${p.zone})` : ''} - VERSEMENT
+                              {p.cashierName && <span className="block text-[9px] text-gray-400 lowercase italic">par {p.cashierName}</span>}
+                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 mb-2">{new Date(p.date).toLocaleString()}</p>
+                            {p.billetage && (p.status === 'En attente' || expandedPaymentId === p.id) && (
+                              <div className="mt-2 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                                <div className="mb-2 border-b border-gray-200 pb-2">
+                                  <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Détails du Versement</p>
+                                  <p className="text-[10px] font-bold text-[#121c32] mt-1">Agent: {p.agentName}</p>
+                                  <p className="text-[10px] font-bold text-[#121c32]">Date: {new Date(p.date).toLocaleString()}</p>
+                                </div>
+                                <p className="text-[9px] font-black text-gray-400 uppercase mb-2 tracking-widest">Billetage Agent</p>
+                                <div className="space-y-1.5">
+                                  {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map(val => p.billetage[val] > 0 && (
+                                    <div key={val} className="flex justify-between items-center text-[10px] whitespace-nowrap">
+                                      <span className="text-gray-400 font-bold">{val.toLocaleString()} :</span>
+                                      <span className="font-black text-[#121c32] ml-2">x{p.billetage[val]}</span>
+                                    </div>
+                                  ))}
+                                  {p.billetage.monnaie > 0 && (
+                                    <div className="flex justify-between items-center text-[10px] whitespace-nowrap border-t border-gray-200 mt-2 pt-2">
+                                      <span className="text-gray-400 font-bold uppercase">Monnaie :</span>
+                                      <span className="font-black text-[#121c32] ml-2">{Number(p.billetage.monnaie).toLocaleString()} F</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <p className="text-[9px] font-black text-gray-400 uppercase mb-2 tracking-widest">Billetage Agent</p>
-                              <div className="space-y-1.5">
-                                {[10000, 5000, 2000, 1000, 500, 250, 200, 100, 50, 25, 10, 5].map(val => p.billetage[val] > 0 && (
-                                  <div key={val} className="flex justify-between items-center text-[10px] whitespace-nowrap">
-                                    <span className="text-gray-400 font-bold">{val.toLocaleString()} :</span>
-                                    <span className="font-black text-[#121c32] ml-2">x{p.billetage[val]}</span>
-                                  </div>
-                                ))}
-                                {p.billetage.monnaie > 0 && (
-                                  <div className="flex justify-between items-center text-[10px] whitespace-nowrap border-t border-gray-200 mt-2 pt-2">
-                                    <span className="text-gray-400 font-bold uppercase">Monnaie :</span>
-                                    <span className="font-black text-[#121c32] ml-2">{Number(p.billetage.monnaie).toLocaleString()} F</span>
-                                  </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-5 text-right text-xs font-bold text-indigo-600">{p.amountCotisations.toLocaleString()} F</td>
+                          <td className="px-6 py-5 text-right text-xs font-bold text-amber-600">{p.amountLivrets.toLocaleString()} F</td>
+                          <td className="px-6 py-5 text-right">
+                            <span className={`text-xs font-bold ${(p.totalAmount - (p.amountCotisations + p.amountLivrets)) < 0 ? 'text-red-600' : (p.totalAmount - (p.amountCotisations + p.amountLivrets)) > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                              {(p.totalAmount - (p.amountCotisations + p.amountLivrets)) > 0 ? '+' : ''}{(p.totalAmount - (p.amountCotisations + p.amountLivrets)).toLocaleString()} F
+                            </span>
+                          </td>
+                          <td className="px-6 py-5 text-right text-sm font-black text-[#121c32]">{p.totalAmount.toLocaleString()} F</td>
+                          <td className="px-6 py-5">
+                            {p.status === 'En attente' ? (
+                              <div className="flex flex-col gap-1">
+                                <input 
+                                  type="number" 
+                                  placeholder="Observé"
+                                  value={observedAmounts[p.id] || ''}
+                                  onChange={(e) => {
+                                    setObservedAmounts({...observedAmounts, [p.id]: e.target.value});
+                                    if (validationErrors[p.id]) {
+                                      const newErrors = {...validationErrors};
+                                      delete newErrors[p.id];
+                                      setValidationErrors(newErrors);
+                                    }
+                                  }}
+                                  className={`w-24 p-2 bg-white border ${validationErrors[p.id] ? 'border-red-500 animate-pulse' : 'border-gray-300'} rounded-xl text-xs font-black text-[#121c32] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all`}
+                                />
+                                {validationErrors[p.id] && (
+                                  <p className="text-[8px] font-black text-red-500 uppercase leading-tight max-w-[100px] mt-0.5">
+                                    {validationErrors[p.id]}
+                                  </p>
+                                )}
+                                <input 
+                                  type="text" 
+                                  placeholder="Obs..."
+                                  value={gapObservations[p.id] || ''}
+                                  onChange={(e) => setGapObservations({...gapObservations, [p.id]: e.target.value})}
+                                  className="w-24 p-1 bg-white border border-gray-300 rounded-lg text-[9px] font-bold text-[#121c32] outline-none focus:border-blue-400 transition-all"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <p className="text-xs font-black text-[#121c32]">{p.observedAmount?.toLocaleString() || p.totalAmount.toLocaleString()} F</p>
+                                {p.gap !== undefined && p.gap !== 0 && (
+                                  <span className={`text-[9px] font-black uppercase ${p.gap < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                    Écart: {p.gap > 0 ? '+' : ''}{p.gap.toLocaleString()} F
+                                  </span>
                                 )}
                               </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-5 text-right text-xs font-bold text-indigo-600">{p.amountCotisations.toLocaleString()} F</td>
-                        <td className="px-6 py-5 text-right text-xs font-bold text-amber-600">{p.amountLivrets.toLocaleString()} F</td>
-                        <td className="px-6 py-5 text-right">
-                          <span className={`text-xs font-bold ${(p.totalAmount - (p.amountCotisations + p.amountLivrets)) < 0 ? 'text-red-600' : (p.totalAmount - (p.amountCotisations + p.amountLivrets)) > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                            {(p.totalAmount - (p.amountCotisations + p.amountLivrets)) > 0 ? '+' : ''}{(p.totalAmount - (p.amountCotisations + p.amountLivrets)).toLocaleString()} F
-                          </span>
-                        </td>
-                        <td className="px-6 py-5 text-right text-sm font-black text-[#121c32]">{p.totalAmount.toLocaleString()} F</td>
-                        <td className="px-6 py-5">
-                          {p.status === 'En attente' ? (
-                            <div className="flex flex-col gap-1">
-                              <input 
-                                type="number" 
-                                placeholder="Observé"
-                                value={observedAmounts[p.id] || ''}
-                                onChange={(e) => {
-                                  setObservedAmounts({...observedAmounts, [p.id]: e.target.value});
-                                  if (validationErrors[p.id]) {
-                                    const newErrors = {...validationErrors};
-                                    delete newErrors[p.id];
-                                    setValidationErrors(newErrors);
-                                  }
-                                }}
-                                className={`w-24 p-2 bg-white border ${validationErrors[p.id] ? 'border-red-500 animate-pulse' : 'border-gray-300'} rounded-xl text-xs font-black text-[#121c32] outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all`}
-                              />
-                              {validationErrors[p.id] && (
-                                <p className="text-[8px] font-black text-red-500 uppercase leading-tight max-w-[100px] mt-0.5">
-                                  {validationErrors[p.id]}
-                                </p>
-                              )}
-                              <input 
-                                type="text" 
-                                placeholder="Obs..."
-                                value={gapObservations[p.id] || ''}
-                                onChange={(e) => setGapObservations({...gapObservations, [p.id]: e.target.value})}
-                                className="w-24 p-1 bg-white border border-gray-300 rounded-lg text-[9px] font-bold text-[#121c32] outline-none focus:border-blue-400 transition-all"
-                              />
-                            </div>
-                          ) : (
-                            <div className="text-center">
-                              <p className="text-xs font-black text-[#121c32]">{p.observedAmount?.toLocaleString() || p.totalAmount.toLocaleString()} F</p>
-                              {p.gap !== undefined && p.gap !== 0 && (
-                                <span className={`text-[9px] font-black uppercase ${p.gap < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                  Écart: {p.gap > 0 ? '+' : ''}{p.gap.toLocaleString()} F
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                            p.status === 'Validé' ? 'bg-emerald-100 text-emerald-600' : 
-                            p.status === 'Rejeté' ? 'bg-red-100 text-red-600' : 
-                            'bg-amber-100 text-amber-600'
-                          }`}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5 text-right">
-                          {p.status === 'En attente' && (
-                            p.type === 'CASHIER_TRANSFER'
-                              ? ['administrateur', 'directeur'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)
-                              : ['administrateur', 'directeur', 'caissier'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)
-                          ) && (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleAction(p.id, 'Validé')}
-                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                                title="Valider le versement"
-                              >
-                                <CheckCircle size={18} />
-                              </button>
-                              <button
-                                onClick={() => handleAction(p.id, 'Rejeté')}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                                title="Rejeter le versement"
-                              >
-                                <XCircle size={18} />
-                              </button>
-                            </div>
-                          )}
+                            )}
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                              p.status === 'Validé' ? 'bg-emerald-100 text-emerald-600' : 
+                              p.status === 'Rejeté' ? 'bg-red-100 text-red-600' : 
+                              'bg-amber-100 text-amber-600'
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5 text-right">
+                            {p.status === 'En attente' && (
+                              p.type === 'CASHIER_TRANSFER'
+                                ? ['administrateur', 'directeur'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)
+                                : ['administrateur', 'directeur', 'caissier'].includes(JSON.parse(localStorage.getItem('microfox_current_user') || '{}').role)
+                            ) && (
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleAction(p.id, 'Validé')}
+                                  className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                  title="Valider le versement"
+                                >
+                                  <CheckCircle size={18} />
+                                </button>
+                                <button
+                                  onClick={() => handleAction(p.id, 'Rejeté')}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                  title="Rejeter le versement"
+                                >
+                                  <XCircle size={18} />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-20 text-center">
+                          <div className="flex flex-col items-center gap-2 opacity-20">
+                            <ArrowDownCircle size={48} />
+                            <p className="text-xs font-black uppercase tracking-widest">Aucun versement à traiter</p>
+                          </div>
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-20 text-center">
-                        <div className="flex flex-col items-center gap-2 opacity-20">
-                          <ArrowDownCircle size={48} />
-                          <p className="text-xs font-black uppercase tracking-widest">Aucun versement à traiter</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full min-w-[1000px] text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date / Heure</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type d'opération</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Description / Tiers</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Débit / Sortie</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Crédit / Entrée</th>
+                      <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Solde Progressif</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {(() => {
+                      const detailsList = getCaisseTransactionsDetails().filter(item => {
+                        const itemDateStr = item.date ? item.date.split('T')[0] : '';
+                        const matchesStartDate = !startDate || itemDateStr >= startDate;
+                        const matchesEndDate = !endDate || itemDateStr <= endDate;
+                        return matchesStartDate && matchesEndDate;
+                      });
+
+                      return detailsList.length > 0 ? (
+                        detailsList.map((item) => (
+                          <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-5 text-xs font-bold text-gray-500 whitespace-nowrap">
+                              {new Date(item.date).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-5">
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
+                                item.category === 'credit' 
+                                  ? 'bg-emerald-100 text-emerald-600' 
+                                  : 'bg-rose-100 text-rose-600'
+                              }`}>
+                                {item.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 text-xs font-bold text-[#121c32]">
+                              {item.description}
+                            </td>
+                            <td className="px-6 py-5 text-right text-xs font-bold text-rose-600 whitespace-nowrap">
+                              {item.category === 'debit' ? `-${item.amount.toLocaleString()} F` : '-'}
+                            </td>
+                            <td className="px-6 py-5 text-right text-xs font-bold text-emerald-600 whitespace-nowrap">
+                              {item.category === 'credit' ? `+${item.amount.toLocaleString()} F` : '-'}
+                            </td>
+                            <td className="px-6 py-5 text-right text-xs font-black text-[#121c32] whitespace-nowrap">
+                              {item.runningBalance.toLocaleString()} F
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-20 text-center">
+                            <div className="flex flex-col items-center gap-2 opacity-20">
+                              <ArrowDownCircle size={48} />
+                              <p className="text-xs font-black uppercase tracking-widest">Aucune transaction trouvée</p>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
