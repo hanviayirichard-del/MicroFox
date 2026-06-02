@@ -100,13 +100,6 @@ const recalculateMicrofoxBalances = () => {
             theoretical[sourceCaisse] += (p.gap || 0);
           }
         }
-      } else {
-        if (p.status === 'Validé') {
-          const caisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
-          if (theoretical[caisse] !== undefined) {
-            theoretical[caisse] += (p.observedAmount || p.totalAmount);
-          }
-        }
       }
     });
 
