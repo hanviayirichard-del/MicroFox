@@ -94,6 +94,41 @@ export const mergeJSON = (json1: string, json2: string): string => {
   }
 };
 
+const safeNativeSetItem = (key: string, value: string) => {
+  try {
+    Storage.prototype.setItem.call(localStorage, key, value);
+  } catch (e: any) {
+    if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
+      console.warn(`LocalStorage quota exceeded in Supabase sync for key: ${key}. Attempting emergency cleanup.`);
+      try {
+        // Find and delete all non-essential keys
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.endsWith('user_journeys') || k.endsWith('audit_logs') || k.includes('user_journeys') || k.includes('audit_logs'))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => {
+          try {
+            Storage.prototype.removeItem.call(localStorage, k);
+          } catch (err) {}
+        });
+        
+        // Retry
+        Storage.prototype.setItem.call(localStorage, key, value);
+      } catch (retryError) {
+        console.error('Failed to resolve QuotaExceededError even after emergency cleanup:', retryError);
+        try {
+          window.dispatchEvent(new CustomEvent('microfox_quota_exceeded'));
+        } catch (evtErr) {}
+      }
+    } else {
+      throw e;
+    }
+  }
+};
+
 export const syncToSupabase = async (key: string, value: string): Promise<boolean> => {
   if (
     key === 'microfox_current_user' || 
@@ -106,7 +141,7 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
-    const maxRetries = 3;
+    const maxRetries = 15;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Fetch current remote value to merge and avoid overwriting other devices' data
       const { data: remoteItem, error: fetchError } = await supabase
@@ -139,6 +174,14 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
           .select('key');
           
         if (!error && data && data.length > 0) {
+          // Write merged value back to local storage natively to prevent data loss on subsequent local edits
+          const localVal = Storage.prototype.getItem.call(localStorage, key);
+          if (finalValue !== localVal) {
+            safeNativeSetItem(key, finalValue);
+            try {
+              window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key, timestamp: Date.now() } }));
+            } catch (e) {}
+          }
           return true;
         }
         
@@ -185,6 +228,15 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
     if (upsertError) {
       console.error(`Error in fallback upsert for key ${key}:`, upsertError);
       return false;
+    }
+    
+    // Write merged value back to local storage natively to prevent data loss on subsequent local edits
+    const localVal = Storage.prototype.getItem.call(localStorage, key);
+    if (finalValue !== localVal) {
+      safeNativeSetItem(key, finalValue);
+      try {
+        window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key, timestamp: Date.now() } }));
+      } catch (e) {}
     }
     return true;
   } catch (e) {

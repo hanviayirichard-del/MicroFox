@@ -42,8 +42,11 @@ const GlobalJournal: React.FC = () => {
       
       let allTxs: any[] = [];
       allMembers.forEach((member: any) => {
-        if (member.history) {
-          member.history.forEach((tx: any) => {
+        const savedHistoryStr = localStorage.getItem(`microfox_history_${member.id}`);
+        const memberHistory = savedHistoryStr ? JSON.parse(savedHistoryStr) : (member.history || []);
+        
+        if (memberHistory && memberHistory.length > 0) {
+          memberHistory.forEach((tx: any) => {
             // Filter by user if caissier or agent commercial
             if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
