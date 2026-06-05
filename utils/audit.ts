@@ -31,7 +31,7 @@ export const recordAuditLog = (
   
   const updatedLogs = [newLog, ...logs]
     .filter(log => new Date(log.timestamp) > oneMonthAgo)
-    .slice(0, 1000); // Also limit total count
+    .slice(0, 100); // Also limit total count
 
   localStorage.setItem('microfox_audit_logs', JSON.stringify(updatedLogs));
 };

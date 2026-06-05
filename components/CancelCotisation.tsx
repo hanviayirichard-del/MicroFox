@@ -17,6 +17,8 @@ interface TontineTransaction {
   tontineAccountNumber?: string;
   recordedBy: string;
   isValidated: boolean; // true if already deposited at the main desk
+  zone?: string;
+  dateSortTime?: number;
 }
 
 const CancelCotisation: React.FC = () => {
@@ -27,6 +29,8 @@ const CancelCotisation: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedZone, setSelectedZone] = useState<string>('all');
+  const [zonesList, setZonesList] = useState<string[]>([]);
   const [mfConfig] = useState(() => {
     const saved = localStorage.getItem('microfox_mf_config');
     return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
@@ -54,62 +58,137 @@ const CancelCotisation: React.FC = () => {
     const allMembers = JSON.parse(savedMembers);
     const allTransactions: TontineTransaction[] = [];
 
+    // Extract zones list dynamically
+    const uniqueZones = Array.from(new Set(allMembers.map((m: any) => m.zone).filter(Boolean))) as string[];
+    setZonesList(uniqueZones.sort());
+
     // Get validated deposits to check if transaction is already "poured" to main desk
     const savedDeposits = localStorage.getItem('microfox_agent_deposits');
     const validatedDeposits = savedDeposits ? JSON.parse(savedDeposits).filter((d: any) => d.status === 'Validé') : [];
     
+    // Pre-parse validated deposits dates to optimize lookup inside nested some loops
+    const parsedDeposits = validatedDeposits.map((d: any) => {
+      let time = 0;
+      try {
+        if (d.date) {
+          const parsed = new Date(d.date);
+          if (!isNaN(parsed.getTime())) {
+            time = parsed.getTime();
+          }
+        }
+      } catch (e) {}
+      return {
+        agentId: d.agentId,
+        time
+      };
+    }).filter((d: any) => d.time > 0);
+
     // Get validated zones to check if transaction is already "locked"
     const savedValidatedZones = localStorage.getItem('microfox_validated_zone_cotisations');
     const validatedZones = savedValidatedZones ? JSON.parse(savedValidatedZones) : {};
     
+    // Pre-parse validated zones dates
+    const parsedValidatedZones: Record<string, { validatedAtTime: number }> = {};
+    if (validatedZones) {
+      Object.entries(validatedZones).forEach(([key, val]: [string, any]) => {
+        if (val && val.validatedAt) {
+          try {
+            const parsed = new Date(val.validatedAt);
+            if (!isNaN(parsed.getTime())) {
+              parsedValidatedZones[key] = {
+                validatedAtTime: parsed.getTime()
+              };
+            }
+          } catch (e) {}
+        }
+      });
+    }
+
     allMembers.forEach((m: any) => {
-      if (m.isDeleted) return;
-      const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-      const history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+      if (!m || m.isDeleted) return;
+      
+      // Use pre-loaded/hydrated history from m if available to avoid thousands of O(N) localStorage reads
+      let history = m.history;
+      if (!Array.isArray(history)) {
+        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+        try {
+          history = savedHistory ? JSON.parse(savedHistory) : [];
+        } catch (err) {
+          history = [];
+        }
+      }
+      if (!Array.isArray(history)) return;
       
       history.forEach((tx: any) => {
-        // Can only cancel cotisations recorded by the person OR anyone if admin/director
+        if (!tx) return;
+        // Can only cancel cotisations recorded by the person OR anyone if admin/director/caissier
         const isOwner = tx.userId === user.id;
-        const isAdmin = user.role === 'admin' || user.role === 'directeur';
+        const isAuthorizedRole = user.role === 'admin' || user.role === 'administrateur' || user.role === 'directeur' || user.role === 'caissier' || user.role === 'agent commercial';
 
-        if (tx.type === 'cotisation' && tx.account === 'tontine' && (isOwner || isAdmin)) {
-          
-          // Check if this specific transaction was part of a validated deposit
-          const isPoured = validatedDeposits.some((d: any) => 
-            d.agentId === tx.userId && 
-            new Date(tx.date) <= new Date(d.date) // Simplification: if deposit happened after tx
+        if ((tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine' && (isOwner || isAuthorizedRole)) {
+          // Pre-evaluate date times for quick comparison
+          let txTime = 0;
+          let txDate = '';
+          try {
+            if (tx.date) {
+              const dParsed = new Date(tx.date);
+              if (!isNaN(dParsed.getTime())) {
+                txTime = dParsed.getTime();
+                txDate = dParsed.toISOString().split('T')[0];
+              }
+            }
+          } catch (e) {}
+
+          // Check if this specific transaction was part of a validated deposit using numeric checks
+          const isPoured = parsedDeposits.some((d: any) => 
+            d.agentId === tx.userId && txTime <= d.time
           );
 
-          // Check if the zone is validated for this date and if the transaction was made before the validation
-          const txDate = new Date(tx.date).toISOString().split('T')[0];
-          const validationKey = `${txDate}_${m.zone}`;
-          const zoneValidation = validatedZones[validationKey];
-          const isZoneValidated = zoneValidation && new Date(tx.date) <= new Date(zoneValidation.validatedAt);
+          // Check if the zone is validated for this date and if the transaction was made before the validation using pre-parsed timestamps
+          const validationKey = txDate ? `${txDate}_${m.zone || ''}` : '';
+          const zoneValidation = validationKey ? parsedValidatedZones[validationKey] : null;
+          let isZoneValidated = false;
+          if (zoneValidation && txTime > 0) {
+            isZoneValidated = txTime <= zoneValidation.validatedAtTime;
+          }
 
           allTransactions.push({
             id: tx.id,
             clientId: m.id,
             clientName: m.name,
             clientCode: m.code,
-            amount: tx.amount,
+            amount: tx.amount || 0,
             date: tx.date,
-            description: tx.description,
+            description: tx.description || '',
             tontineAccountId: tx.tontineAccountId,
             tontineAccountNumber: tx.tontineAccountNumber,
             userId: tx.userId,
             caisse: tx.caisse || 'AGENT',
             recordedBy: tx.cashierName || 'N/A',
-            isValidated: isPoured || isZoneValidated
+            isValidated: !!(isPoured || isZoneValidated),
+            zone: m.zone,
+            dateSortTime: txTime
           });
         }
       });
     });
 
-    // Sort by date descending
-    setTransactions(allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    // Sort by descending date using pre-calculated numeric timestamps
+    setTransactions(allTransactions.sort((a, b) => {
+      const timeB = b.dateSortTime || 0;
+      const timeA = a.dateSortTime || 0;
+      return timeB - timeA;
+    }));
   };
 
   const handleCancel = (tx: TontineTransaction) => {
+    const userObj = currentUser || JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+    if (userObj.role === 'caissier') {
+      setErrorMessage("Action interdite : Le caissier n'a pas la possibilité de supprimer ou d'annuler une cotisation.");
+      setTimeout(() => setErrorMessage(null), 5000);
+      return;
+    }
+
     if (tx.isValidated) {
       setErrorMessage("Impossible d'annuler : Cette cotisation a déjà été versée à la caisse.");
       setTimeout(() => setErrorMessage(null), 5000);
@@ -190,8 +269,138 @@ const CancelCotisation: React.FC = () => {
     }
   };
 
+  const handleValidateZone = (zoneName: string) => {
+    if (!zoneName || zoneName === 'all') return;
+
+    try {
+      const savedMembers = localStorage.getItem('microfox_members_data');
+      if (!savedMembers) return;
+
+      const members = JSON.parse(savedMembers);
+      const savedValidated = localStorage.getItem('microfox_validated_zone_cotisations');
+      const validatedZones = savedValidated ? JSON.parse(savedValidated) : {};
+
+      let totalAmount = 0;
+      let count = 0;
+      const now = new Date().toISOString();
+      const userObj = currentUser || JSON.parse(localStorage.getItem('microfox_current_user') || '{}');
+
+      const normalizeZone = (z: string | undefined | null) => {
+        if (!z) return '';
+        return z.toString().toUpperCase().replace('ZONE', '').replace(/\s+/g, '').replace(/_/g, '').trim();
+      };
+
+      const updatedMembers = members.map((m: any) => {
+        if (normalizeZone(m.zone) !== normalizeZone(zoneName)) return m;
+
+        // Load and update history
+        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+        let history = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+        let historyChanged = false;
+
+        const updatedHistory = history.map((tx: any) => {
+          const isCotisation = (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine';
+          if (isCotisation && !tx.isDeleted && tx.type !== 'annulation') {
+            const txDate = tx.date ? new Date(tx.date) : null;
+            if (txDate && !isNaN(txDate.getTime())) {
+              const txDay = txDate.toISOString().split('T')[0];
+              const validationKey = `${txDay}_${zoneName}`;
+              const zoneValidation = validatedZones[validationKey];
+              const isTxValidated = tx.isValidated === true || (zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime());
+
+              if (!isTxValidated) {
+                tx.isValidated = true;
+                historyChanged = true;
+                totalAmount += tx.amount;
+                count += 1;
+
+                // Create/update day validation entry in validatedZones
+                if (!validatedZones[validationKey]) {
+                  validatedZones[validationKey] = {
+                    validatedAt: now,
+                    validatedBy: userObj.identifiant || 'SYSTEM',
+                    totalAmount: 0,
+                    count: 0
+                  };
+                }
+                validatedZones[validationKey].validatedAt = now;
+                validatedZones[validationKey].totalAmount += tx.amount;
+                validatedZones[validationKey].count += 1;
+              }
+            }
+          }
+          return tx;
+        });
+
+        if (historyChanged) {
+          localStorage.setItem(`microfox_history_${m.id}`, JSON.stringify(updatedHistory));
+          return {
+            ...m,
+            history: updatedHistory
+          };
+        }
+        return m;
+      });
+
+      if (count === 0) {
+        setErrorMessage("Aucune cotisation en attente à valider pour cette zone.");
+        setTimeout(() => setErrorMessage(null), 5000);
+        return;
+      }
+
+      // Save updated validated records and updated members
+      localStorage.setItem('microfox_validated_zone_cotisations', JSON.stringify(validatedZones));
+      localStorage.setItem('microfox_members_data', JSON.stringify(updatedMembers));
+
+      // Record Audit Log
+      recordAuditLog('MODIFICATION', 'TONTINE', `Validation des cotisations de la zone ${zoneName} - Total validé: ${totalAmount} F (${count} cotisations)`);
+
+      // 4. "L'administrateur qui valide la cotisation doit avoir ce versement dans ses opérations."
+      const isAdmin = userObj.role === 'admin' || userObj.role === 'administrateur';
+      if (isAdmin) {
+        const txsSaved = localStorage.getItem('microfox_vault_transactions');
+        const allTxs = txsSaved ? JSON.parse(txsSaved) : [];
+        const newAdminTx = {
+          id: `val_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'Validation Cotisations',
+          amount: totalAmount,
+          date: now,
+          cashierName: userObj.identifiant || 'ADMIN',
+          observation: `Validation Cotisations Zone ${zoneName} - ${totalAmount} FCFA (${count} cotisations)`
+        };
+        localStorage.setItem('microfox_vault_transactions', JSON.stringify([newAdminTx, ...allTxs]));
+      }
+
+      setSuccessMessage(`Validation réussie de ${totalAmount.toLocaleString()} FCFA pour la zone ${zoneName} !`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+
+      // Refresh
+      loadTransactions();
+      dispatchStorageEvent();
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Une erreur est survenue lors de la validation.");
+      setTimeout(() => setErrorMessage(null), 5000);
+    }
+  };
+
   const filteredTransactions = transactions.filter(tx => {
-    const txDateString = new Date(tx.date).toISOString().split('T')[0];
+    let txDateString = '';
+    try {
+      if (tx.date) {
+        if (typeof tx.date === 'string') {
+          txDateString = tx.date.split('T')[0].split(' ')[0];
+        } else {
+          const dParsed = new Date(tx.date);
+          if (!isNaN(dParsed.getTime())) {
+            const year = dParsed.getFullYear();
+            const month = String(dParsed.getMonth() + 1).padStart(2, '0');
+            const day = String(dParsed.getDate()).padStart(2, '0');
+            txDateString = `${year}-${month}-${day}`;
+          }
+        }
+      }
+    } catch (e) {}
     const matchesSearch = tx.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tx.clientCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (tx.tontineAccountNumber && tx.tontineAccountNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -199,15 +408,24 @@ const CancelCotisation: React.FC = () => {
     
     const matchesDate = txDateString >= startDate && txDateString <= endDate;
     
-    return matchesSearch && matchesDate;
+    const normalizeZone = (z: string | undefined | null) => {
+      if (!z) return '';
+      return z.toString().toUpperCase().replace('ZONE', '').replace(/\s+/g, '').replace(/_/g, '').trim();
+    };
+    
+    const matchesZone = selectedZone === 'all' || normalizeZone(tx.zone) === normalizeZone(selectedZone);
+    
+    return matchesSearch && matchesDate && matchesZone;
   });
 
   const totalFilteredAmount = filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
   const generateReportHTML = (isForPrinting: boolean = false) => {
     const listHtml = filteredTransactions.map((tx, index) => {
-      const formattedDate = new Date(tx.date).toLocaleDateString('fr-FR');
-      const formattedTime = new Date(tx.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const dateObj = tx.date ? new Date(tx.date) : null;
+      const isValidDate = dateObj && !isNaN(dateObj.getTime());
+      const formattedDate = isValidDate ? dateObj.toLocaleDateString('fr-FR') : 'N/A';
+      const formattedTime = isValidDate ? dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
       return `
         <tr>
           <td style="text-align: center; font-weight: bold; padding: 3px 5px; border: 1px solid #cbd5e1;">${index + 1}</td>
@@ -473,9 +691,9 @@ const CancelCotisation: React.FC = () => {
           )}
 
           {errorMessage && (
-            <div className="bg-red-500 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-red-500 text-white p-4 rounded-xl flex items-center justify-center gap-3 shadow-sm animate-in fade-in duration-300">
               <AlertCircle size={20} />
-              <span className="font-black uppercase tracking-tight text-sm text-center">{errorMessage}</span>
+              <span className="font-bold text-sm text-center">{errorMessage}</span>
             </div>
           )}
         </div>
@@ -520,6 +738,34 @@ const CancelCotisation: React.FC = () => {
         </div>
       </div>
 
+      {/* Zone Selector and validation for Admin, Directeur, Caissier, and Agent commercial */}
+      {currentUser && (currentUser.role === 'administrateur' || currentUser.role === 'admin' || currentUser.role === 'directeur' || currentUser.role === 'caissier' || currentUser.role === 'agent commercial') && (
+        <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4 print:hidden">
+          <div className="flex-1 space-y-1 w-full sm:w-auto">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Sélectionner une Zone (Filtrer)</label>
+            <select 
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-100 text-[#121c32] rounded-xl font-bold outline-none focus:border-red-500 transition-all text-sm cursor-pointer"
+            >
+              <option value="all">Toutes les Zones</option>
+              {zonesList.map(zone => (
+                <option key={zone} value={zone}>Zone {zone}</option>
+              ))}
+            </select>
+          </div>
+          {selectedZone !== 'all' && (
+            <button 
+              onClick={() => handleValidateZone(selectedZone)}
+              className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95 shadow-md shadow-emerald-600/10 flex items-center justify-center gap-2"
+            >
+              <CheckCircle size={16} />
+              Valider les cotisations
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Summary Stat */}
       <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -542,7 +788,7 @@ const CancelCotisation: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[800px]">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
+              <tr className="bg-gray-55 border-b border-gray-100">
                 <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date & Heure</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client</th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</th>
@@ -554,11 +800,15 @@ const CancelCotisation: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {filteredTransactions.length > 0 ? (
                 filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={tx.id} className="hover:bg-gray-55/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-[#121c32]">{new Date(tx.date).toLocaleDateString()}</span>
-                        <span className="text-[10px] font-medium text-gray-400">{new Date(tx.date).toLocaleTimeString()}</span>
+                        <span className="text-sm font-bold text-[#121c32]">
+                          {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleDateString('fr-FR') : 'N/A'}
+                        </span>
+                        <span className="text-[10px] font-medium text-gray-400">
+                          {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -586,7 +836,9 @@ const CancelCotisation: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right print:hidden">
-                      {!tx.isValidated ? (
+                      {currentUser?.role === 'caissier' ? (
+                        <div className="text-[10px] text-gray-400 font-bold uppercase italic select-none">Non autorisé</div>
+                      ) : !tx.isValidated ? (
                         <button 
                           onClick={() => handleCancel(tx)}
                           className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"

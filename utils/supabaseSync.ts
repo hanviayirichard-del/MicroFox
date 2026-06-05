@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 
 const mergeObjects = (obj1: any, obj2: any): any => {
-  if (JSON.stringify(obj1) === JSON.stringify(obj2)) return obj1;
+  if (obj1 === obj2) return obj1;
 
   if (Array.isArray(obj1) && Array.isArray(obj2)) {
     const map = new Map();
@@ -95,28 +95,90 @@ export const mergeJSON = (json1: string, json2: string): string => {
 };
 
 const safeNativeSetItem = (key: string, value: string) => {
+  let finalValue = value;
+  
+  if (key.endsWith('microfox_members_data')) {
+    try {
+      const members = JSON.parse(value);
+      if (Array.isArray(members)) {
+        finalValue = JSON.stringify(members.map((m: any) => {
+          const { history, ...rest } = m;
+          return rest;
+        }));
+      }
+    } catch (e) {}
+  }
+  
+  if (key.endsWith('microfox_audit_logs')) {
+    try {
+      const logs = JSON.parse(value);
+      if (Array.isArray(logs)) {
+        finalValue = JSON.stringify(logs.slice(0, 100));
+      }
+    } catch (e) {}
+  }
+
   try {
-    Storage.prototype.setItem.call(localStorage, key, value);
+    Storage.prototype.setItem.call(localStorage, key, finalValue);
   } catch (e: any) {
     if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
       console.warn(`LocalStorage quota exceeded in Supabase sync for key: ${key}. Attempting emergency cleanup.`);
       try {
-        // Find and delete all non-essential keys
+        const currentMf = Storage.prototype.getItem.call(localStorage, 'microfox_current_mf');
+        const activePrefix = currentMf ? `mf_${currentMf.toLowerCase().replace(/\s+/g, '_')}_` : '';
+        
         const keysToRemove: string[] = [];
+        const historyKeys: string[] = [];
+        const logsKeys: string[] = [];
+        
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (k && (k.endsWith('user_journeys') || k.endsWith('audit_logs') || k.includes('user_journeys') || k.includes('audit_logs'))) {
+          if (!k) continue;
+          
+          // Keep essential global keys
+          const isGlobalEssential = [
+            'microfox_current_user',
+            'microfox_current_mf',
+            'microfox_session_active',
+            'microfox_offline_mode',
+            'microfox_users',
+            'microfox_permissions'
+          ].includes(k);
+          
+          if (isGlobalEssential) continue;
+          
+          // Clear any key belonging to an inactive microfinance code
+          if (k.startsWith('mf_') && activePrefix && !k.startsWith(activePrefix)) {
             keysToRemove.push(k);
+            continue;
+          }
+          
+          // Mark audit logs and user journeys for clean up
+          if (k.includes('user_journeys') || k.includes('audit_logs')) {
+            logsKeys.push(k);
+          }
+          
+          // Mark history keys for clean up (as they are fully re-fetched or merged from server/cache)
+          if (k.includes('microfox_history_')) {
+            historyKeys.push(k);
           }
         }
+        
+        // Execute the cleanups
         keysToRemove.forEach(k => {
-          try {
-            Storage.prototype.removeItem.call(localStorage, k);
-          } catch (err) {}
+          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+        });
+        
+        logsKeys.forEach(k => {
+          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+        });
+        
+        historyKeys.forEach(k => {
+          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
         });
         
         // Retry
-        Storage.prototype.setItem.call(localStorage, key, value);
+        Storage.prototype.setItem.call(localStorage, key, finalValue);
       } catch (retryError) {
         console.error('Failed to resolve QuotaExceededError even after emergency cleanup:', retryError);
         try {
@@ -265,6 +327,30 @@ export const pullFromSupabase = async (
     // Use incremental sync to protect the database Disk I/O budget
     const lastPullTime = localStorage.getItem(`microfox_last_pulled_${prefix}`);
 
+    if (!lastPullTime && prefix.startsWith('mf_')) {
+      // Prioritize members_data on login/initial sync to show clients immediately
+      try {
+        const targetMembersKey = prefix + 'microfox_members_data';
+        const { data: pData } = await supabase
+          .from('storage')
+          .select('key, value, updated_at')
+          .eq('key', targetMembersKey)
+          .maybeSingle();
+        if (pData) {
+          const localValue = originalGetItem(pData.key);
+          const finalValue = localValue ? mergeJSON(localValue, pData.value) : pData.value;
+          if (finalValue !== localValue) {
+            originalSetItem(pData.key, finalValue);
+            try {
+              window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key: pData.key, timestamp: Date.now() } }));
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.error('Error with prioritized fetch of members_data:', err);
+      }
+    }
+
     while (hasMore && safetyIterations++ < 100) {
       let query = supabase
         .from('storage')
@@ -334,6 +420,9 @@ export const pullFromSupabase = async (
           if (finalValue !== localValue) {
             originalSetItem(item.key, finalValue);
             changed = true;
+            try {
+              window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key: item.key, timestamp: Date.now() } }));
+            } catch (e) {}
           }
         }
       });

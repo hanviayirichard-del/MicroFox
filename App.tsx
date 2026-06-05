@@ -6,6 +6,7 @@ import GeographicMap from './components/GeographicMap';
 import Members from './components/Members';
 import DailyTontine from './components/DailyTontine';
 import CancelCotisation from './components/CancelCotisation';
+import VersementDuJour from './components/VersementDuJour';
 import Commissions from './components/Commissions';
 import CreditManagement from './components/CreditManagement';
 import TontineWithdrawal from './components/TontineWithdrawal';
@@ -59,6 +60,7 @@ const nativeSetItem = (key: string, value: string) => {
     clearMembersCache();
   }
   let finalValue = value;
+  
   // Optimization: Strip redundant history from members_data as it's stored in microfox_history_${id}
   if (key.endsWith('microfox_members_data')) {
     try {
@@ -71,6 +73,16 @@ const nativeSetItem = (key: string, value: string) => {
       }
     } catch (e) {}
   }
+
+  // Pre-emptive capping for audit logs to prevent QuotaExceededError in the first place
+  if (key.endsWith('microfox_audit_logs')) {
+    try {
+      const logs = JSON.parse(value);
+      if (Array.isArray(logs)) {
+        finalValue = JSON.stringify(logs.slice(0, 100));
+      }
+    } catch (e) {}
+  }
   
   try {
     Storage.prototype.setItem.call(localStorage, key, finalValue);
@@ -78,26 +90,64 @@ const nativeSetItem = (key: string, value: string) => {
     if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
       console.warn(`LocalStorage quota exceeded for key: ${key}. Attempting emergency cleanup.`);
       
-      // Drastic emergency cleanup for quota issues
       try {
-        const fullJourneys = nativeGetItem('microfox_user_journeys');
-        if (fullJourneys) nativeRemoveItem('microfox_user_journeys');
+        const currentMf = Storage.prototype.getItem.call(localStorage, 'microfox_current_mf') || globalMfCode;
+        const activePrefix = currentMf ? `mf_${currentMf.toLowerCase().replace(/\s+/g, '_')}_` : '';
         
-        const fullLogs = nativeGetItem('microfox_audit_logs');
-        if (fullLogs) {
-          try {
-            const parsed = JSON.parse(fullLogs);
-            if (Array.isArray(parsed)) {
-              nativeSetItem('microfox_audit_logs', JSON.stringify(parsed.slice(-100)));
-            }
-          } catch (err) {
-            nativeRemoveItem('microfox_audit_logs');
+        const keysToRemove: string[] = [];
+        const historyKeys: string[] = [];
+        const logsKeys: string[] = [];
+        
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k) continue;
+          
+          // Keep essential global keys
+          const isGlobalEssential = [
+            'microfox_current_user',
+            'microfox_current_mf',
+            'microfox_session_active',
+            'microfox_offline_mode',
+            'microfox_users',
+            'microfox_permissions'
+          ].includes(k);
+          
+          if (isGlobalEssential) continue;
+          
+          // Clear any key belonging to an inactive microfinance code
+          if (k.startsWith('mf_') && activePrefix && !k.startsWith(activePrefix)) {
+            keysToRemove.push(k);
+            continue;
+          }
+          
+          // Mark audit logs and user journeys for clean up
+          if (k.includes('user_journeys') || k.includes('audit_logs')) {
+            logsKeys.push(k);
+          }
+          
+          // Mark history keys for clean up (as they are fully re-fetched or merged from server/cache)
+          if (k.includes('microfox_history_')) {
+            historyKeys.push(k);
           }
         }
+        
+        // Execute the cleanups
+        keysToRemove.forEach(k => {
+          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+        });
+        
+        logsKeys.forEach(k => {
+          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+        });
+        
+        historyKeys.forEach(k => {
+          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+        });
         
         // Retry the save once after emergency cleanup
         Storage.prototype.setItem.call(localStorage, key, finalValue);
       } catch (retryError) {
+        console.error('Failed to resolve QuotaExceededError even after emergency cleanup:', retryError);
         window.dispatchEvent(new CustomEvent('microfox_quota_exceeded'));
       }
     }
@@ -487,8 +537,8 @@ const App: React.FC = () => {
       }
     })();
 
-    // Dynamic timeout: if we have zero cached data, we wait longer (15s) to guarantee tables populate, otherwise we timeout fast (3s) to show local copy
-    const timeoutDuration = hasCachedData ? 3000 : 15000;
+    // Dynamic timeout: if we have zero cached data, we wait slightly longer (2.5s) to guarantee tables populate, otherwise we timeout fast (2s) to show local copy
+    const timeoutDuration = hasCachedData ? 2000 : 2500;
     const timeoutPromise = new Promise((resolve) => 
       setTimeout(() => resolve('timeout'), timeoutDuration)
     );
@@ -761,7 +811,7 @@ const App: React.FC = () => {
       if (currentMfCode) {
         pullData(currentMfCode, true);
       }
-    }, 5000); // Every 5 seconds
+    }, 45000); // Every 45 seconds
 
     return () => {
       supabase.removeChannel(channel);
@@ -1155,6 +1205,10 @@ const App: React.FC = () => {
 
     if (activeSection === 'Vente Livrets') {
       return <VenteLivrets />;
+    }
+
+    if (activeSection === 'Versement du jour') {
+      return <VersementDuJour />;
     }
 
     if (activeSection === 'Alerte Doublons') {

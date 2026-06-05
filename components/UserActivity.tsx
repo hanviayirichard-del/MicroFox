@@ -59,7 +59,7 @@ const UserActivity: React.FC = () => {
     loadData();
     window.addEventListener('storage', loadData);
     window.addEventListener('microfox_storage' as any, loadData);
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(loadData, 30000);
     return () => {
       window.removeEventListener('storage', loadData);
       window.removeEventListener('microfox_storage' as any, loadData);
