@@ -703,8 +703,8 @@ const App: React.FC = () => {
 
       const now = new Date();
       const daysMap: { [key: number]: string } = { 0: 'D', 1: 'L', 2: 'M', 3: 'Me', 4: 'J', 5: 'V', 6: 'S' };
-      const currentDay = daysMap[now.getDay()];
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      const currentDay = daysMap[now.getUTCDay()];
+      const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
 
       let blocked = false;
 
@@ -849,20 +849,32 @@ const App: React.FC = () => {
       localStorage.setItem('microfox_reset_v1', 'true');
     }
 
-    // Force cleanup for agent commercial permissions
+    // Force cleanup and injection for user role permissions
     const savedPerms = localStorage.getItem('microfox_permissions');
     if (savedPerms) {
       try {
         const perms = JSON.parse(savedPerms);
-        if (perms && typeof perms === 'object' && perms['agent commercial'] && Array.isArray(perms['agent commercial'])) {
-          const originalLength = perms['agent commercial'].length;
-          perms['agent commercial'] = perms['agent commercial'].filter((p: string) => 
-            p !== 'Analyse' && p !== 'Tableau de Bord' && p !== 'Reçu de caisse'
-          );
-          if (perms['agent commercial'].length !== originalLength) {
-            localStorage.setItem('microfox_permissions', JSON.stringify(perms));
-            dispatchStorageEvent();
+        let updated = false;
+        if (perms && typeof perms === 'object') {
+          if (perms['agent commercial'] && Array.isArray(perms['agent commercial'])) {
+            const originalLength = perms['agent commercial'].length;
+            perms['agent commercial'] = perms['agent commercial'].filter((p: string) => 
+              p !== 'Analyse' && p !== 'Tableau de Bord' && p !== 'Reçu de caisse'
+            );
+            if (perms['agent commercial'].length !== originalLength) {
+              updated = true;
+            }
           }
+          if (perms['caissier'] && Array.isArray(perms['caissier'])) {
+            if (!perms['caissier'].includes('Annulation Cotisation')) {
+              perms['caissier'] = [...perms['caissier'], 'Annulation Cotisation'];
+              updated = true;
+            }
+          }
+        }
+        if (updated) {
+          localStorage.setItem('microfox_permissions', JSON.stringify(perms));
+          dispatchStorageEvent();
         }
       } catch (e) {}
     }

@@ -36,15 +36,55 @@ const CancelCotisation: React.FC = () => {
     return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
   });
 
+  const historyCacheRef = React.useRef<Record<string, { data: any[], raw: string | null }>>({});
+
   useEffect(() => {
     const user = localStorage.getItem('microfox_current_user');
     if (user) setCurrentUser(JSON.parse(user));
     loadTransactions();
-    window.addEventListener('storage', loadTransactions);
-    window.addEventListener('microfox_storage' as any, loadTransactions);
+
+    let debounceTimer: any = null;
+    const triggerLoad = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadTransactions();
+      }, 200);
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (
+        e.key === 'microfox_members_data' ||
+        e.key.startsWith('microfox_history_') ||
+        e.key === 'microfox_agent_deposits' ||
+        e.key === 'microfox_validated_zone_cotisations'
+      ) {
+        triggerLoad();
+      }
+    };
+
+    const handleMicrofoxStorage = (e: CustomEvent<{ key?: string }>) => {
+      const key = e.detail?.key;
+      if (!key) {
+        triggerLoad();
+        return;
+      }
+      if (
+        key === 'microfox_members_data' ||
+        key.startsWith('microfox_history_') ||
+        key === 'microfox_agent_deposits' ||
+        key === 'microfox_validated_zone_cotisations'
+      ) {
+        triggerLoad();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('microfox_storage' as any, handleMicrofoxStorage);
     return () => {
-      window.removeEventListener('storage', loadTransactions);
-      window.removeEventListener('microfox_storage' as any, loadTransactions);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('microfox_storage' as any, handleMicrofoxStorage);
     };
   }, []);
 
@@ -60,7 +100,11 @@ const CancelCotisation: React.FC = () => {
 
     // Extract zones list dynamically
     const uniqueZones = Array.from(new Set(allMembers.map((m: any) => m.zone).filter(Boolean))) as string[];
-    setZonesList(uniqueZones.sort());
+    const sortedZones = uniqueZones.sort();
+    setZonesList(prev => {
+      if (JSON.stringify(prev) === JSON.stringify(sortedZones)) return prev;
+      return sortedZones;
+    });
 
     // Get validated deposits to check if transaction is already "poured" to main desk
     const savedDeposits = localStorage.getItem('microfox_agent_deposits');
@@ -110,22 +154,43 @@ const CancelCotisation: React.FC = () => {
       // Use pre-loaded/hydrated history from m if available to avoid thousands of O(N) localStorage reads
       let history = m.history;
       if (!Array.isArray(history)) {
+        const cacheKey = m.id;
         const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-        try {
-          history = savedHistory ? JSON.parse(savedHistory) : [];
-        } catch (err) {
-          history = [];
+        const cached = historyCacheRef.current[cacheKey];
+        if (cached && cached.raw === savedHistory) {
+          history = cached.data;
+        } else {
+          try {
+            history = savedHistory ? JSON.parse(savedHistory) : [];
+          } catch (err) {
+            history = [];
+          }
+          historyCacheRef.current[cacheKey] = { data: history, raw: savedHistory };
         }
       }
       if (!Array.isArray(history)) return;
       
       history.forEach((tx: any) => {
         if (!tx) return;
-        // Can only cancel cotisations recorded by the person OR anyone if admin/director/caissier
         const isOwner = tx.userId === user.id;
-        const isAuthorizedRole = user.role === 'admin' || user.role === 'administrateur' || user.role === 'directeur' || user.role === 'caissier' || user.role === 'agent commercial';
+        const isAuthorizedRole = user.role === 'admin' || user.role === 'administrateur' || user.role === 'directeur' || user.role === 'caissier';
 
-        if ((tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine' && (isOwner || isAuthorizedRole)) {
+        let isAllowed = false;
+        if (user.role === 'agent commercial') {
+          const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
+          const normalizeZone = (z: string | undefined | null) => {
+            if (!z) return '';
+            return z.toString().toUpperCase().replace('ZONE', '').replace(/\s+/g, '').replace(/_/g, '').trim();
+          };
+          const normalizedTxZone = normalizeZone(m.zone);
+          const hasMatchingZone = agentZones.some((az: string) => normalizeZone(az) === normalizedTxZone);
+
+          isAllowed = isOwner && hasMatchingZone;
+        } else {
+          isAllowed = isOwner || isAuthorizedRole;
+        }
+
+        if (isAllowed && (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine') {
           // Pre-evaluate date times for quick comparison
           let txTime = 0;
           let txDate = '';
@@ -701,20 +766,22 @@ const CancelCotisation: React.FC = () => {
 
       {/* Search & Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
-        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="Rechercher par client ou description..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 text-[#121c32] rounded-2xl font-medium outline-none placeholder:text-gray-400 border border-gray-100 focus:border-red-500 transition-all"
-            />
+        {currentUser?.role !== 'caissier' && (
+          <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="Rechercher par client ou description..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 text-[#121c32] rounded-2xl font-medium outline-none placeholder:text-gray-400 border border-gray-100 focus:border-red-500 transition-all"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100">
+        <div className={`bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 ${currentUser?.role === 'caissier' ? 'md:col-span-2' : ''}`}>
           <div className="flex items-center gap-3">
             <div className="flex-1 space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Du</label>
@@ -738,8 +805,8 @@ const CancelCotisation: React.FC = () => {
         </div>
       </div>
 
-      {/* Zone Selector and validation for Admin, Directeur, Caissier, and Agent commercial */}
-      {currentUser && (currentUser.role === 'administrateur' || currentUser.role === 'admin' || currentUser.role === 'directeur' || currentUser.role === 'caissier' || currentUser.role === 'agent commercial') && (
+      {/* Zone Selector and validation for Admin, Directeur, Caissier */}
+      {currentUser && (currentUser.role === 'administrateur' || currentUser.role === 'admin' || currentUser.role === 'directeur' || currentUser.role === 'caissier') && (
         <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4 print:hidden">
           <div className="flex-1 space-y-1 w-full sm:w-auto">
             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Sélectionner une Zone (Filtrer)</label>
@@ -784,87 +851,89 @@ const CancelCotisation: React.FC = () => {
       </div>
 
       {/* Transactions List */}
-      <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[800px]">
-            <thead>
-              <tr className="bg-gray-55 border-b border-gray-100">
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date & Heure</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Montant</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Statut</th>
-                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right print:hidden">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredTransactions.length > 0 ? (
-                filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-gray-55/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-[#121c32]">
-                          {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleDateString('fr-FR') : 'N/A'}
-                        </span>
-                        <span className="text-[10px] font-medium text-gray-400">
-                          {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-black text-[#121c32] uppercase">{tx.clientName}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-gray-500">{tx.clientCode}</span>
-                          {tx.tontineAccountNumber && (
-                            <span className="text-[9px] font-black text-blue-500 bg-blue-50 px-1.5 rounded uppercase">{tx.tontineAccountNumber}</span>
-                          )}
+      {currentUser?.role !== 'caissier' && (
+        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
+              <thead>
+                <tr className="bg-gray-55 border-b border-gray-100">
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date & Heure</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Montant</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Statut</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right print:hidden">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredTransactions.length > 0 ? (
+                  filteredTransactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-gray-55/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-[#121c32]">
+                            {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleDateString('fr-FR') : 'N/A'}
+                          </span>
+                          <span className="text-[10px] font-medium text-gray-400">
+                            {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs font-medium text-gray-600 max-w-[200px] truncate">{tx.description}</p>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {tx.isValidated ? (
-                        <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-tight">Versé</span>
-                      ) : (
-                        <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black uppercase tracking-tight">En attente</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right print:hidden">
-                      {currentUser?.role === 'caissier' ? (
-                        <div className="text-[10px] text-gray-400 font-bold uppercase italic select-none">Non autorisé</div>
-                      ) : !tx.isValidated ? (
-                        <button 
-                          onClick={() => handleCancel(tx)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                          title="Annuler la cotisation"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      ) : (
-                        <div className="p-2 text-gray-300 cursor-not-allowed">
-                          <Trash2 size={20} />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-[#121c32] uppercase">{tx.clientName}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-500">{tx.clientCode}</span>
+                            {tx.tontineAccountNumber && (
+                              <span className="text-[9px] font-black text-blue-500 bg-blue-50 px-1.5 rounded uppercase">{tx.tontineAccountNumber}</span>
+                            )}
+                          </div>
                         </div>
-                      )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-xs font-medium text-gray-600 max-w-[200px] truncate">{tx.description}</p>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {tx.isValidated ? (
+                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-tight">Versé</span>
+                        ) : (
+                          <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black uppercase tracking-tight">En attente</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right print:hidden">
+                        {currentUser?.role === 'caissier' ? (
+                          <div className="text-[10px] text-gray-400 font-bold uppercase italic select-none">Non autorisé</div>
+                        ) : !tx.isValidated ? (
+                          <button 
+                            onClick={() => handleCancel(tx)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                            title="Annuler la cotisation"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        ) : (
+                          <div className="p-2 text-gray-300 cursor-not-allowed">
+                            <Trash2 size={20} />
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-20 text-center">
+                      <p className="text-sm font-bold text-gray-400 italic">Aucune cotisation annulable trouvée.</p>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center">
-                    <p className="text-sm font-bold text-gray-400 italic">Aucune cotisation annulable trouvée.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

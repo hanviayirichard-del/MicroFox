@@ -59,8 +59,11 @@ const recalculateMicrofoxBalances = () => {
     });
 
     members.forEach((m: any) => {
-      const savedHistoryStr = localStorage.getItem(`microfox_history_${m.id}`);
-      const memberHistory = savedHistoryStr ? JSON.parse(savedHistoryStr) : (m.history || []);
+      let memberHistory = m.history;
+      if (!Array.isArray(memberHistory)) {
+        const savedHistoryStr = localStorage.getItem(`microfox_history_${m.id}`);
+        memberHistory = savedHistoryStr ? JSON.parse(savedHistoryStr) : [];
+      }
       if (memberHistory) {
         memberHistory.forEach((tx: any) => {
           if (tx.isDeleted || tx.type === 'annulation' || tx.status === 'deleted') {

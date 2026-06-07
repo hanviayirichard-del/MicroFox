@@ -74,7 +74,7 @@ const Permissions: React.FC = () => {
     const defaults: Record<string, string[]> = {
       'administrateur': [...ALL_TABS],
       'directeur': ['Accueil', 'Tableau de Bord', 'Carte Géographique', 'Membres', 'Analyse', 'Demande de crédit', 'Validation de Crédit', 'Déblocage de crédit', 'Suivi des crédits', 'Autres opérations crédit', 'Tontine Journalière', 'Demande de retrait tontine', 'Vérification de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Versement du jour', 'Gestion Caisse', 'CAISSE PRINCIPALE', 'Coffre & Banque', 'Dépenses administratives', 'Salaire du Personnel', 'Stocks Livrets', 'Frais & Parts Sociales', 'Commissions', 'Journal Global', 'Balance des comptes', 'Reçu de caisse', 'Comptabilité & États', 'États Réglementaires', 'Etats des écarts', 'Écarts de Caisse', 'Rapports Financiers', 'Pièces à imprimer', 'Contrôle Terrain', 'Conformité (Ratios & LAB)', 'Conseils & Formation', 'Notification', 'Guide Pratique'],
-      'caissier': ['Accueil', 'Membres', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Versement du jour', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Notification', 'Guide Pratique'],
+      'caissier': ['Accueil', 'Membres', 'Analyse', 'Suivi des crédits', 'Vente Livrets', 'Versement du jour', 'Gestion Caisse', 'Dépenses administratives', 'Frais & Parts Sociales', 'Déblocage de crédit', 'Journal Global', 'Reçu de caisse', 'Etats des écarts', 'Rapports Financiers', 'Annulation Cotisation', 'Notification', 'Guide Pratique'],
       'contrôleur': ['Accueil', 'Carte Géographique', 'Contrôle Terrain', 'Notification', 'Guide Pratique'],
       'auditeur': ['Accueil', 'Carte Géographique', 'Alerte Doublons', 'Réclamations Clients', 'Vérification de retrait tontine', 'Notification', 'Guide Pratique'],
       'agent commercial': ['Accueil', 'Carte Géographique', 'Membres', 'Alerte Doublons', 'Suivi des crédits', 'Tontine Journalière', 'Annulation Cotisation', 'Demande de retrait tontine', 'Versements Agents', 'Vente Livrets', 'Versement du jour', 'Commissions', 'Journal Global', 'Etats des écarts', 'Notification', 'Guide Pratique'],
@@ -91,6 +91,11 @@ const Permissions: React.FC = () => {
         merged['agent commercial'] = merged['agent commercial'].filter((p: string) => 
           p !== 'Analyse' && p !== 'Tableau de Bord' && p !== 'Reçu de caisse'
         );
+      }
+
+      // Force include Annulation Cotisation for caissier (as requested)
+      if (merged['caissier'] && !merged['caissier'].includes('Annulation Cotisation')) {
+        merged['caissier'] = [...merged['caissier'], 'Annulation Cotisation'];
       }
       
       setPermissions(merged);
