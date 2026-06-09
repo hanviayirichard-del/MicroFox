@@ -2157,9 +2157,119 @@ function computeBalancesFromHistory(
   tontineAccounts: any[],
   history: any[]
 ) {
+  if (!history || history.length === 0) {
+    return {
+      balances: initialBalances || { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
+      tontineAccounts: tontineAccounts || []
+    };
+  }
+
+  const balances = { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 };
+  const updatedTontineAccounts = (tontineAccounts || []).map(acc => ({ ...acc, balance: 0 }));
+
+  // Tri chronologique des transactions pour calcul séquentiel
+  const sortedHistory = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  sortedHistory.forEach(tx => {
+    const amount = Number(tx.amount) || 0;
+    if (amount <= 0) return;
+
+    // 1. ÉPARGNE
+    if (tx.account === 'epargne') {
+      if (tx.type === 'depot' || tx.type === 'cotisation') {
+        balances.epargne += amount;
+      } else if (tx.type === 'retrait') {
+        balances.epargne = Math.max(0, balances.epargne - amount);
+      } else if (tx.type === 'transfert') {
+        balances.epargne = Math.max(0, balances.epargne - amount);
+      }
+    }
+    
+    // Transferts de destination
+    if (tx.type === 'transfert') {
+      if (tx.destinationAccount === 'epargne') {
+        balances.epargne += amount;
+      } else if (tx.destinationAccount === 'garantie') {
+        balances.garantie += amount;
+      } else if (tx.destinationAccount === 'partSociale') {
+        balances.partSociale += amount;
+      }
+    }
+
+    // 2. TONTINE
+    if (tx.account === 'tontine') {
+      const matchAccountId = tx.tontineAccountId;
+      const matchAccountNum = tx.tontineAccountNumber;
+      
+      let accIdx = -1;
+      if (matchAccountId) {
+        accIdx = updatedTontineAccounts.findIndex(a => a.id === matchAccountId);
+      }
+      if (accIdx === -1 && matchAccountNum) {
+        accIdx = updatedTontineAccounts.findIndex(a => a.number === matchAccountNum);
+      }
+      if (accIdx === -1 && updatedTontineAccounts.length > 0) {
+        accIdx = 0; // Premier compte par défaut
+      }
+
+      if (accIdx !== -1) {
+        if (tx.type === 'depot' || tx.type === 'cotisation') {
+          updatedTontineAccounts[accIdx].balance += amount;
+        } else if (tx.type === 'retrait' || tx.type === 'transfert') {
+          updatedTontineAccounts[accIdx].balance = Math.max(0, updatedTontineAccounts[accIdx].balance - amount);
+        }
+      }
+    }
+
+    // 3. CRÉDIT
+    if (tx.account === 'credit') {
+      if (tx.type === 'deblocage') {
+        balances.credit += amount;
+      } else if (tx.type === 'remboursement') {
+        const rembCap = typeof tx.rembCapital === 'number' ? tx.rembCapital : amount;
+        balances.credit = Math.max(0, balances.credit - rembCap);
+      }
+    }
+
+    // 4. GARANTIE
+    if (tx.account === 'garantie') {
+      if (tx.type === 'depot' || tx.type === 'depot_garantie' || tx.type === 'depot_garantie_deblocage') {
+        balances.garantie += amount;
+      } else if (tx.type === 'retrait' || tx.type === 'retrait_garantie') {
+        balances.garantie = Math.max(0, balances.garantie - amount);
+      }
+    }
+
+    // 5. PART SOCIALE
+    if (tx.account === 'partSociale') {
+      if (tx.type === 'depot') {
+        balances.partSociale += amount;
+      } else if (tx.type === 'retrait') {
+        balances.partSociale = Math.max(0, balances.partSociale - amount);
+      }
+    }
+  });
+
+  balances.tontine = updatedTontineAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+
+  // Si aucun solde calculé n'est supérieur à 0 mais qu'on avait des initialBalances, on conserve ces dernières par précaution
+  if (
+    balances.epargne === 0 &&
+    balances.tontine === 0 &&
+    balances.credit === 0 &&
+    balances.garantie === 0 &&
+    balances.partSociale === 0 &&
+    initialBalances
+  ) {
+    return {
+      balances: initialBalances,
+      tontineAccounts: tontineAccounts || []
+    };
+  }
+
   return {
-    balances: initialBalances || { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
-    tontineAccounts: tontineAccounts || []
+    balances,
+    tontineAccounts: updatedTontineAccounts
   };
 }
 
