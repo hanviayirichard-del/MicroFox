@@ -451,13 +451,11 @@ const DailyTontine: React.FC = () => {
   // Mise à jour de localStorage lors des changements d'état
   useEffect(() => {
     localStorage.setItem('microfox_total_encaisse_jour', totalEncaisse.toString());
-    localStorage.setItem('microfox_pending_sync', 'true');
   }, [totalEncaisse]);
 
   useEffect(() => {
     if (clientList.length > 0) {
       localStorage.setItem('microfox_tontine_clients', JSON.stringify(clientList));
-      localStorage.setItem('microfox_pending_sync', 'true');
     }
   }, [clientList]);
 

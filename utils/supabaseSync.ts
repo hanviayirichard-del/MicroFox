@@ -1,6 +1,8 @@
 import { supabase } from '../supabase';
 
 const mergeObjects = (obj1: any, obj2: any): any => {
+  if (obj1 === undefined || obj1 === null) return obj2;
+  if (obj2 === undefined || obj2 === null) return obj1;
   if (obj1 === obj2) return obj1;
 
   if (Array.isArray(obj1) && Array.isArray(obj2)) {
@@ -69,6 +71,11 @@ const mergeObjects = (obj1: any, obj2: any): any => {
   // If obj1 and obj2 are ISO date strings, prefer the more recent one
   if (typeof obj1 === 'string' && typeof obj2 === 'string' && isoDateRegex.test(obj1) && isoDateRegex.test(obj2)) {
     return obj1 > obj2 ? obj1 : obj2;
+  }
+
+  // If obj1 and obj2 are numbers, prefer the larger one to prevent calculated balances (or accrued transactions values) from being overwritten by 0
+  if (typeof obj1 === 'number' && typeof obj2 === 'number') {
+    return Math.max(obj1, obj2);
   }
 
   // If obj1 is a status that is "more final" than obj2, prefer obj1
@@ -200,10 +207,13 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
   ) {
     return true;
   }
+  if (typeof window !== 'undefined' && window.navigator && !window.navigator.onLine) {
+    return false;
+  }
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
-    const maxRetries = 15;
+    const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Fetch current remote value to merge and avoid overwriting other devices' data
       const { data: remoteItem, error: fetchError } = await supabase
@@ -219,6 +229,14 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
           return false;
         }
         console.error(`Error fetching remote value for key ${key}:`, fetchError);
+        
+        const fetchErrorAny = fetchError as any;
+        const isNetworkErr = !fetchErrorAny.status || 
+                             fetchErrorAny.status === 0 || 
+                             (fetchError.message && /fetch|network|timeout|connect|unreachable/i.test(fetchError.message));
+        if (isNetworkErr) {
+          return false;
+        }
       }
         
       if (remoteItem) {
@@ -235,6 +253,16 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
           .eq('updated_at', remoteItem.updated_at)
           .select('key');
           
+        if (error) {
+          const errorAny = error as any;
+          const isNetworkErr = !errorAny.status || 
+                               errorAny.status === 0 || 
+                               (error.message && /fetch|network|timeout|connect|unreachable/i.test(error.message));
+          if (isNetworkErr) {
+            return false;
+          }
+        }
+
         if (!error && data && data.length > 0) {
           // Write merged value back to local storage natively to prevent data loss on subsequent local edits
           const localVal = Storage.prototype.getItem.call(localStorage, key);
@@ -261,6 +289,16 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
           })
           .select('key');
           
+        if (error) {
+          const errorAny = error as any;
+          const isNetworkErr = !errorAny.status || 
+                               errorAny.status === 0 || 
+                               (error.message && /fetch|network|timeout|connect|unreachable/i.test(error.message));
+          if (isNetworkErr) {
+            return false;
+          }
+        }
+
         if (!error && data && data.length > 0) {
           return true;
         }
@@ -272,11 +310,21 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
     }
     
     // Final fallback to standard upsert with latest merge to guarantee sync completion
-    const { data: remoteItem } = await supabase
+    const { data: remoteItem, error: fallbackFetchError } = await supabase
       .from('storage')
       .select('value')
       .eq('key', key)
       .maybeSingle();
+
+    if (fallbackFetchError) {
+      const fallbackFetchErrorAny = fallbackFetchError as any;
+      const isNetworkErr = !fallbackFetchErrorAny.status || 
+                           fallbackFetchErrorAny.status === 0 || 
+                           (fallbackFetchError.message && /fetch|network|timeout|connect|unreachable/i.test(fallbackFetchError.message));
+      if (isNetworkErr) {
+        return false;
+      }
+    }
       
     const finalValue = remoteItem?.value ? mergeJSON(remoteItem.value, value) : value;
     const { error: upsertError } = await supabase
@@ -311,8 +359,12 @@ export const pullFromSupabase = async (
   prefix: string, 
   originalSetItem: (key: string, value: string) => void,
   originalGetItem: (key: string) => string | null,
-  isDirty?: (key: string) => boolean
+  isDirty?: (key: string) => boolean,
+  forceFull: boolean = false
 ) => {
+  if (typeof window !== 'undefined' && window.navigator && !window.navigator.onLine) {
+    return false;
+  }
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return;
     
@@ -325,29 +377,137 @@ export const pullFromSupabase = async (
     const currentPullTime = new Date().toISOString();
 
     // Use incremental sync to protect the database Disk I/O budget
-    const lastPullTime = localStorage.getItem(`microfox_last_pulled_${prefix}`);
+    const lastPullTime = forceFull ? null : localStorage.getItem(`microfox_last_pulled_${prefix}`);
 
-    if (!lastPullTime && prefix.startsWith('mf_')) {
-      // Prioritize members_data on login/initial sync to show clients immediately
-      try {
-        const targetMembersKey = prefix + 'microfox_members_data';
-        const { data: pData } = await supabase
-          .from('storage')
-          .select('key, value, updated_at')
-          .eq('key', targetMembersKey)
-          .maybeSingle();
-        if (pData) {
-          const localValue = originalGetItem(pData.key);
-          const finalValue = localValue ? mergeJSON(localValue, pData.value) : pData.value;
-          if (finalValue !== localValue) {
-            originalSetItem(pData.key, finalValue);
+    if (prefix.startsWith('mf_')) {
+      const bIsFirstPullSession = sessionStorage.getItem('microfox_session_prioritized_pull_done') !== 'true';
+      if (!lastPullTime || bIsFirstPullSession) {
+        // Prioritize members_data and history keys on startup to show clients and cotisations immediately
+        try {
+          const targetMembersKey = prefix + 'microfox_members_data';
+          
+          const membersRes = await supabase
+            .from('storage')
+            .select('key, value, updated_at')
+            .eq('key', targetMembersKey)
+            .maybeSingle();
+
+          if (membersRes.error) {
+            console.error('Error fetching members data in pull:', membersRes.error);
+            const membersResErrorAny = membersRes.error as any;
+            const isNetworkErr = !membersResErrorAny.status || 
+                                 membersResErrorAny.status === 0 || 
+                                 (membersRes.error.message && /fetch|network|timeout|connect|unreachable/i.test(membersRes.error.message));
+            if (isNetworkErr) {
+              return false;
+            }
+          }
+
+          let prioritizedChanged = false;
+          const prioritizedKeys = new Set<string>();
+          let membersDataForHistory: any[] = [];
+
+          if (membersRes.data) {
+            const item = membersRes.data;
+            const localValue = originalGetItem(item.key);
+            const finalValue = localValue ? mergeJSON(localValue, item.value) : item.value;
+            if (finalValue !== localValue) {
+              originalSetItem(item.key, finalValue);
+              prioritizedChanged = true;
+              prioritizedKeys.add(item.key);
+            }
             try {
-              window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key: pData.key, timestamp: Date.now() } }));
+              const parsed = JSON.parse(finalValue);
+              membersDataForHistory = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {}
+          } else {
+            try {
+              const localMem = originalGetItem(targetMembersKey);
+              if (localMem) {
+                const parsed = JSON.parse(localMem);
+                membersDataForHistory = Array.isArray(parsed) ? parsed : [];
+              }
             } catch (e) {}
           }
+
+          const historyKeys: string[] = [];
+          if (Array.isArray(membersDataForHistory)) {
+            membersDataForHistory.forEach((m: any) => {
+              if (m) {
+                if (m.id) historyKeys.push(`${prefix}microfox_history_${m.id}`);
+                if (m.code && m.code !== m.id) historyKeys.push(`${prefix}microfox_history_${m.code}`);
+              }
+            });
+          }
+
+          let historyResData: any[] = [];
+          if (historyKeys.length > 0) {
+            const chunkSize = 150;
+            for (let i = 0; i < historyKeys.length; i += chunkSize) {
+              const chunk = historyKeys.slice(i, i + chunkSize);
+              const { data: chunkData, error: chunkError } = await supabase
+                .from('storage')
+                .select('key, value, updated_at')
+                .in('key', chunk);
+                
+              if (chunkError) {
+                console.error('Error fetching history chunk in pull:', chunkError);
+                const chunkErrorAny = chunkError as any;
+                const isNetworkErr = !chunkErrorAny.status || 
+                                     chunkErrorAny.status === 0 || 
+                                     (chunkError.message && /fetch|network|timeout|connect|unreachable/i.test(chunkError.message));
+                if (isNetworkErr) {
+                  return false;
+                }
+              }
+              if (chunkData && chunkData.length > 0) {
+                historyResData = [...historyResData, ...chunkData];
+              }
+            }
+          } else {
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from('storage')
+              .select('key, value, updated_at')
+              .like('key', `${prefix}microfox_history_%`);
+              
+            if (fallbackError) {
+              console.error('Error inside history fallback query:', fallbackError);
+              const fallbackErrorAny = fallbackError as any;
+              const isNetworkErr = !fallbackErrorAny.status || 
+                                   fallbackErrorAny.status === 0 || 
+                                   (fallbackError.message && /fetch|network|timeout|connect|unreachable/i.test(fallbackError.message));
+              if (isNetworkErr) {
+                return false;
+              }
+            }
+            if (fallbackData) {
+              historyResData = fallbackData;
+            }
+          }
+
+          if (historyResData && historyResData.length > 0) {
+            historyResData.forEach((item: any) => {
+              const localValue = originalGetItem(item.key);
+              const finalValue = localValue ? mergeJSON(localValue, item.value) : item.value;
+              if (finalValue !== localValue) {
+                originalSetItem(item.key, finalValue);
+                prioritizedChanged = true;
+                prioritizedKeys.add('microfox_history_');
+              }
+            });
+          }
+
+          if (prioritizedChanged) {
+            prioritizedKeys.forEach(k => {
+              try {
+                window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key: k, timestamp: Date.now() } }));
+              } catch (e) {}
+            });
+          }
+          sessionStorage.setItem('microfox_session_prioritized_pull_done', 'true');
+        } catch (err) {
+          console.error('Error with prioritized fetch of members and history data:', err);
         }
-      } catch (err) {
-        console.error('Error with prioritized fetch of members_data:', err);
       }
     }
 
@@ -370,6 +530,13 @@ export const pullFromSupabase = async (
 
       if (error) {
         console.error('Error pulling from Supabase:', error);
+        const errorAny = error as any;
+        const isNetworkErr = !errorAny.status || 
+                             errorAny.status === 0 || 
+                             (error.message && /fetch|network|timeout|connect|unreachable/i.test(error.message));
+        if (isNetworkErr) {
+          return false;
+        }
         return;
       }
 
@@ -389,6 +556,7 @@ export const pullFromSupabase = async (
     
     if (data) {
       let changed = false;
+      const keysToDispatch = new Set<string>();
 
       data.forEach(item => {
         if (
@@ -420,12 +588,27 @@ export const pullFromSupabase = async (
           if (finalValue !== localValue) {
             originalSetItem(item.key, finalValue);
             changed = true;
-            try {
-              window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key: item.key, timestamp: Date.now() } }));
-            } catch (e) {}
+            
+            // Standardize key to avoid flooding dispatch listeners
+            let dKey = item.key;
+            if (item.key.includes('microfox_history_')) {
+              dKey = 'microfox_history_';
+            }
+            keysToDispatch.add(dKey);
           }
         }
       });
+
+      // Dispatch aggregated change events in next tick to prevent blocking the main synchronous loop
+      if (keysToDispatch.size > 0) {
+        setTimeout(() => {
+          keysToDispatch.forEach(k => {
+            try {
+              window.dispatchEvent(new CustomEvent('microfox_storage', { detail: { key: k, timestamp: Date.now() } }));
+            } catch (e) {}
+          });
+        }, 0);
+      }
 
       localStorage.setItem(`microfox_last_pulled_${prefix}`, currentPullTime);
 

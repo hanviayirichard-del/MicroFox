@@ -21,6 +21,91 @@ interface TontineTransaction {
   dateSortTime?: number;
 }
 
+const safeParseDate = (dateStr: any): Date | null => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
+  const str = String(dateStr).trim();
+  
+  // Format standard DD/MM/YYYY hh:mm:ss or DD/MM/YYYY
+  if (str.includes('/')) {
+    try {
+      const parts = str.split(' ');
+      const dateParts = parts[0].split('/');
+      if (dateParts.length === 3) {
+        const day = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1; // months are 0-indexed
+        const year = parseInt(dateParts[2], 10);
+        
+        let hours = 0, minutes = 0, seconds = 0;
+        if (parts[1]) {
+          const timeParts = parts[1].split(':');
+          hours = parseInt(timeParts[0] || '0', 10);
+          minutes = parseInt(timeParts[1] || '0', 10);
+          seconds = parseInt(timeParts[2] || '0', 10);
+        }
+        
+        const d = new Date(year, month, day, hours, minutes, seconds);
+        if (!isNaN(d.getTime())) {
+          return d;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Fallback to native parsing
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d;
+  
+  return null;
+};
+
+const getLocalDateString = (dateInput: any): string => {
+  if (!dateInput) return '';
+  const str = String(dateInput).trim();
+  
+  // Format standard DD/MM/YYYY hh:mm:ss or DD/MM/YYYY
+  if (str.includes('/')) {
+    const parts = str.split(' ')[0].split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      if (year.length === 4) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  
+  // Format ISO/standard YYYY-MM-DD ...
+  if (str.includes('-')) {
+    const parts = str.split('T')[0].split('-');
+    if (parts.length === 3) {
+      const year = parts[0];
+      const month = parts[1].padStart(2, '0');
+      const day = parts[2].padStart(2, '0');
+      if (year.length === 4) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  
+  // Fallback to native properties format
+  try {
+    const d = new Date(dateInput);
+    if (!isNaN(d.getTime())) {
+      if (typeof dateInput === 'string' && dateInput.includes('T')) {
+        return d.toISOString().split('T')[0];
+      }
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+  
+  return '';
+};
+
 const CancelCotisation: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -52,12 +137,19 @@ const CancelCotisation: React.FC = () => {
     };
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (!e.key) return;
+      if (!e.key) {
+        triggerLoad();
+        return;
+      }
+      const key = e.key;
       if (
-        e.key === 'microfox_members_data' ||
-        e.key.startsWith('microfox_history_') ||
-        e.key === 'microfox_agent_deposits' ||
-        e.key === 'microfox_validated_zone_cotisations'
+        key === 'microfox_members_data' ||
+        key.endsWith('microfox_members_data') ||
+        key.includes('microfox_history_') ||
+        key === 'microfox_agent_deposits' ||
+        key.endsWith('microfox_agent_deposits') ||
+        key === 'microfox_validated_zone_cotisations' ||
+        key.endsWith('microfox_validated_zone_cotisations')
       ) {
         triggerLoad();
       }
@@ -65,15 +157,15 @@ const CancelCotisation: React.FC = () => {
 
     const handleMicrofoxStorage = (e: CustomEvent<{ key?: string }>) => {
       const key = e.detail?.key;
-      if (!key) {
-        triggerLoad();
-        return;
-      }
       if (
+        !key ||
         key === 'microfox_members_data' ||
-        key.startsWith('microfox_history_') ||
+        key.endsWith('microfox_members_data') ||
+        key.includes('microfox_history_') ||
         key === 'microfox_agent_deposits' ||
-        key === 'microfox_validated_zone_cotisations'
+        key.endsWith('microfox_agent_deposits') ||
+        key === 'microfox_validated_zone_cotisations' ||
+        key.endsWith('microfox_validated_zone_cotisations')
       ) {
         triggerLoad();
       }
@@ -115,8 +207,8 @@ const CancelCotisation: React.FC = () => {
       let time = 0;
       try {
         if (d.date) {
-          const parsed = new Date(d.date);
-          if (!isNaN(parsed.getTime())) {
+          const parsed = safeParseDate(d.date);
+          if (parsed) {
             time = parsed.getTime();
           }
         }
@@ -137,8 +229,8 @@ const CancelCotisation: React.FC = () => {
       Object.entries(validatedZones).forEach(([key, val]: [string, any]) => {
         if (val && val.validatedAt) {
           try {
-            const parsed = new Date(val.validatedAt);
-            if (!isNaN(parsed.getTime())) {
+            const parsed = safeParseDate(val.validatedAt);
+            if (parsed) {
               parsedValidatedZones[key] = {
                 validatedAtTime: parsed.getTime()
               };
@@ -151,22 +243,23 @@ const CancelCotisation: React.FC = () => {
     allMembers.forEach((m: any) => {
       if (!m || m.isDeleted) return;
       
-      // Use pre-loaded/hydrated history from m if available to avoid thousands of O(N) localStorage reads
-      let history = m.history;
-      if (!Array.isArray(history)) {
-        const cacheKey = m.id;
-        const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
-        const cached = historyCacheRef.current[cacheKey];
-        if (cached && cached.raw === savedHistory) {
-          history = cached.data;
-        } else {
+      const cacheKey = m.id;
+      const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
+      let history = [];
+      const cached = historyCacheRef.current[cacheKey];
+      if (cached && cached.raw === savedHistory) {
+        history = cached.data;
+      } else {
+        if (savedHistory) {
           try {
-            history = savedHistory ? JSON.parse(savedHistory) : [];
+            history = JSON.parse(savedHistory);
           } catch (err) {
-            history = [];
+            history = Array.isArray(m.history) ? m.history : [];
           }
-          historyCacheRef.current[cacheKey] = { data: history, raw: savedHistory };
+        } else {
+          history = Array.isArray(m.history) ? m.history : [];
         }
+        historyCacheRef.current[cacheKey] = { data: history, raw: savedHistory };
       }
       if (!Array.isArray(history)) return;
       
@@ -196,11 +289,11 @@ const CancelCotisation: React.FC = () => {
           let txDate = '';
           try {
             if (tx.date) {
-              const dParsed = new Date(tx.date);
-              if (!isNaN(dParsed.getTime())) {
+              const dParsed = safeParseDate(tx.date);
+              if (dParsed) {
                 txTime = dParsed.getTime();
-                txDate = dParsed.toISOString().split('T')[0];
               }
+              txDate = getLocalDateString(tx.date);
             }
           } catch (e) {}
 
@@ -366,12 +459,13 @@ const CancelCotisation: React.FC = () => {
         const updatedHistory = history.map((tx: any) => {
           const isCotisation = (tx.type === 'cotisation' || tx.type === 'depot' || tx.type === 'deposit') && tx.account === 'tontine';
           if (isCotisation && !tx.isDeleted && tx.type !== 'annulation') {
-            const txDate = tx.date ? new Date(tx.date) : null;
-            if (txDate && !isNaN(txDate.getTime())) {
-              const txDay = txDate.toISOString().split('T')[0];
+            const txDate = tx.date ? safeParseDate(tx.date) : null;
+            if (txDate) {
+              const txDay = getLocalDateString(tx.date);
               const validationKey = `${txDay}_${zoneName}`;
               const zoneValidation = validatedZones[validationKey];
-              const isTxValidated = tx.isValidated === true || (zoneValidation && txDate.getTime() <= new Date(zoneValidation.validatedAt).getTime());
+              const validatedAtParsed = zoneValidation ? safeParseDate(zoneValidation.validatedAt) : null;
+              const isTxValidated = tx.isValidated === true || (zoneValidation && !!validatedAtParsed && txDate.getTime() <= validatedAtParsed.getTime());
 
               if (!isTxValidated) {
                 tx.isValidated = true;
@@ -453,17 +547,7 @@ const CancelCotisation: React.FC = () => {
     let txDateString = '';
     try {
       if (tx.date) {
-        if (typeof tx.date === 'string') {
-          txDateString = tx.date.split('T')[0].split(' ')[0];
-        } else {
-          const dParsed = new Date(tx.date);
-          if (!isNaN(dParsed.getTime())) {
-            const year = dParsed.getFullYear();
-            const month = String(dParsed.getMonth() + 1).padStart(2, '0');
-            const day = String(dParsed.getDate()).padStart(2, '0');
-            txDateString = `${year}-${month}-${day}`;
-          }
-        }
+        txDateString = getLocalDateString(tx.date);
       }
     } catch (e) {}
     const matchesSearch = tx.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -487,8 +571,8 @@ const CancelCotisation: React.FC = () => {
 
   const generateReportHTML = (isForPrinting: boolean = false) => {
     const listHtml = filteredTransactions.map((tx, index) => {
-      const dateObj = tx.date ? new Date(tx.date) : null;
-      const isValidDate = dateObj && !isNaN(dateObj.getTime());
+      const dateObj = tx.date ? safeParseDate(tx.date) : null;
+      const isValidDate = dateObj !== null;
       const formattedDate = isValidDate ? dateObj.toLocaleDateString('fr-FR') : 'N/A';
       const formattedTime = isValidDate ? dateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
       return `
@@ -766,22 +850,20 @@ const CancelCotisation: React.FC = () => {
 
       {/* Search & Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
-        {currentUser?.role !== 'caissier' && (
-          <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input 
-                type="text" 
-                placeholder="Rechercher par client ou description..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 text-[#121c32] rounded-2xl font-medium outline-none placeholder:text-gray-400 border border-gray-100 focus:border-red-500 transition-all"
-              />
-            </div>
+        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 flex-1">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input 
+              type="text" 
+              placeholder="Rechercher par client ou description..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 text-[#121c32] rounded-2xl font-medium outline-none placeholder:text-gray-400 border border-gray-100 focus:border-red-500 transition-all"
+            />
           </div>
-        )}
+        </div>
 
-        <div className={`bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 ${currentUser?.role === 'caissier' ? 'md:col-span-2' : ''}`}>
+        <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100">
           <div className="flex items-center gap-3">
             <div className="flex-1 space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Du</label>
@@ -851,89 +933,87 @@ const CancelCotisation: React.FC = () => {
       </div>
 
       {/* Transactions List */}
-      {currentUser?.role !== 'caissier' && (
-        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left min-w-[800px]">
-              <thead>
-                <tr className="bg-gray-55 border-b border-gray-100">
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date & Heure</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Montant</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Statut</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right print:hidden">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredTransactions.length > 0 ? (
-                  filteredTransactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-gray-55/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-[#121c32]">
-                            {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleDateString('fr-FR') : 'N/A'}
-                          </span>
-                          <span className="text-[10px] font-medium text-gray-400">
-                            {tx.date && !isNaN(new Date(tx.date).getTime()) ? new Date(tx.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                          </span>
+      <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[800px]">
+            <thead>
+              <tr className="bg-gray-55 border-b border-gray-100">
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Date & Heure</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Client</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Description</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Montant</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Statut</th>
+                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right print:hidden">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filteredTransactions.length > 0 ? (
+                filteredTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-gray-55/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-[#121c32]">
+                          {tx.date && safeParseDate(tx.date) ? safeParseDate(tx.date)!.toLocaleDateString('fr-FR') : 'N/A'}
+                        </span>
+                        <span className="text-[10px] font-medium text-gray-400">
+                          {tx.date && safeParseDate(tx.date) ? safeParseDate(tx.date)!.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-black text-[#121c32] uppercase">{tx.clientName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-gray-500">{tx.clientCode}</span>
+                          {tx.tontineAccountNumber && (
+                            <span className="text-[9px] font-black text-blue-500 bg-blue-50 px-1.5 rounded uppercase">{tx.tontineAccountNumber}</span>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-black text-[#121c32] uppercase">{tx.clientName}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-gray-500">{tx.clientCode}</span>
-                            {tx.tontineAccountNumber && (
-                              <span className="text-[9px] font-black text-blue-500 bg-blue-50 px-1.5 rounded uppercase">{tx.tontineAccountNumber}</span>
-                            )}
-                          </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs font-medium text-gray-600 max-w-[200px] truncate">{tx.description}</p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {tx.isValidated ? (
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-tight">Versé</span>
+                      ) : (
+                        <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black uppercase tracking-tight">En attente</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right print:hidden">
+                      {currentUser?.role === 'caissier' ? (
+                        <div className="text-[10px] text-gray-400 font-bold uppercase italic select-none">Non autorisé</div>
+                      ) : !tx.isValidated ? (
+                        <button 
+                          onClick={() => handleCancel(tx)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                          title="Annuler la cotisation"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      ) : (
+                        <div className="p-2 text-gray-300 cursor-not-allowed">
+                          <Trash2 size={20} />
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-xs font-medium text-gray-600 max-w-[200px] truncate">{tx.description}</p>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-black text-[#121c32]">{tx.amount.toLocaleString()} F</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {tx.isValidated ? (
-                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-tight">Versé</span>
-                        ) : (
-                          <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black uppercase tracking-tight">En attente</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right print:hidden">
-                        {currentUser?.role === 'caissier' ? (
-                          <div className="text-[10px] text-gray-400 font-bold uppercase italic select-none">Non autorisé</div>
-                        ) : !tx.isValidated ? (
-                          <button 
-                            onClick={() => handleCancel(tx)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
-                            title="Annuler la cotisation"
-                          >
-                            <Trash2 size={20} />
-                          </button>
-                        ) : (
-                          <div className="p-2 text-gray-300 cursor-not-allowed">
-                            <Trash2 size={20} />
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-20 text-center">
-                      <p className="text-sm font-bold text-gray-400 italic">Aucune cotisation annulable trouvée.</p>
+                      )}
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-20 text-center">
+                    <p className="text-sm font-bold text-gray-400 italic">Aucune cotisation annulable trouvée.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 };

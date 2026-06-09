@@ -2152,6 +2152,17 @@ const OpenEpargneModal: React.FC<{
   );
 };
 
+function computeBalancesFromHistory(
+  initialBalances: { epargne: number; tontine: number; credit: number; garantie: number; partSociale: number },
+  tontineAccounts: any[],
+  history: any[]
+) {
+  return {
+    balances: initialBalances || { epargne: 0, tontine: 0, credit: 0, garantie: 0, partSociale: 0 },
+    tontineAccounts: tontineAccounts || []
+  };
+}
+
 const globalTontineStatsCache = new Map<string, any>();
 
 const Members: React.FC = () => {
@@ -2160,7 +2171,11 @@ const Members: React.FC = () => {
     let loadedClients: ClientAccount[] = [];
     
     if (saved) {
-      loadedClients = JSON.parse(saved);
+      try {
+        loadedClients = JSON.parse(saved);
+      } catch (e) {
+        console.error("Error parsing members data in init:", e);
+      }
     } else {
       loadedClients = [
         {
@@ -2182,16 +2197,53 @@ const Members: React.FC = () => {
       ];
     }
 
-    // Ensure history is loaded for each client if it's empty in the main array
-    return loadedClients.map(c => {
-      if (!c.history || c.history.length === 0) {
+    let hasChanges = false;
+
+    const computedClients = loadedClients.map(c => {
+      const updatedTontineAccounts = (c.tontineAccounts || []).map((acc, index) => ({
+        ...acc,
+        id: acc.id || `${c.id}_tn_${index + 1}`
+      }));
+
+      let history = c.history;
+      if (!history || history.length === 0) {
         const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
         if (savedHistory) {
-          return { ...c, history: JSON.parse(savedHistory) };
+          try {
+            history = JSON.parse(savedHistory);
+          } catch (e) {}
         }
       }
-      return c;
+
+      const computed = computeBalancesFromHistory(c.balances, updatedTontineAccounts, history || []);
+      
+      const balancesDiff = !c.balances ||
+        c.balances.epargne !== computed.balances.epargne ||
+        c.balances.tontine !== computed.balances.tontine ||
+        c.balances.credit !== computed.balances.credit ||
+        c.balances.garantie !== computed.balances.garantie ||
+        c.balances.partSociale !== computed.balances.partSociale;
+
+      if (balancesDiff) {
+        hasChanges = true;
+      }
+
+      return {
+        ...c,
+        tontineAccounts: computed.tontineAccounts,
+        history: history || [],
+        balances: computed.balances,
+        updatedAt: (balancesDiff || !c.updatedAt) ? new Date().toISOString() : c.updatedAt
+      };
     });
+
+    if (hasChanges) {
+      setTimeout(() => {
+        localStorage.setItem('microfox_members_data', JSON.stringify(computedClients));
+      }, 0);
+    }
+
+    return computedClients;
   });
 
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
@@ -2227,23 +2279,56 @@ const Members: React.FC = () => {
       ];
     }
 
+    let hasChanges = false;
+
     const finalClients = loadedClients.map(c => {
-      if (!c.history || c.history.length === 0) {
+      const updatedTontineAccounts = (c.tontineAccounts || []).map((acc, index) => ({
+        ...acc,
+        id: acc.id || `${c.id}_tn_${index + 1}`
+      }));
+
+      let history = c.history;
+      if (!history || history.length === 0) {
         const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
         if (savedHistory) {
           try {
-            return { ...c, history: JSON.parse(savedHistory) };
+            history = JSON.parse(savedHistory);
           } catch (e) {}
         }
       }
-      return c;
+
+      const computed = computeBalancesFromHistory(c.balances, updatedTontineAccounts, history || []);
+      
+      const balancesDiff = !c.balances ||
+        c.balances.epargne !== computed.balances.epargne ||
+        c.balances.tontine !== computed.balances.tontine ||
+        c.balances.credit !== computed.balances.credit ||
+        c.balances.garantie !== computed.balances.garantie ||
+        c.balances.partSociale !== computed.balances.partSociale;
+
+      if (balancesDiff) {
+        hasChanges = true;
+      }
+
+      return {
+        ...c,
+        tontineAccounts: computed.tontineAccounts,
+        history: history || [],
+        balances: computed.balances,
+        updatedAt: (balancesDiff || !c.updatedAt) ? new Date().toISOString() : c.updatedAt
+      };
     });
+
     setClients(finalClients);
+    if (hasChanges) {
+      localStorage.setItem('microfox_members_data', JSON.stringify(finalClients));
+    }
   };
 
   useEffect(() => {
     window.addEventListener('storage', reloadClients);
     window.addEventListener('microfox_storage' as any, reloadClients);
+    reloadClients();
     return () => {
       window.removeEventListener('storage', reloadClients);
       window.removeEventListener('microfox_storage' as any, reloadClients);
@@ -3263,36 +3348,7 @@ const Members: React.FC = () => {
     }
   }, [selectedClient, selectedTontineId]);
 
-  useEffect(() => {
-    const syncBalances = () => {
-      const savedMembers = localStorage.getItem('microfox_members_data');
-      if (savedMembers) {
-        const parsed: ClientAccount[] = JSON.parse(savedMembers);
-        
-        // Ensure history is loaded for each client if it's empty in the saved array
-        const withHistory = parsed.map(c => {
-          const updatedTontineAccounts = c.tontineAccounts.map((acc, index) => ({
-            ...acc,
-            id: acc.id || `${c.id}_tn_${index + 1}`
-          }));
 
-          if (!c.history || c.history.length === 0) {
-            const savedHistory = localStorage.getItem(`microfox_history_${c.id}`);
-            if (savedHistory) {
-              return { ...c, tontineAccounts: updatedTontineAccounts, history: JSON.parse(savedHistory) };
-            }
-          }
-          return { ...c, tontineAccounts: updatedTontineAccounts };
-        });
-
-        setClients(withHistory);
-      }
-    };
-
-    window.addEventListener('storage', syncBalances);
-    syncBalances();
-    return () => window.removeEventListener('storage', syncBalances);
-  }, []);
 
   const handleRegister = (newClient: ClientAccount) => {
     // Add updatedAt if not present before stringifying and saving

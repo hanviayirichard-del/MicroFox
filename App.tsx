@@ -191,7 +191,7 @@ try {
 
     // Optimization: Rehydrate history for members_data if it was stripped
     if (key === 'microfox_members_data' && value) {
-      if (cachedMembersKey === fullKey && cachedRehydratedValue !== null) {
+      if (cachedMembersKey === fullKey && cachedMembersValue === value && cachedRehydratedValue !== null) {
         return cachedRehydratedValue;
       }
       try {
@@ -489,16 +489,47 @@ const App: React.FC = () => {
             pushPromises.push(syncToSupabase('microfox_permissions', permsData));
           }
           
-          // Push all tenant-specific data
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith(prefix)) {
-              const value = nativeGetItem(key);
-              if (value) {
-                pushPromises.push(syncToSupabase(key, value));
-              }
-            }
+          // Push only dirty keys to avoid pushing everything in the entire localStorage starting with prefix
+          const dirtyKeysStr = nativeGetItem(prefix + 'microfox_dirty_keys') || nativeGetItem('microfox_dirty_keys') || '[]';
+          let dirtyKeys: string[] = [];
+          try {
+            dirtyKeys = JSON.parse(dirtyKeysStr);
+            if (!Array.isArray(dirtyKeys)) dirtyKeys = [];
+          } catch (e) {
+            dirtyKeys = [];
           }
+
+          // If dirtyKeys is empty but pending_sync is true, scan prefix-based keys as a safe fallback
+          if (dirtyKeys.length === 0) {
+            const tenantKeys: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k) tenantKeys.push(k);
+            }
+            tenantKeys.forEach(k => {
+              if (k.startsWith(prefix)) {
+                const suffix = k.substring(prefix.length);
+                const isBalanceKey = suffix === 'microfox_vault_balance' || 
+                                     suffix === 'microfox_bank_balance' || 
+                                     suffix.startsWith('microfox_cash_balance_') ||
+                                     suffix === 'microfox_tontine_clients' ||
+                                     suffix === 'microfox_total_encaisse_jour' ||
+                                     suffix.startsWith('microfox_last_pulled_');
+                if (!isBalanceKey && suffix !== 'microfox_pending_sync' && suffix !== 'microfox_dirty_keys') {
+                  dirtyKeys.push(k);
+                }
+              }
+            });
+          }
+
+          const uniqueDirtyKeys = Array.from(new Set(dirtyKeys)).filter(k => k && k.startsWith(prefix));
+          
+          uniqueDirtyKeys.forEach(k => {
+            const value = nativeGetItem(k);
+            if (value) {
+              pushPromises.push(syncToSupabase(k, value));
+            }
+          });
           
           const results = await Promise.all(pushPromises);
           const pushSuccess = results.every(ok => ok);
@@ -518,8 +549,8 @@ const App: React.FC = () => {
 
         // Récupérer les données globales et locataires en parallèle
         const [globalChanged, tenantChanged] = await Promise.all([
-          pullFromSupabase('microfox_', nativeSetItem, nativeGetItem, isDirty),
-          pullFromSupabase(prefix, nativeSetItem, nativeGetItem, isDirty)
+          pullFromSupabase('microfox_', nativeSetItem, nativeGetItem, isDirty, !isSilent),
+          pullFromSupabase(prefix, nativeSetItem, nativeGetItem, isDirty, !isSilent)
         ]);
         
         if (globalChanged || tenantChanged) {
@@ -537,8 +568,8 @@ const App: React.FC = () => {
       }
     })();
 
-    // Dynamic timeout: if we have zero cached data, we wait slightly longer (2.5s) to guarantee tables populate, otherwise we timeout fast (2s) to show local copy
-    const timeoutDuration = hasCachedData ? 2000 : 2500;
+    // Dynamic timeout: if we have zero cached data, we wait slightly longer (2.5s) to guarantee tables populate, otherwise we timeout fast (2s) to show local copy. For explicit user-initiated syncs, wait up to 30s.
+    const timeoutDuration = !isSilent ? 30000 : (hasCachedData ? 2000 : 2500);
     const timeoutPromise = new Promise((resolve) => 
       setTimeout(() => resolve('timeout'), timeoutDuration)
     );
@@ -895,12 +926,18 @@ const App: React.FC = () => {
       }
     };
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (!e.key || e.key === 'microfox_members_data' || e.key.endsWith('microfox_members_data') || e.key.includes('microfox_history_')) {
+    const handleStorageChange = (e: any) => {
+      const key = e.key !== undefined ? e.key : (e.detail ? e.detail.key : null);
+      if (key) {
+        if (key === 'microfox_members_data' || key.endsWith('microfox_members_data') || key.includes('microfox_history_')) {
+          clearMembersCache();
+        }
+      } else if (e.type === 'storage') {
         clearMembersCache();
       }
-      if (e.key === 'microfox_offline_mode') {
-        setIsOfflineMode(e.newValue === 'true');
+      if (key === 'microfox_offline_mode') {
+        const val = e.newValue !== undefined ? e.newValue : localStorage.getItem('microfox_offline_mode');
+        setIsOfflineMode(val === 'true');
       }
     };
 

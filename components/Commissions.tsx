@@ -1,6 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Search, BarChart3, Calendar, Coins, TrendingUp, User, ChevronDown, Download, Printer, Navigation, Trash2 } from 'lucide-react';
 
+const getLocalDateString = (dateInput: any): string => {
+  if (!dateInput) return '';
+  const str = String(dateInput).trim();
+  
+  // Format standard DD/MM/YYYY hh:mm:ss or DD/MM/YYYY
+  if (str.includes('/')) {
+    const parts = str.split(' ')[0].split('/');
+    if (parts.length === 3) {
+      if (parts[2].length === 4) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+      } else if (parts[0].length === 4) {
+        const year = parts[0];
+        const month = parts[1].padStart(2, '0');
+        const day = parts[2].padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  
+  // Format ISO/standard YYYY-MM-DD ... or DD-MM-YYYY
+  if (str.includes('-')) {
+    const parts = str.split('T')[0].split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        const year = parts[0];
+        const month = parts[1].padStart(2, '0');
+        const day = parts[2].padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      } else if (parts[2].length === 4) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  
+  // Fallback using UTC to ensure timezone-independent date components
+  try {
+    const d = new Date(dateInput);
+    if (!isNaN(d.getTime())) {
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+  
+  return '';
+};
+
 const Commissions: React.FC = () => {
   // Initialisation des dates sur le mois en cours pour assurer l'affichage immédiat des données
   const getInitialDates = () => {
@@ -44,16 +98,19 @@ const Commissions: React.FC = () => {
       allMembers.forEach((member: any) => {
         if (!member.tontineAccounts || member.tontineAccounts.length === 0) return;
 
+        const savedHistory = localStorage.getItem(`microfox_history_${member.id}`);
+        const history = savedHistory ? JSON.parse(savedHistory) : (member.history || []);
+
         member.tontineAccounts.forEach((acc: any) => {
           const dailyMise = Number(acc.dailyMise) || 500;
           if (dailyMise <= 0) return;
 
           // Récupération des transactions tontine pour cet utilisateur et ce compte
-          const tontineTxs = (member.history || [])
+          const tontineTxs = (history || [])
             .filter((t: any) => t.account === 'tontine' && (t.type === 'cotisation' || t.type === 'depot') && (t.tontineAccountId === acc.id || !t.tontineAccountId))
             .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-          const accountWithdrawals = (member.history || [])
+          const accountWithdrawals = (history || [])
             .filter((h: any) => h.account === 'tontine' && (h.tontineAccountId === acc.id || !h.tontineAccountId) && h.type === 'retrait')
             .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -64,17 +121,12 @@ const Commissions: React.FC = () => {
           let currentCycleAmount = 0;
           let cycleIdx = 1;
 
-          const recordCommissionIfInRange = (triggerDate: Date, idx: number, agentName: string) => {
-            const y = triggerDate.getFullYear();
-            const m = String(triggerDate.getMonth() + 1).padStart(2, '0');
-            const d = String(triggerDate.getDate()).padStart(2, '0');
-            const dateStr = `${y}-${m}-${d}`;
-
+          const recordCommissionIfInRange = (dateStr: string, txDate: Date, idx: number, agentName: string) => {
             if (dateStr >= startDate && dateStr <= endDate) {
               totalComm += dailyMise;
               totalCyc++;
               commissionList.push({
-                id: member.id + acc.id + idx + triggerDate.getTime() + Math.random(),
+                id: member.id + acc.id + idx + txDate.getTime() + Math.random(),
                 name: member.name,
                 code: member.code,
                 accountNumber: acc.number,
@@ -91,6 +143,7 @@ const Commissions: React.FC = () => {
 
           for (const tx of tontineTxs) {
             const txDate = new Date(tx.date);
+            const txDateStr = getLocalDateString(tx.date);
             let remainingAmount = Number(tx.amount);
             
             const agentParts = tx.description.split(' - Agent ');
@@ -101,7 +154,7 @@ const Commissions: React.FC = () => {
               // Nouveau cycle temporel (début de tontine)
               if (currentCycleFirstDepositDate === null) {
                 currentCycleFirstDepositDate = txDate;
-                recordCommissionIfInRange(txDate, cycleIdx, currentAgent);
+                recordCommissionIfInRange(txDateStr, txDate, cycleIdx, currentAgent);
               }
 
               const cycleEndDateLimit = new Date(currentCycleFirstDepositDate.getTime() + (31 * 24 * 60 * 60 * 1000));
@@ -117,7 +170,7 @@ const Commissions: React.FC = () => {
                 cycleIdx++;
                 currentCycleFirstDepositDate = txDate;
                 currentCycleCases = 0;
-                recordCommissionIfInRange(txDate, cycleIdx, currentAgent);
+                recordCommissionIfInRange(txDateStr, txDate, cycleIdx, currentAgent);
                 continue;
               }
 
@@ -131,7 +184,7 @@ const Commissions: React.FC = () => {
                 cycleIdx++;
                 // Si il reste de l'argent, cela déclenche un nouveau cycle immédiat
                 currentCycleFirstDepositDate = remainingAmount > 0 ? txDate : null;
-                if (remainingAmount > 0) recordCommissionIfInRange(txDate, cycleIdx, currentAgent);
+                if (remainingAmount > 0) recordCommissionIfInRange(txDateStr, txDate, cycleIdx, currentAgent);
               } else {
                 // Reste d'argent ne complétant pas un cycle
                 currentCycleAmount = Number(currentCycleAmount) + remainingAmount;
