@@ -60,6 +60,26 @@ const DailyTontine: React.FC = () => {
           // Récupération de l'historique
           const savedHistory = localStorage.getItem(`microfox_history_${m.id}`);
           let clientHistory = savedHistory ? JSON.parse(savedHistory) : (m.history || []);
+          if (clientHistory.length === 0) {
+            const simulatedTx: any[] = [];
+            accountsToProcess.forEach((accountCheck: any, aIdx: number) => {
+              if (accountCheck.balance > 0) {
+                simulatedTx.push({
+                  id: `sim_${accountCheck.id || m.id}_initial_${aIdx}`,
+                  type: 'cotisation',
+                  account: 'tontine',
+                  tontineAccountId: accountCheck.id || `${m.id}_tn_${aIdx + 1}`,
+                  tontineAccountNumber: accountCheck.number || '',
+                  amount: accountCheck.balance,
+                  date: new Date().toISOString(),
+                  description: 'Collecte journalière (Simulé)'
+                });
+              }
+            });
+            if (simulatedTx.length > 0) {
+              clientHistory = simulatedTx;
+            }
+          }
 
           // Load pending and validated withdrawals
           const savedPending = localStorage.getItem('microfox_pending_withdrawals');

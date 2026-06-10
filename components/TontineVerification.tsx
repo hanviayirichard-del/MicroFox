@@ -72,7 +72,7 @@ const TontineVerification: React.FC = () => {
   const calculateTontineStatsInternal = (grossBalance: number, dailyMise: number, history: any[], accountId: string, pendingWithdrawals: any[] = [], isFirstAccount: boolean = true, accountNumber?: string) => {
     if (dailyMise <= 0) dailyMise = 500;
     
-    const accountHistory = (history || [])
+    let accountHistory = (history || [])
       .filter(h => h.type === 'cloture_cycle' || (h.account === 'tontine' && (
         h.tontineAccountId === accountId || 
         h.tontineAccountNumber === accountNumber ||
@@ -82,6 +82,19 @@ const TontineVerification: React.FC = () => {
         ))
       ) && (h.type === 'cotisation' || h.type === 'depot') && h.description?.toLowerCase().includes('livret') !== true))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    if (accountHistory.length === 0 && grossBalance > 0) {
+      accountHistory = [{
+        id: `sim_${accountId}_initial`,
+        type: 'cotisation',
+        account: 'tontine',
+        tontineAccountId: accountId,
+        tontineAccountNumber: accountNumber || '',
+        amount: grossBalance,
+        date: new Date().toISOString(),
+        description: 'Collecte journalière (Simulé)'
+      }];
+    }
     
     const allWithdrawalsRaw = [
       ...(history || []).filter(h => h.account === 'tontine' && (

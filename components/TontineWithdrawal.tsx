@@ -45,7 +45,7 @@ const TontineWithdrawal: React.FC = () => {
     let dailyMise = Number(dailyMiseInput);
     if (isNaN(dailyMise) || dailyMise <= 0) dailyMise = 500;
     
-    const accountHistory = (history || [])
+    let accountHistory = (history || [])
       .filter(h => h.type === 'cloture_cycle' || (((h.account === 'tontine' && (h.type === 'cotisation' || h.type === 'depot')) || (h.type === 'transfert' && h.destinationAccount === 'tontine')) && (
         h.tontineAccountId === accountId || 
         h.tontineAccountNumber === accountNumber ||
@@ -55,6 +55,19 @@ const TontineWithdrawal: React.FC = () => {
         ))
       ) && h.description?.toLowerCase().includes('livret') !== true))
       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    if (accountHistory.length === 0 && grossBalance > 0) {
+      accountHistory = [{
+        id: `sim_${accountId}_initial`,
+        type: 'cotisation',
+        account: 'tontine',
+        tontineAccountId: accountId,
+        tontineAccountNumber: accountNumber || '',
+        amount: grossBalance,
+        date: new Date().toISOString(),
+        description: 'Collecte journalière (Simulé)'
+      }];
+    }
     
     // Merge history withdrawals with pending withdrawals to correctly split cycles
     const allWithdrawalsRaw = [
