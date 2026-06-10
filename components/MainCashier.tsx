@@ -527,7 +527,8 @@ const MainCashier: React.FC = () => {
             caisse: p.type === 'CASHIER_TRANSFER' ? (p.caisse || 'CAISSE PRINCIPALE') : (action === 'Validé' ? selectedCaisse : (p.caisse || 'CAISSE PRINCIPALE')), 
             observedAmount: finalAmount, 
             gap: gap, 
-            validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id 
+            validatorId: JSON.parse(localStorage.getItem('microfox_current_user') || '{}').id,
+            updatedAt: new Date().toISOString()
           };
         }
         return p;

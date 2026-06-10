@@ -102,7 +102,7 @@ const DailyTontine: React.FC = () => {
                   (isFirstAccount && (!h.description?.includes('Compte:') || (acc.number && h.description?.includes(acc.number)))) ||
                   (acc.number && h.description?.includes(acc.number))
                 ))
-              ) && h.type === 'cotisation' && (new Date(h.date).toDateString() === new Date().toDateString() || (h.date && h.date.split('T')[0] === new Date().toISOString().split('T')[0])) && !h.description?.toLowerCase().includes('livret'))
+              ) && h.type === 'cotisation' && !h.id?.startsWith('sim_') && !h.description?.toLowerCase().includes('simulé') && (new Date(h.date).toDateString() === new Date().toDateString() || (h.date && h.date.split('T')[0] === new Date().toISOString().split('T')[0])) && !h.description?.toLowerCase().includes('livret'))
               .reduce((sum: number, h: any) => sum + h.amount, 0);
 
             const tontineDeposits = clientHistory

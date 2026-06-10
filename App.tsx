@@ -359,7 +359,12 @@ try {
       const fullKey = isGlobal ? key : prefix + key;
       nativeRemoveItem(fullKey);
 
-      const isBalanceKey = key === 'microfox_vault_balance' || key === 'microfox_bank_balance' || key.startsWith('microfox_cash_balance_');
+      const isBalanceKey = key === 'microfox_vault_balance' || 
+                           key === 'microfox_bank_balance' || 
+                           key.startsWith('microfox_cash_balance_') ||
+                           key === 'microfox_tontine_clients' ||
+                           key === 'microfox_total_encaisse_jour' ||
+                           key.startsWith('microfox_last_pulled_');
 
       if (key !== 'microfox_pending_sync' && key !== 'microfox_dirty_keys' && !isBalanceKey) {
         try {
@@ -434,6 +439,7 @@ try {
 const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = React.useRef(false);
+  const isFirstPullRef = React.useRef(true);
   const [syncStatusText, setSyncStatusText] = useState('Mise à jour de vos données...');
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [syncVersion, setSyncVersion] = useState(0);
@@ -553,7 +559,10 @@ const App: React.FC = () => {
           pullFromSupabase(prefix, nativeSetItem, nativeGetItem, isDirty, !isSilent)
         ]);
         
-        if (globalChanged || tenantChanged) {
+        const bIsStartup = isFirstPullRef.current;
+        isFirstPullRef.current = false;
+
+        if (globalChanged || tenantChanged || bIsStartup) {
           setSyncVersion(v => v + 1);
           // Dispatch storage event to notify components to reload from localStorage
           dispatchStorageEvent();

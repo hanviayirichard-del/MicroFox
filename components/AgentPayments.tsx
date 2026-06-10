@@ -321,6 +321,7 @@ const AgentPayments: React.FC = () => {
 
     // Mark as cancelled
     payment.status = 'Annulé';
+    payment.updatedAt = new Date().toISOString();
     localStorage.setItem('microfox_agent_payments', JSON.stringify(allPayments));
 
     // Return the exact physical totalAmount to agent balance
@@ -330,7 +331,8 @@ const AgentPayments: React.FC = () => {
     localStorage.setItem(agentBalanceKey, newBalance.toString());
 
     // Update locally and refresh UI
-    setPaymentsHistory(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'Annulé' } : p));
+    const cancelTime = payment.updatedAt;
+    setPaymentsHistory(prev => prev.map(p => p.id === paymentId ? { ...p, status: 'Annulé', updatedAt: cancelTime } : p));
     setAgentBalance(newBalance);
     
     dispatchStorageEvent();

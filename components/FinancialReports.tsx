@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Download, Printer, FileText, TrendingUp, Wallet, CreditCard, BookOpen, MapPin, Calculator, CheckSquare, Square, UserPlus, Users, Lock, AlertTriangle, X, History as HistoryIcon, Landmark } from 'lucide-react';
+import { Search, Calendar, Download, Printer, FileText, TrendingUp, Wallet, CreditCard, BookOpen, MapPin, Calculator, CheckSquare, Square, UserPlus, Users, Lock, AlertTriangle, X, History as HistoryIcon, Landmark, ArrowUpRight } from 'lucide-react';
+import { dispatchStorageEvent } from '../utils/events';
 
 const FinancialReports: React.FC = () => {
   const [startDate, setStartDate] = useState(() => {
@@ -43,6 +44,7 @@ const FinancialReports: React.FC = () => {
     garantieRetraits: any[];
     adminExpenses: any[];
     agentPayments: any[];
+    agentOutflowPayments: any[];
     vaultTransactions: any[];
     validatedWithdrawals: any[];
     openingBalance: number;
@@ -60,6 +62,7 @@ const FinancialReports: React.FC = () => {
     garantieRetraits: [],
     adminExpenses: [],
     agentPayments: [],
+    agentOutflowPayments: [],
     vaultTransactions: [],
     validatedWithdrawals: [],
     openingBalance: 0
@@ -109,6 +112,7 @@ const FinancialReports: React.FC = () => {
       garantieRetraits: [],
       adminExpenses: [],
       agentPayments: [],
+      agentOutflowPayments: [],
       vaultTransactions: [],
       validatedWithdrawals: [],
       openingBalance: 0
@@ -268,14 +272,36 @@ const FinancialReports: React.FC = () => {
         const pDate = p.date.split('T')[0];
         const amount = p.observedAmount || p.totalAmount;
 
-        if (p.status !== 'Validé') return;
-        if (isCaissier && p.validatorId !== user.id) return;
-        if (!selectedCaisse.includes('all') && !selectedCaisse.some(c => c.toUpperCase() === (p.caisse || 'N/A').toUpperCase())) return;
+        // Is current caisse the sender of this payment?
+        const isSender = (isCaissier && user?.caisse && p.agentId === user.caisse) ||
+                         (!isCaissier && (
+                           (!selectedCaisse.includes('all') && selectedCaisse.some(c => c.toUpperCase() === (p.agentId || '').toUpperCase())) ||
+                           (selectedCaisse.includes('all') && p.type === 'CASHIER_TRANSFER')
+                         ));
 
-        if (pDate < startDate) {
-          newData.openingBalance += amount;
-        } else if (pDate <= endDate) {
-          newData.agentPayments.push(p);
+        // Is current caisse the receiver of this payment?
+        const isReceiver = (isCaissier && user?.caisse && p.caisse?.toUpperCase() === user.caisse.toUpperCase()) ||
+                           (!isCaissier && (selectedCaisse.includes('all') || selectedCaisse.some(c => c.toUpperCase() === (p.caisse || '').toUpperCase())));
+
+        // SENDER logic (Outflow / Sortie)
+        if (isSender) {
+          // Both validated and pending cashier transfers are counted as outflows of the sender caisse
+          if (p.status === 'Validé' || p.status === 'En attente') {
+            if (pDate < startDate) {
+              newData.openingBalance -= amount;
+            } else if (pDate <= endDate) {
+              newData.agentOutflowPayments.push(p);
+            }
+          }
+        }
+
+        // RECEIVER logic (Inflow / Entrée)
+        if (isReceiver && p.status === 'Validé') {
+          if (pDate < startDate) {
+            newData.openingBalance += amount;
+          } else if (pDate <= endDate) {
+            newData.agentPayments.push(p);
+          }
         }
       });
     }
@@ -472,6 +498,7 @@ const FinancialReports: React.FC = () => {
   const totalObservedVersementAgents = calculateTotal(data.agentPayments.map(p => ({ amount: p.observedAmount || p.totalAmount })));
   const totalVersementAgents = totalObservedVersementAgents;
   const ecartVersementAgents = totalObservedVersementAgents - totalExpectedVersementAgents;
+  const totalAgentOutflow = calculateTotal((data.agentOutflowPayments || []).map((p: any) => ({ amount: p.observedAmount || p.totalAmount })));
   
   const totalPartSocialeDepot = data.epargneDepots.filter(tx => 
     tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
@@ -577,6 +604,8 @@ const FinancialReports: React.FC = () => {
   const [isBilletageModalOpen, setIsBilletageModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
+  const [transferAmountType, setTransferAmountType] = useState<'total' | 'partial'>('total');
+  const [customTransferAmount, setCustomTransferAmount] = useState<string>('');
   const [denominations, setDenominations] = useState<Record<string, number>>({
     '10000': 0,
     '5000': 0,
@@ -641,6 +670,105 @@ const FinancialReports: React.FC = () => {
     setIsBilletageModalOpen(false);
   };
 
+  const handleSoldePhysicalTransfer = () => {
+    if (physicalBalance <= 0) {
+      alert("La valeur du solde physique doit être supérieure à 0.");
+      return;
+    }
+
+    const amount = transferAmountType === 'total' ? physicalBalance : Number(customTransferAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Veuillez saisir un montant de versement valide supérieur à 0 F.");
+      return;
+    }
+    if (amount > physicalBalance) {
+      alert(`Le montant du versement ne peut pas dépasser le solde physique disponible (${physicalBalance.toLocaleString()} F).`);
+      return;
+    }
+
+    const roleLower = currentUser?.role?.toLowerCase();
+    const isUserCaissier = roleLower === 'caissier';
+    const isUserAdminOrDirector = roleLower === 'admin' || roleLower === 'administrateur' || roleLower === 'directeur';
+
+    if (!isUserCaissier && !isUserAdminOrDirector) {
+      alert("Vous n'avez pas les autorisations nécessaires pour effectuer cette action.");
+      return;
+    }
+
+    if (isUserCaissier) {
+      const sourceCaisse = currentUser?.caisse;
+      if (!sourceCaisse) {
+        alert("Erreur: Votre caisse n'est pas configurée.");
+        return;
+      }
+
+      const savedPayments = localStorage.getItem('microfox_agent_payments');
+      const allPayments = savedPayments ? JSON.parse(savedPayments) : [];
+      
+      const transferPayment = {
+        id: `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        agentId: sourceCaisse,
+        agentName: sourceCaisse,
+        cashierName: currentUser.identifiant || currentUser.nom,
+        amountCotisations: 0,
+        amountLivrets: 0,
+        totalAmount: amount,
+        physicalBalance: amount,
+        gap: 0,
+        billetage: denominations,
+        date: new Date().toISOString(),
+        status: 'En attente',
+        caisse: 'CAISSE PRINCIPALE',
+        type: 'CASHIER_TRANSFER'
+      };
+      
+      localStorage.setItem('microfox_agent_payments', JSON.stringify([transferPayment, ...allPayments]));
+
+      const cashKey = `microfox_cash_balance_${sourceCaisse}`;
+      const currentCashBal = Number(localStorage.getItem(cashKey) || 0);
+      localStorage.setItem(cashKey, (currentCashBal - amount).toString());
+
+      setPhysicalBalance(prev => Math.max(0, prev - amount));
+      setCustomTransferAmount('');
+      dispatchStorageEvent();
+
+      alert(`Versement de ${amount.toLocaleString()} F vers la CAISSE PRINCIPALE enregistré avec succès et en attente de validation.`);
+    } else if (isUserAdminOrDirector) {
+      const sourceCaisse = 'CAISSE PRINCIPALE';
+      const cashKey = `microfox_cash_balance_${sourceCaisse}`;
+      const currentCashBal = Number(localStorage.getItem(cashKey) || 0);
+      localStorage.setItem(cashKey, (currentCashBal - amount).toString());
+
+      const vaultSaved = localStorage.getItem('microfox_vault_balance');
+      const vaultBalance = vaultSaved ? Number(vaultSaved) : 10000000;
+      localStorage.setItem('microfox_vault_balance', (vaultBalance + amount).toString());
+
+      const savedVault = localStorage.getItem('microfox_vault_transactions');
+      const allTxs = savedVault ? JSON.parse(savedVault) : [];
+      
+      const newTx = {
+        id: `report_transfer_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        type: 'Versement au Coffre',
+        from: 'CAISSE PRINCIPALE',
+        to: 'Coffre',
+        amount: amount,
+        theoreticalAmount: amount,
+        gap: 0,
+        date: new Date().toISOString(),
+        userId: currentUser?.id,
+        cashierName: currentUser?.identifiant || currentUser?.nom || 'Admin',
+        observation: `Versement direct du solde physique de l'état récapitulatif financier`
+      };
+      localStorage.setItem('microfox_vault_transactions', JSON.stringify([newTx, ...allTxs]));
+
+      setPhysicalBalance(prev => Math.max(0, prev - amount));
+      setCustomTransferAmount('');
+      dispatchStorageEvent();
+
+      alert(`Versement de ${amount.toLocaleString()} F vers le COFFRE effectué avec succès.`);
+    }
+  };
+
   const [selectedReport, setSelectedReport] = useState('all');
   const [checkedReports, setCheckedReports] = useState<string[]>([]);
 
@@ -686,7 +814,7 @@ const FinancialReports: React.FC = () => {
   ];
 
   const totalInflow = displayDepotMemb + displayDepotTont + totalDepotGarantie + totalCreditRemb + totalVersementAgents + totalFraisDossierCredit + totalFraisTenueCompte + totalPartSocialeDepot + totalAdhesion + totalVenteLivretCompte + totalVenteLivretTontineNonAgent + totalPaidGaps + totalVaultInflow;
-  const totalOutflow = displayRetraitMemb + displayRetraitTont + totalRetraitGarantie + totalCreditAccor + totalAdminExpenses + totalPartSocialeRetrait + totalGapTontine + totalVaultOutflow;
+  const totalOutflow = displayRetraitMemb + displayRetraitTont + totalRetraitGarantie + totalCreditAccor + totalAdminExpenses + totalPartSocialeRetrait + totalGapTontine + totalVaultOutflow + totalAgentOutflow;
   const currentBalance = startingBalance + totalInflow - totalOutflow;
 
   useEffect(() => {
@@ -750,6 +878,7 @@ const FinancialReports: React.FC = () => {
           ['RETRAIT PART SOCIALE', totalPartSocialeRetrait],
           ['ÉCARTS SUR RETRAIT TONTINE', totalGapTontine],
           ['VERSEMENT AU COFFRE', totalVaultOutflow],
+          ['VERSEMENTS EFFECTUÉS', totalAgentOutflow],
           ['TOTAL SORTIES', totalOutflow],
           ['', ''],
           ['FLUX NET', totalInflow - totalOutflow],
@@ -1290,6 +1419,9 @@ const FinancialReports: React.FC = () => {
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Versement au Coffre</div>
                 <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalVaultOutflow.toLocaleString()}</div>
 
+                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Versements Effectués</div>
+                <div className="bg-white p-4 text-sm font-black text-red-600 text-right">{totalAgentOutflow.toLocaleString()}</div>
+
                 <div className="bg-red-50 p-4 text-xs font-black text-red-900 uppercase">Total Sorties</div>
                 <div className="bg-red-50 p-4 text-sm font-black text-red-900 text-right">{totalOutflow.toLocaleString()}</div>
 
@@ -1351,6 +1483,78 @@ const FinancialReports: React.FC = () => {
                     {(physicalBalance - currentBalance).toLocaleString()} F
                   </span>
                 </div>
+
+                {/* Possibilité de versement total ou partiel */}
+                {(() => {
+                  const roleLower = currentUser?.role?.toLowerCase();
+                  const isUserCaissier = roleLower === 'caissier';
+                  const isUserAdminOrDirector = roleLower === 'admin' || roleLower === 'administrateur' || roleLower === 'directeur';
+                  
+                  if ((isUserCaissier || isUserAdminOrDirector) && physicalBalance > 0) {
+                    return (
+                      <div className="bg-gray-50 border border-gray-100 p-6 rounded-[2rem] space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                            <ArrowUpRight size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-tight">Versement du Solde Physique</h3>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              {isUserCaissier ? 'Destination: Caisse Principale' : 'Destination: Coffre'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTransferAmountType('total');
+                                setCustomTransferAmount(physicalBalance.toString());
+                              }}
+                              className={`flex-1 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${transferAmountType === 'total' ? 'bg-[#121c32] text-white shadow-sm' : 'bg-white text-gray-400 border border-gray-200'}`}
+                            >
+                              Total ({physicalBalance.toLocaleString()} F)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTransferAmountType('partial');
+                                setCustomTransferAmount('');
+                              }}
+                              className={`flex-1 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${transferAmountType === 'partial' ? 'bg-[#121c32] text-white shadow-sm' : 'bg-white text-gray-400 border border-gray-200'}`}
+                            >
+                              Partiel
+                            </button>
+                          </div>
+
+                          {transferAmountType === 'partial' && (
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black tracking-widest text-gray-400 uppercase">Montant à transférer (F)</label>
+                              <input
+                                type="number"
+                                value={customTransferAmount}
+                                onChange={(e) => setCustomTransferAmount(e.target.value)}
+                                className="w-full p-2 bg-white border border-gray-200 text-[#121c32] rounded-xl text-center font-black outline-none focus:border-emerald-500 text-sm"
+                                placeholder="Saisir le montant"
+                              />
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleSoldePhysicalTransfer}
+                            className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/10"
+                          >
+                            Valider le Versement
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           </div>
