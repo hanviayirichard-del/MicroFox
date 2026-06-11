@@ -266,7 +266,7 @@ const CancelCotisation: React.FC = () => {
       history.forEach((tx: any) => {
         if (!tx) return;
         const isOwner = tx.userId === user.id;
-        const isAuthorizedRole = user.role === 'admin' || user.role === 'administrateur' || user.role === 'directeur' || user.role === 'caissier';
+        const isAuthorizedRole = user.role !== 'agent commercial';
 
         let isAllowed = false;
         if (user.role === 'agent commercial') {

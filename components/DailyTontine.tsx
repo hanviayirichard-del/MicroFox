@@ -2,6 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { dispatchStorageEvent } from '../utils/events';
 import { QrCode, TrendingUp, Search, Wallet, Cloud, CheckCircle, AlertCircle } from 'lucide-react';
 
+const isSameDay = (dateStr1: any, dateStr2: any): boolean => {
+  if (!dateStr1 || !dateStr2) return false;
+  
+  const parseToYYYYMMDD = (input: any): string => {
+    const str = String(input).trim();
+    if (str.includes('/')) {
+      const parts = str.split(' ')[0].split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        if (year.length === 4) {
+          return `${year}-${month}-${day}`;
+        }
+      }
+    }
+    if (str.includes('-')) {
+      const parts = str.split('T')[0].split('-');
+      if (parts.length === 3) {
+        const year = parts[0];
+        const month = parts[1].padStart(2, '0');
+        const day = parts[2].padStart(2, '0');
+        if (year.length === 4) {
+          return `${year}-${month}-${day}`;
+        }
+      }
+    }
+    try {
+      const d = new Date(input);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    } catch (e) {}
+    return '';
+  };
+
+  const d1 = parseToYYYYMMDD(dateStr1);
+  const d2 = parseToYYYYMMDD(dateStr2);
+  return d1 !== '' && d1 === d2;
+};
+
 const DailyTontine: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -102,7 +146,7 @@ const DailyTontine: React.FC = () => {
                   (isFirstAccount && (!h.description?.includes('Compte:') || (acc.number && h.description?.includes(acc.number)))) ||
                   (acc.number && h.description?.includes(acc.number))
                 ))
-              ) && h.type === 'cotisation' && !h.id?.startsWith('sim_') && !h.description?.toLowerCase().includes('simulé') && (new Date(h.date).toDateString() === new Date().toDateString() || (h.date && h.date.split('T')[0] === new Date().toISOString().split('T')[0])) && !h.description?.toLowerCase().includes('livret'))
+              ) && h.type === 'cotisation' && !h.id?.startsWith('sim_') && !h.description?.toLowerCase().includes('simulé') && isSameDay(h.date, new Date()) && !h.description?.toLowerCase().includes('livret'))
               .reduce((sum: number, h: any) => sum + h.amount, 0);
 
             const tontineDeposits = clientHistory
