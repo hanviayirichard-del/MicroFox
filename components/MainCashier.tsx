@@ -354,17 +354,12 @@ const MainCashier: React.FC = () => {
     const observed = observedAmounts[paymentId];
     const observation = gapObservations[paymentId] || '';
 
-    if (action === 'Validé' && !observed) {
-      setValidationErrors({...validationErrors, [paymentId]: "Saisie du montant reçu obligatoire"});
-      return;
-    }
-
     const processAction = () => {
       const saved = localStorage.getItem('microfox_agent_payments');
       const currentPayments = saved ? JSON.parse(saved) : [];
       const updatedPayments = currentPayments.map((p: any) => {
         if (p.id === paymentId) {
-          const finalAmount = observed ? Number(observed) : p.totalAmount;
+          const finalAmount = (observed !== undefined && observed !== '') ? Number(observed) : p.totalAmount;
           const theoretical = p.theoreticalAmount ?? p.totalAmount;
           const gap = finalAmount - theoretical;
 
@@ -548,7 +543,9 @@ const MainCashier: React.FC = () => {
     };
 
     if (action === 'Validé') {
-      showConfirm("Validation de versement", `Voulez-vous valider le versement de ${observed} F ?`, processAction);
+      const paymentItem = payments.find((p: any) => p.id === paymentId);
+      const displayAmt = (observed !== undefined && observed !== '') ? Number(observed) : (paymentItem ? paymentItem.totalAmount : 0);
+      showConfirm("Validation de versement", `Voulez-vous valider le versement de ${displayAmt.toLocaleString()} F ?`, processAction);
     } else {
       showConfirm("Rejet de versement", "Voulez-vous rejeter ce versement ? L'argent sera retourné au solde de l'agent.", processAction);
     }
