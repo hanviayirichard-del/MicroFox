@@ -36,20 +36,23 @@ const mergeObjects = (obj1: any, obj2: any): any => {
   }
 
   // If obj1 and obj2 are objects with an updatedAt or timestamp field, prefer the more recent one
-  const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  const isoDateRegex = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/;
   if (typeof obj1 === 'object' && obj1 !== null && typeof obj2 === 'object' && obj2 !== null) {
     const d1 = obj1.updatedAt || obj1.updated_at || obj1.timestamp || obj1.date;
     const d2 = obj2.updatedAt || obj2.updated_at || obj2.timestamp || obj2.date;
     
-    const date1 = (typeof d1 === 'string' && isoDateRegex.test(d1)) ? d1 : null;
-    const date2 = (typeof d2 === 'string' && isoDateRegex.test(d2)) ? d2 : null;
+    const time1 = (typeof d1 === 'string' && isoDateRegex.test(d1)) ? Date.parse(d1) : null;
+    const time2 = (typeof d2 === 'string' && isoDateRegex.test(d2)) ? Date.parse(d2) : null;
 
-    if (date1 && date2) {
-      if (date1 > date2) return obj1;
-      if (date2 > date1) return obj2;
-    } else if (date1) {
+    const isValidTime1 = time1 !== null && !isNaN(time1);
+    const isValidTime2 = time2 !== null && !isNaN(time2);
+
+    if (isValidTime1 && isValidTime2) {
+      if (time1 > time2) return obj1;
+      if (time2 > time1) return obj2;
+    } else if (isValidTime1) {
       return obj1; // Favor the one with a date
-    } else if (date2) {
+    } else if (isValidTime2) {
       return obj2; // Favor the one with a date
     }
   }
@@ -70,7 +73,11 @@ const mergeObjects = (obj1: any, obj2: any): any => {
 
   // If obj1 and obj2 are ISO date strings, prefer the more recent one
   if (typeof obj1 === 'string' && typeof obj2 === 'string' && isoDateRegex.test(obj1) && isoDateRegex.test(obj2)) {
-    return obj1 > obj2 ? obj1 : obj2;
+    const t1 = Date.parse(obj1);
+    const t2 = Date.parse(obj2);
+    if (!isNaN(t1) && !isNaN(t2)) {
+      return t1 > t2 ? obj1 : obj2;
+    }
   }
 
   // If obj1 and obj2 are numbers, prefer the larger one to prevent calculated balances (or accrued transactions values) from being overwritten by 0
@@ -83,7 +90,7 @@ const mergeObjects = (obj1: any, obj2: any): any => {
   if (typeof obj1 === 'string' && typeof obj2 === 'string') {
     const idx1 = finalStatuses.indexOf(obj1);
     const idx2 = finalStatuses.indexOf(obj2);
-    if (idx1 !== -1 || idx2 !== -1) {
+    if (idx1 !== -1 && idx2 !== -1) {
       return idx1 >= idx2 ? obj1 : obj2;
     }
   }
