@@ -97,6 +97,12 @@ const GlobalJournal: React.FC = () => {
             };
 
             const isRegularization = v.type === 'Régularisation Écart' || v.type === 'Annulation Surplus';
+            const isVersement = v.type && (
+              v.type.toLowerCase().includes('versement') || 
+              v.type === 'CASHIER_TRANSFER' ||
+              (v.details && v.details.toLowerCase().includes('versement')) ||
+              (v.observation && v.observation.toLowerCase().includes('versement'))
+            );
 
             if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isToMyCaisse = v.to && user.caisse && v.to.toUpperCase() === user.caisse.toUpperCase();
@@ -107,7 +113,9 @@ const GlobalJournal: React.FC = () => {
                 addVaultEntry('depot', v.to, 'to');
               } 
               if (isFromMyCaisse || (isMyOp && v.from && v.from !== 'Système' && (!isRegularization || internalCaisses.includes(v.from.toUpperCase())))) {
-                addVaultEntry('retrait', v.from, 'from');
+                if (!isVersement) {
+                  addVaultEntry('retrait', v.from, 'from');
+                }
               }
               return;
             }
@@ -122,7 +130,7 @@ const GlobalJournal: React.FC = () => {
                 addVaultEntry('depot', v.to, 'to');
               }
             } else {
-              if (v.from && v.from !== 'Système') {
+              if (v.from && v.from !== 'Système' && !isVersement) {
                 addVaultEntry('retrait', v.from, 'from');
               }
               if (v.to && v.to !== 'Système') {

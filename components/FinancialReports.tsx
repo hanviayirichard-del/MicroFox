@@ -118,11 +118,40 @@ const FinancialReports: React.FC = () => {
       openingBalance: 0
     };
 
+    const agentIds = allUsers.filter((u: any) => u.role === 'agent commercial').map((u: any) => u.id);
+
     const getCaisseDelta = (tx: any) => {
       const desc = (tx.description || '').toLowerCase();
-      if (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement') return tx.amount;
-      if (tx.type === 'retrait' || (tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite'))) return -tx.amount;
-      return 0;
+      const isAgent = agentIds.includes(tx.userId);
+      
+      let inflow = 0;
+      let outflow = 0;
+
+      if (tx.account === 'epargne' || tx.account === 'frais' || tx.account === 'partSociale') {
+        if (tx.type === 'depot') inflow = tx.amount || 0;
+        if (tx.type === 'retrait' || tx.type === 'transfert') outflow = tx.amount || 0;
+      } else if (tx.account === 'tontine') {
+        if (tx.type === 'depot' || tx.type === 'cotisation') {
+          if (!isAgent) inflow = tx.amount || 0;
+        }
+        if (tx.type === 'retrait' || tx.type === 'transfert') outflow = tx.amount || 0;
+      } else if (tx.account === 'credit') {
+        if (tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite')) outflow = tx.amount || 0;
+        if (tx.type === 'remboursement') inflow = tx.amount || 0;
+      } else if (tx.account === 'garantie') {
+        if (tx.type === 'depot') inflow = tx.amount || 0;
+        if (tx.type === 'retrait' || tx.type === 'transfert') outflow = tx.amount || 0;
+      }
+
+      if (tx.type === 'transfert' && tx.destinationAccount) {
+        if (tx.destinationAccount === 'tontine') {
+          if (!isAgent) inflow = tx.amount || 0;
+        } else {
+          inflow = tx.amount || 0;
+        }
+      }
+
+      return inflow - outflow;
     };
 
     zones.forEach(z => {
@@ -398,8 +427,11 @@ const FinancialReports: React.FC = () => {
         if (isCaissier && g.userId !== user.id) return;
         if (!selectedCaisse.includes('all') && !selectedCaisse.some(c => c.toUpperCase() === (gCaisse || 'N/A').toUpperCase())) return;
 
+        // Skip CAISSIER gaps to prevent double subtraction as they are already accounted for by vault transactions
+        if (g.type === 'CAISSIER') return;
+
         if (gDate < startDate) {
-          // Removed redundant opening balance adjustment as it's handled by vault transactions
+          newData.openingBalance -= (g.gapAmount || 0);
         } else if (gDate <= endDate) {
           newData.cashGaps.push(g);
         }
@@ -1442,9 +1474,13 @@ const FinancialReports: React.FC = () => {
                   <span className="text-2xl font-black text-amber-900">{totalVaultInflow.toLocaleString()} F</span>
                 </div>
 
-                <div className="flex items-center justify-between p-6 bg-blue-600 rounded-3xl shadow-lg shadow-blue-200">
-                  <span className="text-xs font-black text-white uppercase tracking-widest">Solde Actuel (Théorique)</span>
-                  <span className="text-2xl font-black text-white">{currentBalance.toLocaleString()} F</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-6 bg-blue-600 rounded-3xl shadow-lg shadow-blue-200">
+                  <span className="text-xs font-black text-white uppercase tracking-widest leading-normal">
+                    Solde Actuel (Théorique) {currentUser?.caisse || user?.caisse ? `- ${currentUser?.caisse || user?.caisse}` : ''}
+                  </span>
+                  <span className="text-xl sm:text-2xl font-black text-white whitespace-nowrap">
+                    {currentBalance.toLocaleString()} F
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between p-6 bg-emerald-500 rounded-3xl shadow-lg shadow-emerald-200">
