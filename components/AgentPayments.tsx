@@ -174,7 +174,7 @@ const AgentPayments: React.FC = () => {
         
         let filtered = allPayments;
         if (user && user.role === 'agent commercial') {
-          filtered = allPayments.filter((p: any) => p.agentId === user.id);
+          filtered = allPayments.filter((p: any) => String(p.agentId) === String(user.id));
         }
         
         // Filter by date range
@@ -230,7 +230,7 @@ const AgentPayments: React.FC = () => {
 
     // Prevent duplicate payments (same amount, same agent, pending, same day)
     const isDuplicate = paymentsHistory.some(p => 
-      p.agentId === currentUser?.id && 
+      String(p.agentId) === String(currentUser?.id) && 
       p.totalAmount === totalAmount && 
       p.status === 'En attente' &&
       (new Date(p.date).toDateString() === targetDateStr || (p.date && p.date.split('T')[0] === targetDateYMD))
@@ -288,7 +288,7 @@ const AgentPayments: React.FC = () => {
       localStorage.setItem('microfox_pending_sync', 'true');
       
       if (currentUser?.role === 'agent commercial') {
-        setPaymentsHistory(updatedAllPayments.filter((p: any) => p.agentId === currentUser.id));
+        setPaymentsHistory(updatedAllPayments.filter((p: any) => String(p.agentId) === String(currentUser.id)));
       } else {
         setPaymentsHistory(updatedAllPayments);
       }

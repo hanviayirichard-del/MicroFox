@@ -814,7 +814,7 @@ const App: React.FC = () => {
                 // Skip if locally dirty and not mergeable JSON to avoid overwriting newer local changes
                 const isDirty = () => {
                   try {
-                    const dirty = JSON.parse(nativeGetItem('microfox_dirty_keys') || '[]');
+                    const dirty = JSON.parse(nativeGetItem(prefix + 'microfox_dirty_keys') || nativeGetItem('microfox_dirty_keys') || '[]');
                     return Array.isArray(dirty) && dirty.includes(key);
                   } catch (e) { return false; }
                 };

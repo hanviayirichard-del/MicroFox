@@ -302,7 +302,7 @@ const FinancialReports: React.FC = () => {
         const amount = p.observedAmount || p.totalAmount;
 
         // Is current caisse the sender of this payment?
-        const isSender = (isCaissier && user?.caisse && p.agentId === user.caisse) ||
+        const isSender = (isCaissier && user?.caisse && String(p.agentId).toUpperCase() === String(user.caisse).toUpperCase()) ||
                          (!isCaissier && (
                            (!selectedCaisse.includes('all') && selectedCaisse.some(c => c.toUpperCase() === (p.agentId || '').toUpperCase())) ||
                            (selectedCaisse.includes('all') && p.type === 'CASHIER_TRANSFER')

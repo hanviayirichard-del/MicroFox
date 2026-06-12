@@ -477,7 +477,7 @@ const MainCashier: React.FC = () => {
               // Find agent zone
               const savedUsers = localStorage.getItem('microfox_users');
               const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
-              const agent = allUsers.find((u: any) => u.id === p.agentId);
+              const agent = allUsers.find((u: any) => String(u.id) === String(p.agentId));
               const agentZone = agent?.zoneCollecte || agent?.zone;
 
               const agentCode = agent?.code || p.agentId;

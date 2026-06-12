@@ -299,7 +299,7 @@ const CancelCotisation: React.FC = () => {
 
           // Check if this specific transaction was part of a validated deposit using numeric checks
           const isPoured = parsedDeposits.some((d: any) => 
-            d.agentId === tx.userId && txTime <= d.time
+            String(d.agentId) === String(tx.userId) && txTime <= d.time
           );
 
           // Check if the zone is validated for this date and if the transaction was made before the validation using pre-parsed timestamps
