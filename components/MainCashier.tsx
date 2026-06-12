@@ -5,6 +5,393 @@ import { Landmark, CheckCircle, XCircle, Clock, Search, Filter, TrendingUp, Wall
 import { recordAuditLog } from '../utils/audit';
 import ConfirmModal from './ConfirmModal';
 
+const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const startDate = todayStr;
+  const endDate = todayStr;
+
+  const savedUsers = localStorage.getItem('microfox_users');
+  const rawUsers = savedUsers ? JSON.parse(savedUsers) : [];
+  
+  const userStr = localStorage.getItem('microfox_current_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const isCaissier = user?.role === 'caissier';
+  
+  const allUsers = rawUsers.filter((u: any) => !user || user.codeMF === 'GLOBAL' || u.codeMF === user.codeMF);
+  const agentIds = allUsers.filter((u: any) => u.role === 'agent commercial').map((u: any) => u.id);
+
+  const selectedCaisseArr = [caisseName];
+
+  let openingBalance = 0;
+  
+  // Transactions
+  let epargneDepots: any[] = [];
+  let epargneRetraits: any[] = [];
+  let tontineDepotsByZone: Record<string, any[]> = {};
+  let tontineRetraitsByZone: Record<string, any[]> = {};
+  let creditsAccordes: any[] = [];
+  let remboursements: any[] = [];
+  let garantieDepots: any[] = [];
+  let garantieRetraits: any[] = [];
+  let adminExpenses: any[] = [];
+  let agentPayments: any[] = [];
+  let agentOutflowPayments: any[] = [];
+  let vaultTransactions: any[] = [];
+  let cashGaps: any[] = [];
+
+  const getCaisseDelta = (tx: any) => {
+    const desc = (tx.description || '').toLowerCase();
+    const isAgent = agentIds.includes(tx.userId);
+    
+    let inflow = 0;
+    let outflow = 0;
+
+    if (tx.account === 'epargne' || tx.account === 'frais' || tx.account === 'partSociale') {
+      if (tx.type === 'depot') inflow = tx.amount || 0;
+      if (tx.type === 'retrait' || tx.type === 'transfert') outflow = tx.amount || 0;
+    } else if (tx.account === 'tontine') {
+      if (tx.type === 'depot' || tx.type === 'cotisation') {
+        if (!isAgent) inflow = tx.amount || 0;
+      }
+      if (tx.type === 'retrait' || tx.type === 'transfert') outflow = tx.amount || 0;
+    } else if (tx.account === 'credit') {
+      if (tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite')) outflow = tx.amount || 0;
+      if (tx.type === 'remboursement') inflow = tx.amount || 0;
+    } else if (tx.account === 'garantie') {
+      if (tx.type === 'depot') inflow = tx.amount || 0;
+      if (tx.type === 'retrait' || tx.type === 'transfert') outflow = tx.amount || 0;
+    }
+
+    if (tx.type === 'transfert' && tx.destinationAccount) {
+      if (tx.destinationAccount === 'tontine') {
+        if (!isAgent) inflow = tx.amount || 0;
+      } else {
+        inflow = tx.amount || 0;
+      }
+    }
+
+    return inflow - outflow;
+  };
+
+  // Load Member transactions
+  const savedMembers = localStorage.getItem('microfox_members_data');
+  const seenTxIds = new Set<string>();
+
+  if (savedMembers) {
+    const allMembers = JSON.parse(savedMembers);
+    allMembers.forEach((member: any) => {
+      const history = member.history || [];
+      history.forEach((tx: any) => {
+        const txKey = tx.id || `${tx.date}_${tx.type}_${tx.amount}_${member.id}_${tx.description}`;
+        if (seenTxIds.has(txKey)) return;
+
+        if (tx.type === 'deblocage') {
+          const deblocageKey = `debloc_strict_${tx.date.split('T')[0]}_${Math.round(tx.amount)}_${member.id}`;
+          if (seenTxIds.has(deblocageKey)) return;
+          seenTxIds.add(deblocageKey);
+        }
+
+        seenTxIds.add(txKey);
+
+        const txUser = allUsers.find((u: any) => u.id === tx.userId);
+        const txCaisse = tx.caisse || txUser?.caisse || 'N/A';
+        
+        if (isCaissier) {
+          const isMyOp = tx.userId === user.id || (tx.cashierName && tx.cashierName === user.identifiant);
+          if (!isMyOp) return;
+        }
+        if (!selectedCaisseArr.some(c => c.toUpperCase() === txCaisse.toUpperCase())) return;
+        
+        const txDate = tx.date.split('T')[0];
+        
+        if (txDate < startDate) {
+          openingBalance += getCaisseDelta(tx);
+          return;
+        }
+
+        if (txDate > endDate) return;
+
+        if (tx.account === 'epargne' || tx.account === 'frais' || tx.account === 'partSociale') {
+          if (tx.type === 'depot') epargneDepots.push(tx);
+          if (tx.type === 'retrait' || tx.type === 'transfert') epargneRetraits.push(tx);
+        }
+
+        if (tx.account === 'tontine') {
+          if (tx.type === 'depot' || tx.type === 'cotisation') {
+            const desc = (tx.description || '').toLowerCase();
+            if (!desc.includes('livret')) {
+              const zone = member.zone || 'Inconnue';
+              if (!tontineDepotsByZone[zone]) tontineDepotsByZone[zone] = [];
+              tontineDepotsByZone[zone].push(tx);
+            }
+          }
+          if (tx.type === 'retrait' || tx.type === 'transfert') {
+            const zone = member.zone || 'Inconnue';
+            if (!tontineRetraitsByZone[zone]) tontineRetraitsByZone[zone] = [];
+            tontineRetraitsByZone[zone].push(tx);
+          }
+        }
+
+        if (tx.account === 'credit') {
+          const desc = (tx.description || '').toLowerCase();
+          if (tx.type === 'deblocage' && !desc.includes('pénalité') && !desc.includes('penalite')) creditsAccordes.push(tx);
+          if (tx.type === 'remboursement') remboursements.push(tx);
+        }
+
+        if (tx.account === 'garantie') {
+          if (tx.type === 'depot') garantieDepots.push(tx);
+          if (tx.type === 'retrait' || tx.type === 'transfert') garantieRetraits.push(tx);
+        }
+
+        if (tx.type === 'transfert' && tx.destinationAccount) {
+          const destTx = { ...tx, account: tx.destinationAccount, type: 'depot' };
+          if (tx.destinationAccount === 'epargne' || tx.destinationAccount === 'frais' || tx.destinationAccount === 'partSociale') {
+            epargneDepots.push(destTx);
+          } else if (tx.destinationAccount === 'garantie') {
+            garantieDepots.push(destTx);
+          } else if (tx.destinationAccount === 'tontine') {
+            const zone = member.zone || 'Inconnue';
+            if (!tontineDepotsByZone[zone]) tontineDepotsByZone[zone] = [];
+            tontineDepotsByZone[zone].push(destTx);
+          }
+        }
+      });
+    });
+  }
+
+  // Load Admin Expenses
+  const savedExpenses = localStorage.getItem('microfox_admin_expenses');
+  if (savedExpenses) {
+    const allExpenses = JSON.parse(savedExpenses);
+    allExpenses.forEach((e: any) => {
+      if (e.isDeleted) return;
+      
+      const eDate = e.date.split('T')[0];
+      const expUser = allUsers.find((u: any) => u.identifiant === e.recordedBy);
+      const expCaisse = expUser?.caisse || 'N/A';
+
+      if (isCaissier && e.recordedBy !== user.identifiant) return;
+      if (!selectedCaisseArr.includes(expCaisse)) return;
+
+      if (eDate < startDate) {
+        openingBalance -= e.amount;
+      } else if (eDate <= endDate) {
+        adminExpenses.push(e);
+      }
+    });
+  }
+
+  // Load Agent Payments
+  const savedPayments = localStorage.getItem('microfox_agent_payments');
+  if (savedPayments) {
+    const allPayments = JSON.parse(savedPayments);
+    allPayments.forEach((p: any) => {
+      const pDate = p.date.split('T')[0];
+      const amount = p.observedAmount || p.totalAmount;
+
+      const isSender = (isCaissier && user?.caisse && String(p.agentId).toUpperCase() === String(user.caisse).toUpperCase()) ||
+                      (!isCaissier && selectedCaisseArr.some(c => c.toUpperCase() === (p.agentId || '').toUpperCase()));
+
+      const isReceiver = (isCaissier && user?.caisse && p.caisse?.toUpperCase() === user.caisse.toUpperCase()) ||
+                        (!isCaissier && selectedCaisseArr.some(c => c.toUpperCase() === (p.caisse || '').toUpperCase()));
+
+      if (isSender) {
+        if (p.status === 'Validé' || p.status === 'En attente') {
+          if (pDate < startDate) {
+            openingBalance -= amount;
+          } else if (pDate <= endDate) {
+            agentOutflowPayments.push(p);
+          }
+        }
+      }
+
+      if (isReceiver && p.status === 'Validé') {
+        if (pDate < startDate) {
+          openingBalance += amount;
+        } else if (pDate <= endDate) {
+          agentPayments.push(p);
+        }
+      }
+    });
+  }
+
+  // Load Vault Transactions
+  const savedVault = localStorage.getItem('microfox_vault_transactions');
+  if (savedVault) {
+    const allVaultTxs = JSON.parse(savedVault);
+    allVaultTxs.forEach((v: any) => {
+      const vDate = v.date.split('T')[0];
+      
+      let isRelevant = false;
+      let delta = 0;
+
+      if (isCaissier) {
+        if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse') && v.to?.toUpperCase() === user.caisse?.toUpperCase()) {
+          isRelevant = true;
+          delta = v.amount;
+        } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') && v.from === user.caisse) {
+          isRelevant = true;
+          delta = -v.amount;
+        } else if (v.userId === user.id) {
+          isRelevant = true;
+          delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
+        }
+      } else {
+        if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse') && selectedCaisseArr.some(c => c.toUpperCase() === v.to?.toUpperCase())) {
+          isRelevant = true;
+          delta = v.amount;
+        } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') && selectedCaisseArr.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
+          isRelevant = true;
+          delta = -v.amount;
+        } else {
+          const vUser = allUsers.find((u: any) => u.id === v.userId);
+          if (vUser?.caisse && selectedCaisseArr.some(c => c.toUpperCase() === vUser.caisse.toUpperCase())) {
+            isRelevant = true;
+            delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
+          }
+        }
+      }
+
+      if (isRelevant) {
+        if (vDate < startDate) {
+          openingBalance += delta;
+        } else if (vDate <= endDate) {
+          vaultTransactions.push(v);
+        }
+      }
+    });
+  }
+
+  // Load Validated Withdrawals for Gaps
+  const savedValidated = localStorage.getItem('microfox_validated_withdrawals');
+  if (savedValidated) {
+    const allValidated = JSON.parse(savedValidated).filter((w: any) => !w.isDeleted);
+    allValidated.forEach((v: any) => {
+      const vDate = v.validationDate.split('T')[0];
+      const vUser = allUsers.find((u: any) => u.id === v.userId);
+      const vCaisse = vUser?.caisse || 'N/A';
+      const gap = v.gap || 0;
+
+      if (isCaissier && v.userId !== user.id) return;
+      if (!selectedCaisseArr.some(c => c.toUpperCase() === (vCaisse || 'N/A').toUpperCase())) return;
+
+      if (vDate < startDate) {
+        openingBalance -= gap;
+      }
+    });
+  }
+
+  // Load Cash Gaps
+  const savedGaps = localStorage.getItem('microfox_all_gaps');
+  if (savedGaps) {
+    const allGaps = JSON.parse(savedGaps);
+    allGaps.forEach((g: any) => {
+      const gDate = g.date.split('T')[0];
+      const gUser = allUsers.find((u: any) => u.id === g.userId);
+      const gCaisse = g.caisse || gUser?.caisse || 'N/A';
+
+      if (isCaissier && g.userId !== user.id) return;
+      if (!selectedCaisseArr.some(c => c.toUpperCase() === (gCaisse || 'N/A').toUpperCase())) return;
+
+      if (g.type === 'CAISSIER') return;
+
+      if (gDate < startDate) {
+        openingBalance -= (g.gapAmount || 0);
+      } else if (gDate <= endDate) {
+        cashGaps.push(g);
+      }
+    });
+  }
+
+  const calculateTotal = (list: any[]) => list.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+  const totalDepotMemb = calculateTotal(epargneDepots);
+  const totalRetraitMemb = calculateTotal(epargneRetraits);
+  const totalDepotTont = Object.values(tontineDepotsByZone).reduce((acc: number, list) => acc + calculateTotal(list as any[]), 0) as number;
+  const totalGapTontine = cashGaps
+    .filter(g => g.type === 'TONTINE')
+    .reduce((acc, g) => acc + (g.gapAmount || 0), 0);
+
+  const totalRetraitTont = Object.values(tontineRetraitsByZone).reduce((acc: number, list) => acc + calculateTotal(list as any[]), 0) as number;
+  const displayRetraitTont = totalRetraitTont - totalGapTontine;
+  const totalCreditAccor = calculateTotal(creditsAccordes);
+  
+  const totalCapitalRemb = remboursements.reduce((acc, tx) => {
+    const match = tx.description?.match(/Cap: (\d+)/);
+    if (match) return acc + Number(match[1]);
+    
+    const intMatch = tx.description?.match(/Int: (\d+)/);
+    const penMatch = tx.description?.match(/Pen: (\d+)/);
+    
+    if (intMatch || penMatch) {
+      const otherAmounts = (intMatch ? Number(intMatch[1]) : 0) + (penMatch ? Number(penMatch[1]) : 0);
+      return acc + Math.max(0, tx.amount - otherAmounts);
+    }
+    
+    return acc + tx.amount;
+  }, 0);
+  const totalInteretRemb = remboursements.reduce((acc, tx) => {
+    const match = tx.description?.match(/Int: (\d+)/);
+    return acc + (match ? Number(match[1]) : 0);
+  }, 0);
+  const totalPenaliteRemb = remboursements.reduce((acc, tx) => {
+    const match = tx.description?.match(/Pen: (\d+)/);
+    return acc + (match ? Number(match[1]) : 0);
+  }, 0);
+  
+  const totalCreditRemb = totalCapitalRemb + totalInteretRemb + totalPenaliteRemb;
+
+  const totalDepotGarantie = calculateTotal(garantieDepots);
+  const totalRetraitGarantie = calculateTotal(garantieRetraits);
+
+  const totalAdminExpenses = calculateTotal(adminExpenses);
+  const totalObservedVersementAgents = calculateTotal(agentPayments.map(p => ({ amount: p.observedAmount || p.totalAmount })));
+  const totalVersementAgents = totalObservedVersementAgents;
+  const totalAgentOutflow = calculateTotal(agentOutflowPayments.map((p: any) => ({ amount: p.observedAmount || p.totalAmount })));
+  
+  const totalPartSocialeDepot = epargneDepots.filter(tx => 
+    tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
+  ).reduce((acc, tx) => acc + tx.amount, 0);
+
+  const totalPartSocialeRetrait = epargneRetraits.filter(tx => 
+    tx.account === 'partSociale' || tx.description?.toLowerCase().includes('part sociale')
+  ).reduce((acc, tx) => acc + tx.amount, 0);
+
+  const totalAdhesion = epargneDepots.filter(tx => 
+    tx.description?.toLowerCase().includes('adhésion') && 
+    tx.account !== 'partSociale' &&
+    !tx.description?.toLowerCase().includes('part sociale')
+  ).reduce((acc, tx) => acc + tx.amount, 0);
+
+  const tontineAgentsCollected = Object.values(tontineDepotsByZone).reduce((acc: number, list) => {
+    return acc + calculateTotal(list.filter((tx: any) => agentIds.includes(tx.userId)));
+  }, 0);
+
+  const totalDepotTontNonAgent = totalDepotTont - tontineAgentsCollected;
+  
+  const totalVaultInflow = vaultTransactions
+    .filter(v => v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse')
+    .reduce((acc, v) => acc + v.amount, 0);
+  
+  const totalVaultOutflow = vaultTransactions
+    .filter(v => v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée')
+    .reduce((acc, v) => acc + v.amount, 0);
+
+  const totalPaidGaps = vaultTransactions
+    .filter(v => v.type === 'Régularisation Écart')
+    .reduce((acc, v) => acc + v.amount, 0);
+
+  const displayDepotMemb = totalDepotMemb - (totalPartSocialeDepot + totalAdhesion);
+  const displayRetraitMemb = totalRetraitMemb - totalPartSocialeRetrait;
+  const displayDepotTont = totalDepotTontNonAgent;
+
+  const totalInflow = displayDepotMemb + displayDepotTont + totalDepotGarantie + totalCreditRemb + totalVersementAgents + totalPartSocialeDepot + totalAdhesion + totalPaidGaps + totalVaultInflow;
+  const totalOutflow = displayRetraitMemb + displayRetraitTont + totalRetraitGarantie + totalCreditAccor + totalAdminExpenses + totalPartSocialeRetrait + totalGapTontine + totalVaultOutflow + totalAgentOutflow;
+
+  return openingBalance + totalInflow - totalOutflow;
+};
+
 const MainCashier: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -84,8 +471,7 @@ const MainCashier: React.FC = () => {
         initialCaisse = user.caisse.trim();
       }
     }
-    const saved = localStorage.getItem(`microfox_cash_balance_${initialCaisse}`);
-    return saved !== null ? Number(saved) : 0;
+    return calculateTheoreticalBalanceForCaisse(initialCaisse);
   });
   const [denominations, setDenominations] = useState<any>({
     '10000': 0,
@@ -327,8 +713,7 @@ const MainCashier: React.FC = () => {
       const savedPayments = localStorage.getItem('microfox_agent_payments');
       if (savedPayments) setPayments(JSON.parse(savedPayments));
       
-      const savedBalance = localStorage.getItem(`microfox_cash_balance_${selectedCaisse}`);
-      setCashBalance(savedBalance !== null ? Number(savedBalance) : 0);
+      setCashBalance(calculateTheoreticalBalanceForCaisse(selectedCaisse));
     };
     
     loadData();
@@ -741,8 +1126,7 @@ const MainCashier: React.FC = () => {
                 className="appearance-none bg-gray-50 border border-gray-200 text-[#121c32] text-sm font-black rounded-xl px-4 py-2 pr-10 outline-none focus:border-blue-400 transition-all uppercase tracking-tight disabled:opacity-70"
               >
                 {caisses.map(c => {
-                  const saved = localStorage.getItem(`microfox_cash_balance_${c}`);
-                  const bal = saved !== null ? Number(saved) : 0;
+                  const bal = calculateTheoreticalBalanceForCaisse(c);
                   return <option key={c} value={c}>{c} ({bal.toLocaleString()} F)</option>;
                 })}
               </select>

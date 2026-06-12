@@ -339,44 +339,48 @@ const FinancialReports: React.FC = () => {
     const savedVault = localStorage.getItem('microfox_vault_transactions');
     if (savedVault) {
       const allVaultTxs = JSON.parse(savedVault);
+      const caisseNames = ['CAISSE PRINCIPALE', 'CAISSE 1', 'CAISSE 2', 'CAISSE 3', 'CAISSE 4'];
+      const filterCaisses = isCaissier
+        ? [user.caisse.toUpperCase().trim()]
+        : (selectedCaisse.includes('all')
+           ? caisseNames
+           : selectedCaisse.map(c => c.toUpperCase().trim()));
+
       allVaultTxs.forEach((v: any) => {
         const vDate = v.date.split('T')[0];
         
         let isRelevant = false;
         let delta = 0;
 
-        if (isCaissier) {
-          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse') && v.to?.toUpperCase() === user.caisse?.toUpperCase()) {
-            isRelevant = true;
+        const fromC = (v.from || '').toUpperCase().trim();
+        const toC = (v.to || '').toUpperCase().trim();
+        const cName = (v.caisse || '').toUpperCase().trim();
+
+        if (filterCaisses.includes(toC)) {
+          delta += v.amount;
+          isRelevant = true;
+        }
+        if (filterCaisses.includes(fromC)) {
+          delta -= v.amount;
+          isRelevant = true;
+        }
+
+        if (!isRelevant && cName && filterCaisses.includes(cName)) {
+          isRelevant = true;
+          const typeLower = (v.type || '').toLowerCase();
+          if (typeLower.includes('approvisionnement') || typeLower.includes('fonds') || typeLower.includes('initialisation') || typeLower.includes('réception')) {
             delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') && v.from === user.caisse) {
-            isRelevant = true;
-            delta = -v.amount;
-          } else if (v.userId === user.id) {
-            isRelevant = true;
-            delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
-          }
-        } else if (!selectedCaisse.includes('all')) {
-          if ((v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse') && selectedCaisse.some(c => c.toUpperCase() === v.to?.toUpperCase())) {
-            isRelevant = true;
-            delta = v.amount;
-          } else if ((v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') && selectedCaisse.some(c => c.toUpperCase() === v.from?.toUpperCase())) {
-            isRelevant = true;
-            delta = -v.amount;
           } else {
-            const vUser = allUsers.find((u: any) => u.id === v.userId);
-            if (vUser?.caisse && selectedCaisse.some(c => c.toUpperCase() === vUser.caisse.toUpperCase())) {
-              isRelevant = true;
-              delta = (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type.toLowerCase().includes('versement') || v.type === 'Régularisation Écart') ? v.amount : -v.amount;
-            }
+            delta = -v.amount;
           }
-        } else {
-          // All caisses
-          if (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse' || v.type === 'Versement Caisse' || v.type === 'Régularisation Écart') {
-            isRelevant = true;
+        }
+
+        if (!isRelevant && isCaissier && v.userId === user.id) {
+          isRelevant = true;
+          const typeLower = (v.type || '').toLowerCase();
+          if (typeLower.includes('approvisionnement') || typeLower.includes('fonds') || typeLower.includes('initialisation') || typeLower.includes('réception')) {
             delta = v.amount;
-          } else if (v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée' || v.type === 'Versement Caisse') {
-            isRelevant = true;
+          } else {
             delta = -v.amount;
           }
         }
@@ -387,7 +391,8 @@ const FinancialReports: React.FC = () => {
           } else if (vDate <= endDate) {
             newData.vaultTransactions.push({
               ...v,
-              type: (v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse') ? 'Approvisionnement Caisse' : v.type
+              delta,
+              type: v.type
             });
           }
         }
@@ -575,14 +580,14 @@ const FinancialReports: React.FC = () => {
   const totalVenteLivretTontineNonAgent = Object.values(data.livretsTontineByZone).reduce((acc: number, list) => acc + calculateTotal(filterNonAgentOps(list as any[])), 0) as number;
 
   const totalVaultInflow = data.vaultTransactions
-    .filter(v => v.type === 'Approvisionnement Caisse' || v.type === 'Fonds de caisse')
-    .reduce((acc, v) => acc + v.amount, 0);
+    .filter(v => v.delta > 0 && v.type !== 'Régularisation Écart')
+    .reduce((acc, v) => acc + (v.delta || 0), 0);
   
   const startingBalance = data.openingBalance;
   
   const totalVaultOutflow = data.vaultTransactions
-    .filter(v => v.type === 'Versement au Coffre' || v.type === 'Versement Fin de Journée')
-    .reduce((acc, v) => acc + v.amount, 0);
+    .filter(v => v.delta < 0 && v.type !== 'Régularisation Écart')
+    .reduce((acc, v) => acc + Math.abs(v.delta || 0), 0);
 
   const totalPaidGaps = data.vaultTransactions
     .filter(v => v.type === 'Régularisation Écart')
