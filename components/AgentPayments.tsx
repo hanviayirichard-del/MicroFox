@@ -202,10 +202,10 @@ const AgentPayments: React.FC = () => {
     // Trigger immediate pull from Supabase to ensure freshest statistics and collections
     window.dispatchEvent(new CustomEvent('request_supabase_sync'));
 
-    // Regularly poll Supabase every 45 seconds to get freshest agent payments
+    // Regularly poll Supabase every 5 seconds to get freshest agent payments
     const syncInterval = setInterval(() => {
       window.dispatchEvent(new CustomEvent('request_supabase_sync'));
-    }, 45000);
+    }, 5000);
 
     window.addEventListener('storage', handleStorage);
     window.addEventListener('microfox_storage' as any, handleStorage);
