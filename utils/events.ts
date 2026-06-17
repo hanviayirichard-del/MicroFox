@@ -84,7 +84,8 @@ const recalculateMicrofoxBalances = () => {
           if (seenTxIds.has(txKey)) return;
 
           if (tx.type === 'deblocage') {
-            const deblocageKey = `debloc_strict_${tx.date.split('T')[0]}_${Math.round(tx.amount)}_${member.id}`;
+            const datePart = (tx.date && typeof tx.date === 'string') ? tx.date.split('T')[0] : '1970-01-01';
+            const deblocageKey = `debloc_strict_${datePart}_${Math.round(tx.amount || 0)}_${member.id}`;
             if (seenTxIds.has(deblocageKey)) return;
             seenTxIds.add(deblocageKey);
           }

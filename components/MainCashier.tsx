@@ -87,7 +87,8 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
         if (seenTxIds.has(txKey)) return;
 
         if (tx.type === 'deblocage') {
-          const deblocageKey = `debloc_strict_${tx.date.split('T')[0]}_${Math.round(tx.amount)}_${member.id}`;
+          const datePart = (tx.date && typeof tx.date === 'string') ? tx.date.split('T')[0] : '1970-01-01';
+          const deblocageKey = `debloc_strict_${datePart}_${Math.round(tx.amount || 0)}_${member.id}`;
           if (seenTxIds.has(deblocageKey)) return;
           seenTxIds.add(deblocageKey);
         }
@@ -103,7 +104,7 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
         }
         if (!selectedCaisseArr.some(c => c.toUpperCase() === txCaisse.toUpperCase())) return;
         
-        const txDate = tx.date.split('T')[0];
+        const txDate = (tx.date && typeof tx.date === 'string') ? tx.date.split('T')[0] : '1970-01-01';
         
         if (txDate < startDate) {
           openingBalance += getCaisseDelta(tx);
@@ -167,7 +168,7 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
     allExpenses.forEach((e: any) => {
       if (e.isDeleted) return;
       
-      const eDate = e.date.split('T')[0];
+      const eDate = (e.date && typeof e.date === 'string') ? e.date.split('T')[0] : '1970-01-01';
       const expUser = allUsers.find((u: any) => u.identifiant === e.recordedBy);
       const expCaisse = expUser?.caisse || 'N/A';
 
@@ -187,7 +188,7 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
   if (savedPayments) {
     const allPayments = JSON.parse(savedPayments);
     allPayments.forEach((p: any) => {
-      const pDate = p.date.split('T')[0];
+      const pDate = (p.date && typeof p.date === 'string') ? p.date.split('T')[0] : '1970-01-01';
       const amount = p.observedAmount || p.totalAmount;
 
       const isSender = (isCaissier && user?.caisse && String(p.agentId).toUpperCase() === String(user.caisse).toUpperCase()) ||
@@ -221,7 +222,7 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
   if (savedVault) {
     const allVaultTxs = JSON.parse(savedVault);
     allVaultTxs.forEach((v: any) => {
-      const vDate = v.date.split('T')[0];
+      const vDate = (v.date && typeof v.date === 'string') ? v.date.split('T')[0] : '1970-01-01';
       
       let isRelevant = false;
       let delta = 0;
@@ -268,7 +269,7 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
   if (savedValidated) {
     const allValidated = JSON.parse(savedValidated).filter((w: any) => !w.isDeleted);
     allValidated.forEach((v: any) => {
-      const vDate = v.validationDate.split('T')[0];
+      const vDate = (v.validationDate && typeof v.validationDate === 'string') ? v.validationDate.split('T')[0] : '1970-01-01';
       const vUser = allUsers.find((u: any) => u.id === v.userId);
       const vCaisse = vUser?.caisse || 'N/A';
       const gap = v.gap || 0;
@@ -287,7 +288,7 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
   if (savedGaps) {
     const allGaps = JSON.parse(savedGaps);
     allGaps.forEach((g: any) => {
-      const gDate = g.date.split('T')[0];
+      const gDate = (g.date && typeof g.date === 'string') ? g.date.split('T')[0] : '1970-01-01';
       const gUser = allUsers.find((u: any) => u.id === g.userId);
       const gCaisse = g.caisse || gUser?.caisse || 'N/A';
 
