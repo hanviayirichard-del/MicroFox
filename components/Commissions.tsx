@@ -308,9 +308,18 @@ const Commissions: React.FC = () => {
         item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.agent && item.agent.toLowerCase().includes(searchTerm.toLowerCase()));
       
+      const normalizeZone = (z: string | undefined | null) => {
+        if (!z) return '';
+        return z.toString().toUpperCase().replace('ZONE', '').replace(/\s+/g, '').replace(/_/g, '').trim();
+      };
+      const normalizedItemZone = normalizeZone(item.zone);
+      const normalizedSelectedZone = normalizeZone(selectedZone);
+      
       const matchesZone = currentUser?.role === 'agent commercial' 
-        ? (selectedZone !== '' && item.zone === selectedZone)
-        : (selectedZone === '' || item.zone === selectedZone);
+        ? (selectedZone === '' 
+            ? agentZones.map(az => normalizeZone(az)).includes(normalizedItemZone) 
+            : normalizedItemZone === normalizedSelectedZone)
+        : (selectedZone === '' || normalizedItemZone === normalizedSelectedZone);
 
       const matchesDeleted = filterDeleted === 'all' 
         ? true 

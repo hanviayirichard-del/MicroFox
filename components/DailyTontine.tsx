@@ -82,7 +82,12 @@ const DailyTontine: React.FC = () => {
       if (user.role === 'agent commercial') {
         const agentZones = user.zonesCollecte || (user.zoneCollecte ? [user.zoneCollecte] : []);
         if (agentZones.length > 0) {
-          filteredAllMembers = filteredAllMembers.filter((m: any) => agentZones.includes(m.zone));
+          const normalizeZone = (z: string | undefined | null) => {
+            if (!z) return '';
+            return z.toString().toUpperCase().replace('ZONE', '').replace(/\s+/g, '').replace(/_/g, '').trim();
+          };
+          const normalizedAgentZones = agentZones.map((az: string) => normalizeZone(az));
+          filteredAllMembers = filteredAllMembers.filter((m: any) => normalizedAgentZones.includes(normalizeZone(m.zone)));
         }
       } else if (user.role === 'caissier') {
         filteredAllMembers = filteredAllMembers.filter((m: any) => m.zone === '01');

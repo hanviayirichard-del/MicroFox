@@ -574,9 +574,9 @@ export const pullFromSupabase = async (
         .range(from, from + batchSize - 1);
 
       if (lastPullTime) {
-        // Subtract 5 minutes of clock skew buffer to handle minor clock desynchronization
+        // Subtract 24 hours of clock skew buffer to handle minor clock desynchronization
         const lastPullDate = new Date(lastPullTime);
-        const safePullTime = new Date(lastPullDate.getTime() - 5 * 60 * 1000).toISOString();
+        const safePullTime = new Date(lastPullDate.getTime() - 24 * 60 * 60 * 1000).toISOString();
         query = query.gt('updated_at', safePullTime);
       }
 
