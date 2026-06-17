@@ -147,7 +147,7 @@ const OperationForm: React.FC<{
     }
   }, []);
 
-  const [type, setType] = useState<'depot' | 'retrait' | 'remboursement' | 'transfert' | 'deblocage' | 'depot_garantie' | 'retrait_garantie'>('depot');
+   const [type, setType] = useState<'depot' | 'retrait' | 'remboursement' | 'transfert' | 'deblocage' | 'depot_garantie' | 'retrait_garantie'>('depot');
   const [account, setAccount] = useState<'epargne' | 'garantie' | 'partSociale' | 'credit' | 'tontine'>('epargne');
   const [transferDest, setTransferDest] = useState<'epargne' | 'garantie' | 'partSociale'>('epargne');
   const [rembCapital, setRembCapital] = useState<string>('');
@@ -159,7 +159,7 @@ const OperationForm: React.FC<{
   const [description, setSearchDescription] = useState('');
 
   const isEpargneBlocked = (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && 
-                           ((partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < 300)) ||
+                            (!epargneAccountNumber || (partSocialeBalance || 0) < 1000 || (adhesionPaid || 0) < 2000 || (livretPaid || 0) < 300)) ||
                            (((type !== 'transfert' && account === 'epargne') || (type === 'transfert' && (account === 'epargne' || transferDest === 'epargne'))) && isEpargneBlockedByAdmin);
   
   const selectedTontines = tontineAccounts.filter(a => selectedTontineIds.includes(a.id));
@@ -1088,6 +1088,19 @@ const RegistrationForm: React.FC<{
           amount: fraisAdhesion,
           date: new Date().toISOString(),
           description: 'Frais d\'adhésion',
+          userId: currentUser?.id,
+          cashierName: currentUser?.identifiant,
+          caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
+        });
+      }
+      if (fraisLivret > 0) {
+        history.push({
+          id: `fl-${clientId}-${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          type: 'depot',
+          account: 'frais',
+          amount: fraisLivret,
+          date: new Date().toISOString(),
+          description: 'Frais de livret d\'épargne',
           userId: currentUser?.id,
           cashierName: currentUser?.identifiant,
           caisse: currentUser?.role === 'agent commercial' ? 'AGENT' : (currentUser?.caisse || (currentUser?.role === 'administrateur' || currentUser?.role === 'directeur' ? 'CAISSE PRINCIPALE' : 'N/A'))
@@ -4503,8 +4516,14 @@ const Members: React.FC = () => {
             partSocialeBalance={selectedClient?.balances.partSociale}
             garantieBalance={selectedClient?.balances.garantie}
             epargneBalance={selectedClient?.balances.epargne}
-            adhesionPaid={selectedClient?.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('adhésion')).reduce((sum, tx) => sum + tx.amount, 0)}
-            livretPaid={selectedClient?.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('livret')).reduce((sum, tx) => sum + tx.amount, 0)}
+            adhesionPaid={selectedClient ? (() => {
+              const fromHistory = selectedClient.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('adhésion')).reduce((sum, tx) => sum + tx.amount, 0);
+              return (selectedClient.epargneAccountNumber && fromHistory === 0) ? 2000 : fromHistory;
+            })() : 0}
+            livretPaid={selectedClient ? (() => {
+              const fromHistory = selectedClient.history.filter(tx => tx.account === 'frais' && tx.description.toLowerCase().includes('livret')).reduce((sum, tx) => sum + tx.amount, 0);
+              return (selectedClient.epargneAccountNumber && fromHistory === 0) ? 300 : fromHistory;
+            })() : 0}
             creditBalances={selectedClient ? (() => {
               const total = selectedClient.balances.credit;
               const lastDetails = (selectedClient as any).lastCreditDetails;

@@ -56,15 +56,41 @@ const GlobalJournal: React.FC = () => {
             const tontineAcc = member.tontineAccounts?.find((ta: any) => ta.id === tx.tontineAccountId);
             const tontineNumber = tontineAcc ? tontineAcc.number : (member.tontineAccounts?.[0]?.number || 'N/A');
 
-            allTxs.push({
-              ...tx,
-              memberName: member.name,
-              memberCode: member.code,
-              caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A',
-              epargneAccountNumber: member.epargneAccountNumber || 'N/A',
-              tontineAccountNumber: tontineNumber,
-              cashierName: tx.cashierName || users.find((u: any) => u.id === tx.userId)?.identifiant || 'N/A'
-            });
+            if (tx.type === 'transfert') {
+              allTxs.push({
+                ...tx,
+                id: `${tx.id}_out`,
+                memberName: member.name,
+                memberCode: member.code,
+                caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A',
+                epargneAccountNumber: member.epargneAccountNumber || 'N/A',
+                tontineAccountNumber: tontineNumber,
+                cashierName: tx.cashierName || users.find((u: any) => u.id === tx.userId)?.identifiant || 'N/A'
+              });
+
+              allTxs.push({
+                ...tx,
+                id: `${tx.id}_in`,
+                type: 'transfert_entrée',
+                account: tx.destinationAccount || 'epargne',
+                memberName: member.name,
+                memberCode: member.code,
+                caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A',
+                epargneAccountNumber: member.epargneAccountNumber || 'N/A',
+                tontineAccountNumber: tontineNumber,
+                cashierName: tx.cashierName || users.find((u: any) => u.id === tx.userId)?.identifiant || 'N/A'
+              });
+            } else {
+              allTxs.push({
+                ...tx,
+                memberName: member.name,
+                memberCode: member.code,
+                caisse: tx.caisse || userCaisseMap[tx.userId] || 'N/A',
+                epargneAccountNumber: member.epargneAccountNumber || 'N/A',
+                tontineAccountNumber: tontineNumber,
+                cashierName: tx.cashierName || users.find((u: any) => u.id === tx.userId)?.identifiant || 'N/A'
+              });
+            }
           });
         }
       });
@@ -102,7 +128,7 @@ const GlobalJournal: React.FC = () => {
               v.type === 'CASHIER_TRANSFER' ||
               (v.details && v.details.toLowerCase().includes('versement')) ||
               (v.observation && v.observation.toLowerCase().includes('versement'))
-            );
+            ) && !(v.from && internalCaisses.includes(v.from.toUpperCase()));
 
             if (user.role === 'caissier' || user.role === 'agent commercial') {
               const isToMyCaisse = v.to && user.caisse && v.to.toUpperCase() === user.caisse.toUpperCase();
@@ -221,7 +247,7 @@ const GlobalJournal: React.FC = () => {
           </thead>
           <tbody>
             ${filteredTxs.map(tx => {
-              const isCredit = tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement';
+              const isCredit = tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' || tx.type === 'transfert_entrée';
               const isDebit = tx.type === 'retrait' || tx.type === 'transfert' || tx.type === 'deblocage';
               const isCancelled = tx.type === 'annulation';
               const typeLabel = isCancelled ? 'Annulé' : (isCredit ? 'Entrée' : (isDebit ? 'Sortie' : 'Autre'));
@@ -326,7 +352,8 @@ const GlobalJournal: React.FC = () => {
                      tx.type === 'remboursement' || 
                      tx.type === 'adhesion' || 
                      tx.type === 'part_sociale' || 
-                     tx.type === 'vente_livret';
+                     tx.type === 'vente_livret' ||
+                     tx.type === 'transfert_entrée';
 
     const isDebit = (tx.type === 'retrait' || 
                     tx.type === 'deblocage' || 
@@ -511,11 +538,11 @@ const GlobalJournal: React.FC = () => {
                         <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${
                           ['demande', 'validation'].includes(tx.type) ? 'bg-blue-50 text-blue-600' :
                           tx.type === 'annulation' ? 'bg-red-100 text-red-600' : 
-                          (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')
+                          (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' || tx.type === 'transfert_entrée' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')
                         }`}>
                           {['demande', 'validation'].includes(tx.type) ? <FileText size={18} /> : 
                            tx.type === 'annulation' ? <X size={18} /> : 
-                           (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
+                           (tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' || tx.type === 'transfert_entrée' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />)}
                         </div>
                         <div className="min-w-0">
                           <p className={`text-sm font-black uppercase ${tx.type === 'annulation' ? 'text-red-500 line-through' : 'text-[#121c32]'}`}>{tx.description}</p>
@@ -546,8 +573,8 @@ const GlobalJournal: React.FC = () => {
                           {tx.amount.toLocaleString()} F
                         </span>
                       ) : (
-                        <span className={`text-sm font-black whitespace-nowrap ${tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' ? '+' : '-'}{tx.amount.toLocaleString()} F
+                        <span className={`text-sm font-black whitespace-nowrap ${tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' || tx.type === 'transfert_entrée' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {tx.type === 'depot' || tx.type === 'cotisation' || tx.type === 'remboursement' || tx.type === 'transfert_entrée' ? '+' : '-'}{tx.amount.toLocaleString()} F
                         </span>
                       )}
                     </td>
