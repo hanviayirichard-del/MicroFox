@@ -205,18 +205,36 @@ const safeNativeSetItem = (key: string, value: string) => {
   }
 };
 
-export const syncToSupabase = async (key: string, value: string): Promise<boolean> => {
-  if (
-    key === 'microfox_current_user' || 
-    key === 'microfox_current_mf' || 
-    key === 'microfox_session_active' || 
-    key === 'microfox_offline_mode'
-  ) {
-    return true;
+let activeSyncCount = 0;
+interface SyncQueueItem {
+  key: string;
+  value: string;
+  resolve: (val: boolean) => void;
+  reject: (err: any) => void;
+}
+const syncQueue: SyncQueueItem[] = [];
+const MAX_CONCURRENT_SYNCS = 2;
+
+const processSyncQueue = async () => {
+  if (activeSyncCount >= MAX_CONCURRENT_SYNCS || syncQueue.length === 0) return;
+  
+  const item = syncQueue.shift();
+  if (!item) return;
+  
+  activeSyncCount++;
+  try {
+    const success = await executeSyncToSupabase(item.key, item.value);
+    item.resolve(success);
+  } catch (err) {
+    console.error(`Queue execute error for ${item.key}:`, err);
+    item.resolve(false);
+  } finally {
+    activeSyncCount--;
+    setTimeout(processSyncQueue, 40);
   }
-  if (typeof window !== 'undefined' && window.navigator && !window.navigator.onLine) {
-    return false;
-  }
+};
+
+const executeSyncToSupabase = async (key: string, value: string): Promise<boolean> => {
   try {
     if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
     
@@ -360,6 +378,35 @@ export const syncToSupabase = async (key: string, value: string): Promise<boolea
     console.error('Supabase sync failed:', e);
     return false;
   }
+};
+
+export const syncToSupabase = async (key: string, value: string): Promise<boolean> => {
+  if (
+    key === 'microfox_current_user' || 
+    key === 'microfox_current_mf' || 
+    key === 'microfox_session_active' || 
+    key === 'microfox_offline_mode'
+  ) {
+    return true;
+  }
+  if (typeof window !== 'undefined' && window.navigator && !window.navigator.onLine) {
+    return false;
+  }
+
+  return new Promise((resolve, reject) => {
+    // Check if there is already an item in the queue for the exact same key.
+    // If so, we replace its value with the newer value rather than queuing multiple database queries!
+    const existingIndex = syncQueue.findIndex(item => item.key === key);
+    if (existingIndex !== -1) {
+      syncQueue[existingIndex].resolve(true); // resolve the old one with success
+      syncQueue[existingIndex].value = value;
+      syncQueue[existingIndex].resolve = resolve;
+      syncQueue[existingIndex].reject = reject;
+    } else {
+      syncQueue.push({ key, value, resolve, reject });
+    }
+    processSyncQueue();
+  });
 };
 
 export const pullFromSupabase = async (
