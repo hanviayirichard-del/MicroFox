@@ -849,6 +849,32 @@ const App: React.FC = () => {
     const pullInterval = setInterval(() => {
       const currentMfCode = localStorage.getItem('microfox_current_mf');
       if (currentMfCode) {
+        // Fast point-lookup for microfox_agent_payments to make it instant!
+        const prefix = `mf_${currentMfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+        const targetKey = prefix + 'microfox_agent_payments';
+        if (supabase) {
+          (async () => {
+            try {
+              const { data, error } = await supabase
+                .from('storage')
+                .select('value')
+                .eq('key', targetKey)
+                .maybeSingle();
+
+              if (!error && data) {
+                const localValue = nativeGetItem(targetKey);
+                if (data.value && data.value !== localValue) {
+                  const { mergeJSON } = await import('./utils/supabaseSync');
+                  const finalValue = localValue ? mergeJSON(localValue, data.value) : data.value;
+                  if (finalValue !== localValue) {
+                    nativeSetItem(targetKey, finalValue);
+                    dispatchStorageEvent();
+                  }
+                }
+              }
+            } catch (e) {}
+          })();
+        }
         pullData(currentMfCode, true);
       }
     }, 5000); // Every 5 seconds
@@ -864,7 +890,35 @@ const App: React.FC = () => {
 
     const handlePullRequest = () => {
       const mfCode = localStorage.getItem('microfox_current_mf');
-      if (mfCode) pullData(mfCode, true);
+      if (mfCode) {
+        // Fast point-lookup for microfox_agent_payments to make it instant!
+        const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+        const targetKey = prefix + 'microfox_agent_payments';
+        if (supabase) {
+          (async () => {
+            try {
+              const { data, error } = await supabase
+                .from('storage')
+                .select('value')
+                .eq('key', targetKey)
+                .maybeSingle();
+
+              if (!error && data) {
+                const localValue = nativeGetItem(targetKey);
+                if (data.value && data.value !== localValue) {
+                  const { mergeJSON } = await import('./utils/supabaseSync');
+                  const finalValue = localValue ? mergeJSON(localValue, data.value) : data.value;
+                  if (finalValue !== localValue) {
+                    nativeSetItem(targetKey, finalValue);
+                    dispatchStorageEvent();
+                  }
+                }
+              }
+            } catch (e) {}
+          })();
+        }
+        pullData(mfCode, true);
+      }
     };
 
     window.addEventListener('request_supabase_sync', handlePullRequest);
