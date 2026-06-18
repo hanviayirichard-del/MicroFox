@@ -881,7 +881,7 @@ const App: React.FC = () => {
         }
         pullData(currentMfCode, true);
       }
-    }, 5000); // Every 5 seconds
+    }, 45000); // Every 45 seconds
 
     return () => {
       supabase.removeChannel(channel);
