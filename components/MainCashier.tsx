@@ -1078,7 +1078,11 @@ const MainCashier: React.FC = () => {
 
     const filteredPayments = payments.filter(p => {
     if (currentUser.role === 'caissier' && p.type === 'CASHIER_TRANSFER') {
-      return false;
+      const isSender = currentUser.caisse && p.agentId?.trim().toUpperCase() === currentUser.caisse.trim().toUpperCase();
+      const isReceiver = currentUser.caisse && (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase() === currentUser.caisse.trim().toUpperCase();
+      if (!isSender && !isReceiver) {
+        return false;
+      }
     }
     const matchesSearch = (p.agentName || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'Tous' || p.status === filterStatus;
