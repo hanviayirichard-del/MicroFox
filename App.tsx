@@ -462,7 +462,9 @@ const App: React.FC = () => {
       setIsSyncing(true);
       setIsBackgroundSyncing(false);
     } else {
-      setIsBackgroundSyncing(true);
+      const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
+      const hasPendingSync = nativeGetItem(prefix + 'microfox_pending_sync') === 'true' || nativeGetItem('microfox_pending_sync') === 'true';
+      setIsBackgroundSyncing(hasPendingSync);
     }
     
     const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
@@ -588,7 +590,9 @@ const App: React.FC = () => {
       
       if (result === 'timeout') {
         console.warn('Initial sync timed out, continuing in background');
-        setIsBackgroundSyncing(true);
+        if (!isSilent) {
+          setIsBackgroundSyncing(true);
+        }
       }
     } catch (error) {
       console.error('Error during initial sync:', error);
