@@ -1,5 +1,7 @@
 import { supabase } from '../supabase';
 
+const finalStatuses = ['En attente', 'Validé', 'Approuvé', 'Débloqué', 'Régularisé', 'Litige', 'Payé', 'Terminé', 'Annulé', 'Rejeté'];
+
 const mergeObjects = (obj1: any, obj2: any): any => {
   if (obj1 === undefined || obj1 === null) return obj2;
   if (obj2 === undefined || obj2 === null) return obj1;
@@ -35,25 +37,58 @@ const mergeObjects = (obj1: any, obj2: any): any => {
     return Array.from(map.values());
   }
 
-  // If obj1 and obj2 are objects with an updatedAt or timestamp field, prefer the more recent one
+  // If obj1 is a status that is "more final" than obj2, prefer obj1 directly
+  if (typeof obj1 === 'object' && obj1 !== null && typeof obj2 === 'object' && obj2 !== null) {
+    if (obj1.status && obj2.status && obj1.status !== obj2.status) {
+      const idx1 = finalStatuses.indexOf(obj1.status);
+      const idx2 = finalStatuses.indexOf(obj2.status);
+      if (idx1 !== -1 && idx2 !== -1) {
+        if (idx1 > idx2) return obj1;
+        if (idx2 > idx1) return obj2;
+      }
+    }
+  }
+
+  // If obj1 and obj2 are objects with an updatedAt or timestamp field, prefer the more recent one.
+  // Avoid comparing modified times (updatedAt) with creation times (date) to protect against clock desynchronization between devices.
   const isoDateRegex = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/;
   if (typeof obj1 === 'object' && obj1 !== null && typeof obj2 === 'object' && obj2 !== null) {
-    const d1 = obj1.updatedAt || obj1.updated_at || obj1.timestamp || obj1.date;
-    const d2 = obj2.updatedAt || obj2.updated_at || obj2.timestamp || obj2.date;
-    
-    const time1 = (typeof d1 === 'string' && isoDateRegex.test(d1)) ? Date.parse(d1) : null;
-    const time2 = (typeof d2 === 'string' && isoDateRegex.test(d2)) ? Date.parse(d2) : null;
+    const u1 = obj1.updatedAt || obj1.updated_at || obj1.timestamp;
+    const u2 = obj2.updatedAt || obj2.updated_at || obj2.timestamp;
 
-    const isValidTime1 = time1 !== null && !isNaN(time1);
-    const isValidTime2 = time2 !== null && !isNaN(time2);
+    if (u1 || u2) {
+      const time1 = (typeof u1 === 'string' && isoDateRegex.test(u1)) ? Date.parse(u1) : null;
+      const time2 = (typeof u2 === 'string' && isoDateRegex.test(u2)) ? Date.parse(u2) : null;
 
-    if (isValidTime1 && isValidTime2) {
-      if (time1 > time2) return obj1;
-      if (time2 > time1) return obj2;
-    } else if (isValidTime1) {
-      return obj1; // Favor the one with a date
-    } else if (isValidTime2) {
-      return obj2; // Favor the one with a date
+      const isValidTime1 = time1 !== null && !isNaN(time1);
+      const isValidTime2 = time2 !== null && !isNaN(time2);
+
+      if (isValidTime1 && isValidTime2) {
+        if (time1 > time2) return obj1;
+        if (time2 > time1) return obj2;
+      } else if (isValidTime1) {
+        return obj1;
+      } else if (isValidTime2) {
+        return obj2;
+      }
+    } else {
+      // Fallback to comparing creation date if neither has updatedAt/timestamp
+      const d1 = obj1.date;
+      const d2 = obj2.date;
+      const time1 = (typeof d1 === 'string' && isoDateRegex.test(d1)) ? Date.parse(d1) : null;
+      const time2 = (typeof d2 === 'string' && isoDateRegex.test(d2)) ? Date.parse(d2) : null;
+
+      const isValidTime1 = time1 !== null && !isNaN(time1);
+      const isValidTime2 = time2 !== null && !isNaN(time2);
+
+      if (isValidTime1 && isValidTime2) {
+        if (time1 > time2) return obj1;
+        if (time2 > time1) return obj2;
+      } else if (isValidTime1) {
+        return obj1;
+      } else if (isValidTime2) {
+        return obj2;
+      }
     }
   }
 
@@ -86,7 +121,6 @@ const mergeObjects = (obj1: any, obj2: any): any => {
   }
 
   // If obj1 is a status that is "more final" than obj2, prefer obj1
-  const finalStatuses = ['En attente', 'Validé', 'Approuvé', 'Débloqué', 'Régularisé', 'Litige', 'Payé', 'Terminé', 'Annulé', 'Rejeté'];
   if (typeof obj1 === 'string' && typeof obj2 === 'string') {
     const idx1 = finalStatuses.indexOf(obj1);
     const idx2 = finalStatuses.indexOf(obj2);
@@ -267,7 +301,7 @@ const executeSyncToSupabase = async (key: string, value: string): Promise<boolea
       if (remoteItem) {
         const finalValue = mergeJSON(remoteItem.value, value);
         
-        // Optimistic locking: update ONLY if updated_at has not changed since fetch
+        // Update key-value storage safely
         const { data, error } = await supabase
           .from('storage')
           .update({ 
@@ -275,7 +309,6 @@ const executeSyncToSupabase = async (key: string, value: string): Promise<boolea
             updated_at: new Date().toISOString() 
           })
           .eq('key', key)
-          .eq('updated_at', remoteItem.updated_at)
           .select('key');
           
         if (error) {
