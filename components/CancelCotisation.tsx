@@ -146,8 +146,8 @@ const CancelCotisation: React.FC = () => {
         key === 'microfox_members_data' ||
         key.endsWith('microfox_members_data') ||
         key.includes('microfox_history_') ||
-        key === 'microfox_agent_deposits' ||
-        key.endsWith('microfox_agent_deposits') ||
+        key === 'microfox_agent_payments' ||
+        key.endsWith('microfox_agent_payments') ||
         key === 'microfox_validated_zone_cotisations' ||
         key.endsWith('microfox_validated_zone_cotisations')
       ) {
@@ -162,8 +162,8 @@ const CancelCotisation: React.FC = () => {
         key === 'microfox_members_data' ||
         key.endsWith('microfox_members_data') ||
         key.includes('microfox_history_') ||
-        key === 'microfox_agent_deposits' ||
-        key.endsWith('microfox_agent_deposits') ||
+        key === 'microfox_agent_payments' ||
+        key.endsWith('microfox_agent_payments') ||
         key === 'microfox_validated_zone_cotisations' ||
         key.endsWith('microfox_validated_zone_cotisations')
       ) {
@@ -198,26 +198,25 @@ const CancelCotisation: React.FC = () => {
       return sortedZones;
     });
 
+    // Get users to check agent names in descriptions
+    const savedUsers = localStorage.getItem('microfox_users');
+    const allUsers = savedUsers ? JSON.parse(savedUsers) : [];
+
     // Get validated deposits to check if transaction is already "poured" to main desk
-    const savedDeposits = localStorage.getItem('microfox_agent_deposits');
-    const validatedDeposits = savedDeposits ? JSON.parse(savedDeposits).filter((d: any) => d.status === 'Validé') : [];
+    const savedDeposits = localStorage.getItem('microfox_agent_payments');
+    const validatedDeposits = savedDeposits ? JSON.parse(savedDeposits).filter((d: any) => d.status === 'Validé' || d.status === 'En attente') : [];
     
     // Pre-parse validated deposits dates to optimize lookup inside nested some loops
     const parsedDeposits = validatedDeposits.map((d: any) => {
-      let time = 0;
-      try {
-        if (d.date) {
-          const parsed = safeParseDate(d.date);
-          if (parsed) {
-            time = parsed.getTime();
-          }
-        }
-      } catch (e) {}
+      const depDay = d.date ? getLocalDateString(d.date) : '';
+      const agent = d.agentId ? allUsers.find((u: any) => String(u.id) === String(d.agentId)) : null;
+      const agentIdentifiant = agent?.identifiant || d.agentName || '';
       return {
         agentId: d.agentId,
-        time
+        agentIdentifiant: agentIdentifiant.toLowerCase(),
+        depDay
       };
-    }).filter((d: any) => d.time > 0);
+    }).filter((d: any) => d.depDay !== '');
 
     // Get validated zones to check if transaction is already "locked"
     const savedValidatedZones = localStorage.getItem('microfox_validated_zone_cotisations');
@@ -299,10 +298,15 @@ const CancelCotisation: React.FC = () => {
             }
           } catch (e) {}
 
-          // Check if this specific transaction was part of a validated deposit using numeric checks
-          const isPoured = parsedDeposits.some((d: any) => 
-            String(d.agentId) === String(tx.userId) && txTime <= d.time
-          );
+          // Check if this specific transaction was part of a validated deposit using robust day comparisons
+          const isPoured = parsedDeposits.some((d: any) => {
+            const matchesAgent = String(d.agentId) === String(tx.userId) ||
+              (tx.description && d.agentIdentifiant && tx.description.toLowerCase().includes(`agent ${d.agentIdentifiant}`)) ||
+              (tx.recordedBy && d.agentIdentifiant && tx.recordedBy.toLowerCase() === d.agentIdentifiant) ||
+              (tx.recordedBy && d.agentId && String(tx.recordedBy).toLowerCase() === String(d.agentId).toLowerCase());
+            
+            return matchesAgent && txDate <= d.depDay;
+          });
 
           // Check if the zone is validated for this date and if the transaction was made before the validation using pre-parsed timestamps
           const validationKey = txDate ? `${txDate}_${m.zone || ''}` : '';
