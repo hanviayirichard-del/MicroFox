@@ -448,6 +448,7 @@ const App: React.FC = () => {
     return localStorage.getItem('microfox_offline_mode') === 'true';
   });
   const mfCodeRef = React.useRef<string | null>(localStorage.getItem('microfox_current_mf'));
+  const lastFullPullTimeRef = React.useRef(0);
 
   const pullData = async (mfCode: string, isSilent: boolean = false, hasCachedData: boolean = true) => {
     if (isOfflineMode) {
@@ -921,7 +922,11 @@ const App: React.FC = () => {
             } catch (e) {}
           })();
         }
-        pullData(mfCode, true);
+        const now = Date.now();
+        if (now - lastFullPullTimeRef.current >= 15000) {
+          lastFullPullTimeRef.current = now;
+          pullData(mfCode, true);
+        }
       }
     };
 
