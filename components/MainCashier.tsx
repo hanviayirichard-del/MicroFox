@@ -397,16 +397,7 @@ const MainCashier: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('En attente');
-  const [paymentCaisseFilter, setPaymentCaisseFilter] = useState(() => {
-    const userStr = localStorage.getItem('microfox_current_user');
-    if (userStr) {
-      const u = JSON.parse(userStr);
-      if (u.role === 'caissier' && u.caisse) {
-        return u.caisse.trim();
-      }
-    }
-    return 'Tous';
-  });
+  const [paymentCaisseFilter, setPaymentCaisseFilter] = useState('Tous');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferType, setTransferType] = useState<'total' | 'partial'>('total');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -1090,6 +1081,7 @@ const MainCashier: React.FC = () => {
     const itemCaisse = (p.caisse || 'CAISSE PRINCIPALE').trim();
     const matchesCaisse = 
       paymentCaisseFilter.trim().toLowerCase() === 'tous' ||
+      p.status === 'En attente' ||
       (itemCaisse.toLowerCase() === paymentCaisseFilter.trim().toLowerCase()) || 
       (p.type === 'CASHIER_TRANSFER' && p.agentName?.trim().toLowerCase() === paymentCaisseFilter.trim().toLowerCase());
     
