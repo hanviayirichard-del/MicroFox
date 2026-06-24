@@ -688,6 +688,20 @@ const MainCashier: React.FC = () => {
             });
           }
         }
+      } else {
+        // Commercial agent payment
+        const targetCaisse = (p.caisse || 'CAISSE PRINCIPALE').toUpperCase();
+        if (p.status === 'Validé' && targetCaisse === targetCaisseUpper) {
+          details.push({
+            id: p.id || `agent_tgt_${p.date || Date.now()}`,
+            date: p.date || new Date().toISOString(),
+            type: "Versement Agent",
+            description: `Versement de l'agent ${p.agentName} ${p.zone ? `(Zone ${p.zone})` : ''}`,
+            amount: p.observedAmount || p.totalAmount,
+            category: 'credit',
+            rawTx: p
+          });
+        }
       }
     });
 
