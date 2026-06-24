@@ -397,7 +397,16 @@ const MainCashier: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('En attente');
-  const [paymentCaisseFilter, setPaymentCaisseFilter] = useState('Tous');
+  const [paymentCaisseFilter, setPaymentCaisseFilter] = useState(() => {
+    const userStr = localStorage.getItem('microfox_current_user');
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.role === 'caissier' && u.caisse) {
+        return u.caisse.trim();
+      }
+    }
+    return 'Tous';
+  });
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferType, setTransferType] = useState<'total' | 'partial'>('total');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -1067,28 +1076,41 @@ const MainCashier: React.FC = () => {
     showAlert("Succès", `Versement de ${physicalAmount.toLocaleString()} F effectué. Écart: ${gap.toLocaleString()} F.`, "success");
   };
 
-    const filteredPayments = payments.filter(p => {
-    if (currentUser.role === 'caissier' && p.type === 'CASHIER_TRANSFER') {
-      const isSender = currentUser.caisse && p.agentId?.trim().toUpperCase() === currentUser.caisse.trim().toUpperCase();
-      const isReceiver = currentUser.caisse && (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase() === currentUser.caisse.trim().toUpperCase();
-      if (!isSender && !isReceiver) {
-        return false;
-      }
-    }
+  const filteredPayments = payments.filter(p => {
     const matchesSearch = (p.agentName || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'Tous' || p.status === filterStatus;
     
-    const itemCaisse = (p.caisse || 'CAISSE PRINCIPALE').trim();
-    const matchesCaisse = 
-      paymentCaisseFilter.trim().toLowerCase() === 'tous' ||
-      p.status === 'En attente' ||
-      (itemCaisse.toLowerCase() === paymentCaisseFilter.trim().toLowerCase()) || 
-      (p.type === 'CASHIER_TRANSFER' && p.agentName?.trim().toLowerCase() === paymentCaisseFilter.trim().toLowerCase());
-    
     const txDate = p.date ? p.date.split('T')[0].split(' ')[0] : '';
     const matchesDate = (!startDate || txDate >= startDate) && (!endDate || txDate <= endDate);
+
+    // Role-based filtering
+    if (currentUser.role === 'caissier') {
+      const userCaisse = (currentUser.caisse || '').trim().toUpperCase();
+      if (p.type === 'CASHIER_TRANSFER') {
+        const isSender = p.agentId?.trim().toUpperCase() === userCaisse;
+        const isReceiver = (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase() === userCaisse;
+        if (!isSender && !isReceiver) return false;
+      } else {
+        // Agent payments: only show if destination is the caissier's caisse
+        const destCaisse = (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase();
+        if (destCaisse !== userCaisse) return false;
+      }
+    } else {
+      // Admin / directeur: filter by paymentCaisseFilter
+      const selectedFilterUpper = paymentCaisseFilter.trim().toUpperCase();
+      if (selectedFilterUpper !== 'TOUS') {
+        const itemCaisse = (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase();
+        if (p.type === 'CASHIER_TRANSFER') {
+          const isSender = p.agentId?.trim().toUpperCase() === selectedFilterUpper;
+          const isReceiver = (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase() === selectedFilterUpper;
+          if (!isSender && !isReceiver) return false;
+        } else {
+          if (itemCaisse !== selectedFilterUpper) return false;
+        }
+      }
+    }
     
-    return matchesSearch && matchesFilter && matchesCaisse && matchesDate;
+    return matchesSearch && matchesFilter && matchesDate;
   }).sort((a, b) => {
     if (a.status === 'En attente' && b.status !== 'En attente') return -1;
     if (a.status !== 'En attente' && b.status === 'En attente') return 1;
