@@ -54,7 +54,46 @@ import { supabase } from './supabase';
 import { dispatchStorageEvent } from './utils/events';
 
 // Capture des méthodes de stockage natives au chargement du module
-const nativeGetItem = (key: string) => Storage.prototype.getItem.call(localStorage, key);
+const originalGetItem = (() => {
+  try {
+    const raw = localStorage.getItem;
+    return raw ? raw.bind(localStorage) : null;
+  } catch (e) {
+    return null;
+  }
+})();
+
+const originalSetItem = (() => {
+  try {
+    const raw = localStorage.setItem;
+    return raw ? raw.bind(localStorage) : null;
+  } catch (e) {
+    return null;
+  }
+})();
+
+const originalRemoveItem = (() => {
+  try {
+    const raw = localStorage.removeItem;
+    return raw ? raw.bind(localStorage) : null;
+  } catch (e) {
+    return null;
+  }
+})();
+
+const nativeGetItem = (key: string): string | null => {
+  try {
+    if (originalGetItem) return originalGetItem(key);
+    return Storage.prototype.getItem.call(localStorage, key);
+  } catch (e) {
+    try {
+      return localStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  }
+};
+
 const nativeSetItem = (key: string, value: string) => {
   if (key === 'microfox_members_data' || key.endsWith('microfox_members_data') || key.includes('microfox_history_')) {
     clearMembersCache();
@@ -85,13 +124,17 @@ const nativeSetItem = (key: string, value: string) => {
   }
   
   try {
-    Storage.prototype.setItem.call(localStorage, key, finalValue);
+    if (originalSetItem) {
+      originalSetItem(key, finalValue);
+    } else {
+      Storage.prototype.setItem.call(localStorage, key, finalValue);
+    }
   } catch (e: any) {
     if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
       console.warn(`LocalStorage quota exceeded for key: ${key}. Attempting emergency cleanup.`);
       
       try {
-        const currentMf = Storage.prototype.getItem.call(localStorage, 'microfox_current_mf') || globalMfCode;
+        const currentMf = nativeGetItem('microfox_current_mf') || globalMfCode;
         const activePrefix = currentMf ? `mf_${currentMf.toLowerCase().replace(/\s+/g, '_')}_` : '';
         
         const keysToRemove: string[] = [];
@@ -133,19 +176,41 @@ const nativeSetItem = (key: string, value: string) => {
         
         // Execute the cleanups
         keysToRemove.forEach(k => {
-          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+          try {
+            if (originalRemoveItem) {
+              originalRemoveItem(k);
+            } else {
+              Storage.prototype.removeItem.call(localStorage, k);
+            }
+          } catch (err) {}
         });
         
         logsKeys.forEach(k => {
-          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+          try {
+            if (originalRemoveItem) {
+              originalRemoveItem(k);
+            } else {
+              Storage.prototype.removeItem.call(localStorage, k);
+            }
+          } catch (err) {}
         });
         
         historyKeys.forEach(k => {
-          try { Storage.prototype.removeItem.call(localStorage, k); } catch (err) {}
+          try {
+            if (originalRemoveItem) {
+              originalRemoveItem(k);
+            } else {
+              Storage.prototype.removeItem.call(localStorage, k);
+            }
+          } catch (err) {}
         });
         
         // Retry the save once after emergency cleanup
-        Storage.prototype.setItem.call(localStorage, key, finalValue);
+        if (originalSetItem) {
+          originalSetItem(key, finalValue);
+        } else {
+          Storage.prototype.setItem.call(localStorage, key, finalValue);
+        }
       } catch (retryError) {
         console.error('Failed to resolve QuotaExceededError even after emergency cleanup:', retryError);
         window.dispatchEvent(new CustomEvent('microfox_quota_exceeded'));
@@ -155,7 +220,13 @@ const nativeSetItem = (key: string, value: string) => {
 };
 const nativeRemoveItem = (key: string) => {
   clearMembersCache();
-  Storage.prototype.removeItem.call(localStorage, key);
+  try {
+    if (originalRemoveItem) {
+      originalRemoveItem(key);
+    } else {
+      Storage.prototype.removeItem.call(localStorage, key);
+    }
+  } catch (err) {}
 };
 
 // Caching structure to avoid costly synchronous O(N^2) parsing during page navigation/renders
@@ -448,7 +519,6 @@ const App: React.FC = () => {
     return localStorage.getItem('microfox_offline_mode') === 'true';
   });
   const mfCodeRef = React.useRef<string | null>(localStorage.getItem('microfox_current_mf'));
-  const lastFullPullTimeRef = React.useRef(0);
 
   const pullData = async (mfCode: string, isSilent: boolean = false, hasCachedData: boolean = true) => {
     if (isOfflineMode) {
@@ -922,11 +992,7 @@ const App: React.FC = () => {
             } catch (e) {}
           })();
         }
-        const now = Date.now();
-        if (now - lastFullPullTimeRef.current >= 15000) {
-          lastFullPullTimeRef.current = now;
-          pullData(mfCode, true);
-        }
+        pullData(mfCode, true);
       }
     };
 
