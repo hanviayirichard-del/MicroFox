@@ -204,7 +204,7 @@ const CancelCotisation: React.FC = () => {
 
     // Get validated deposits to check if transaction is already "poured" to main desk
     const savedDeposits = localStorage.getItem('microfox_agent_payments');
-    const validatedDeposits = savedDeposits ? JSON.parse(savedDeposits).filter((d: any) => d.status === 'Validé' || d.status === 'En attente') : [];
+    const validatedDeposits = savedDeposits ? JSON.parse(savedDeposits).filter((d: any) => d.status === 'Validé') : [];
     
     // Pre-parse validated deposits dates to optimize lookup inside nested some loops
     const parsedDeposits = validatedDeposits.map((d: any) => {

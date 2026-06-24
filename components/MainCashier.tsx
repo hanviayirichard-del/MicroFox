@@ -191,10 +191,12 @@ const calculateTheoreticalBalanceForCaisse = (caisseName: string) => {
       const pDate = (p.date && typeof p.date === 'string') ? p.date.split('T')[0] : '1970-01-01';
       const amount = p.observedAmount || p.totalAmount;
 
-      const isSender = (isCaissier && user?.caisse && String(p.agentId).toUpperCase() === String(user.caisse).toUpperCase()) ||
+      const userCaisseToUse = (user?.caisse || caisseName || '').toUpperCase();
+
+      const isSender = (isCaissier && userCaisseToUse && String(p.agentId).toUpperCase() === userCaisseToUse) ||
                       (!isCaissier && selectedCaisseArr.some(c => c.toUpperCase() === (p.agentId || '').toUpperCase()));
 
-      const isReceiver = (isCaissier && user?.caisse && p.caisse?.toUpperCase() === user.caisse.toUpperCase()) ||
+      const isReceiver = (isCaissier && userCaisseToUse && p.caisse?.toUpperCase() === userCaisseToUse) ||
                         (!isCaissier && selectedCaisseArr.some(c => c.toUpperCase() === (p.caisse || '').toUpperCase()));
 
       if (isSender) {
@@ -1099,7 +1101,7 @@ const MainCashier: React.FC = () => {
 
     // Role-based filtering
     if (currentUser.role === 'caissier') {
-      const userCaisse = (currentUser.caisse || '').trim().toUpperCase();
+      const userCaisse = (currentUser.caisse || selectedCaisse || '').trim().toUpperCase();
       if (p.type === 'CASHIER_TRANSFER') {
         const isSender = p.agentId?.trim().toUpperCase() === userCaisse;
         const isReceiver = (p.caisse || 'CAISSE PRINCIPALE').trim().toUpperCase() === userCaisse;
