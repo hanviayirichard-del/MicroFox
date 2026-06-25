@@ -209,12 +209,15 @@ const CancelCotisation: React.FC = () => {
     // Pre-parse validated deposits dates to optimize lookup inside nested some loops
     const parsedDeposits = validatedDeposits.map((d: any) => {
       const depDay = d.date ? getLocalDateString(d.date) : '';
+      const dParsed = d.date ? safeParseDate(d.date) : null;
+      const dTime = dParsed ? dParsed.getTime() : 0;
       const agent = d.agentId ? allUsers.find((u: any) => String(u.id) === String(d.agentId)) : null;
       const agentIdentifiant = agent?.identifiant || d.agentName || '';
       return {
         agentId: d.agentId,
         agentIdentifiant: agentIdentifiant.toLowerCase(),
-        depDay
+        depDay,
+        dTime
       };
     }).filter((d: any) => d.depDay !== '');
 
@@ -298,14 +301,18 @@ const CancelCotisation: React.FC = () => {
             }
           } catch (e) {}
 
-          // Check if this specific transaction was part of a validated deposit using robust day comparisons
+          // Check if this specific transaction was part of a validated deposit using robust day comparisons and timestamps
           const isPoured = parsedDeposits.some((d: any) => {
             const matchesAgent = String(d.agentId) === String(tx.userId) ||
               (tx.description && d.agentIdentifiant && tx.description.toLowerCase().includes(`agent ${d.agentIdentifiant}`)) ||
               (tx.recordedBy && d.agentIdentifiant && tx.recordedBy.toLowerCase() === d.agentIdentifiant) ||
               (tx.recordedBy && d.agentId && String(tx.recordedBy).toLowerCase() === String(d.agentId).toLowerCase());
             
-            return matchesAgent && txDate <= d.depDay;
+            if (!matchesAgent) return false;
+            if (txTime > 0 && d.dTime > 0) {
+              return txTime <= d.dTime;
+            }
+            return txDate <= d.depDay;
           });
 
           // Check if the zone is validated for this date and if the transaction was made before the validation using pre-parsed timestamps
