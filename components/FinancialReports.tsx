@@ -850,7 +850,7 @@ const FinancialReports: React.FC = () => {
     { id: 'tontine_gaps', label: 'Écarts sur retrait tontine' },
   ];
 
-  const totalInflow = displayDepotMemb + displayDepotTont + totalDepotGarantie + totalCreditRemb + totalVersementAgents + totalFraisDossierCredit + totalFraisTenueCompte + totalPartSocialeDepot + totalAdhesion + totalVenteLivretCompte + totalVenteLivretTontineNonAgent + totalPaidGaps + totalVaultInflow;
+  const totalInflow = displayDepotMemb + displayDepotTont + totalDepotGarantie + totalCreditRemb + totalVersementAgents + totalFraisDossierCredit + totalFraisTenueCompte + totalPartSocialeDepot + totalAdhesion + totalVenteLivretCompte + totalVenteLivretTontineNonAgent + totalPaidGaps;
   const totalOutflow = displayRetraitMemb + displayRetraitTont + totalRetraitGarantie + totalCreditAccor + totalAdminExpenses + totalPartSocialeRetrait + totalGapTontine + totalVaultOutflow + totalAgentOutflow;
   const currentBalance = startingBalance + totalInflow - totalOutflow;
 
@@ -902,7 +902,6 @@ const FinancialReports: React.FC = () => {
           ['VENTE LIVRET DE COMPTE', totalVenteLivretCompte],
           ['VENTE LIVRET TONTINE', totalVenteLivretTontineNonAgent],
           ['ÉCARTS PAYÉS', totalPaidGaps],
-          ['APPROVISIONNEMENT CAISSE', totalVaultInflow],
           ['TOTAL ENTRÉES', totalInflow],
           ['', ''],
           ['SORTIES', ''],
@@ -1420,9 +1419,6 @@ const FinancialReports: React.FC = () => {
 
                 <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Écarts Payés</div>
                 <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalPaidGaps.toLocaleString()}</div>
-
-                <div className="bg-white p-4 text-xs font-bold text-gray-700 uppercase">Approvisionnement Caisse</div>
-                <div className="bg-white p-4 text-sm font-black text-emerald-600 text-right">{totalVaultInflow.toLocaleString()}</div>
 
                 <div className="bg-emerald-50 p-4 text-xs font-black text-emerald-900 uppercase">Total Entrées</div>
                 <div className="bg-emerald-50 p-4 text-sm font-black text-emerald-900 text-right">{totalInflow.toLocaleString()}</div>
