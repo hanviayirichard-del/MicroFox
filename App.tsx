@@ -253,7 +253,8 @@ try {
         key !== 'microfox_current_user' && 
         key !== 'microfox_session_active' && 
         key !== 'microfox_users' && 
-        key !== 'microfox_permissions') {
+        key !== 'microfox_permissions' &&
+        key !== 'microfox_microfinances') {
       const prefix = `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_`;
       fullKey = prefix + key;
     }
@@ -304,7 +305,7 @@ try {
       globalMfCode = value;
     }
     const mfCode = globalMfCode;
-    const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
+    const isGlobal = key === 'microfox_users' || key === 'microfox_permissions' || key === 'microfox_microfinances';
     
     if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_session_active' && (isGlobal || mfCode)) {
       const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
@@ -423,7 +424,7 @@ try {
       clearMembersCache();
     }
     const mfCode = nativeGetItem('microfox_current_mf');
-    const isGlobal = key === 'microfox_users' || key === 'microfox_permissions';
+    const isGlobal = key === 'microfox_users' || key === 'microfox_permissions' || key === 'microfox_microfinances';
 
     if (key.startsWith('microfox_') && key !== 'microfox_current_mf' && key !== 'microfox_current_user' && key !== 'microfox_session_active' && (isGlobal || mfCode)) {
       const prefix = (mfCode && !isGlobal) ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
@@ -1426,6 +1427,7 @@ const App: React.FC = () => {
                   (key.startsWith('microfox_') && 
                    key !== 'microfox_users' && 
                    key !== 'microfox_permissions' && 
+                   key !== 'microfox_microfinances' && 
                    key !== 'microfox_offline_mode')) {
                 keysToRemove.push(key);
               }
@@ -1573,6 +1575,7 @@ const App: React.FC = () => {
             (key.startsWith('microfox_') && 
              key !== 'microfox_users' && 
              key !== 'microfox_permissions' && 
+             key !== 'microfox_microfinances' && 
              key !== 'microfox_offline_mode' &&
              key !== 'microfox_dirty_keys'))) {
           keysToRemove.push(key);

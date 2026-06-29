@@ -228,7 +228,7 @@ const safeNativeSetItem = (key: string, value: string) => {
         // Retry
         Storage.prototype.setItem.call(localStorage, key, finalValue);
       } catch (retryError) {
-        console.error('Failed to resolve QuotaExceededError even after emergency cleanup:', retryError);
+        console.warn('Failed to resolve QuotaExceededError even after emergency cleanup:', retryError);
         try {
           window.dispatchEvent(new CustomEvent('microfox_quota_exceeded'));
         } catch (evtErr) {}
@@ -240,6 +240,7 @@ const safeNativeSetItem = (key: string, value: string) => {
 };
 
 let activeSyncCount = 0;
+let isStorageTableAvailable = true;
 interface SyncQueueItem {
   key: string;
   value: string;
@@ -260,7 +261,7 @@ const processSyncQueue = async () => {
     const success = await executeSyncToSupabase(item.key, item.value);
     item.resolve(success);
   } catch (err) {
-    console.error(`Queue execute error for ${item.key}:`, err);
+    console.warn(`Queue execute error for ${item.key}:`, err);
     item.resolve(false);
   } finally {
     activeSyncCount--;
@@ -270,7 +271,7 @@ const processSyncQueue = async () => {
 
 const executeSyncToSupabase = async (key: string, value: string): Promise<boolean> => {
   try {
-    if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return false;
+    if (!supabase || !import.meta.env.VITE_SUPABASE_URL || !isStorageTableAvailable) return false;
     
     const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -282,12 +283,13 @@ const executeSyncToSupabase = async (key: string, value: string): Promise<boolea
         .maybeSingle();
         
       if (fetchError) {
-        // If table doesn't exist (42P01), we should probably stop trying to sync
-        if (fetchError.code === '42P01') {
+        // If table doesn't exist (42P01) or other relation errors, stop trying to sync
+        if (fetchError.code === '42P01' || (fetchError.message && fetchError.message.includes('relation "storage" does not exist'))) {
           console.warn('Supabase storage table not found. Please run the SQL schema script.');
+          isStorageTableAvailable = false;
           return false;
         }
-        console.error(`Error fetching remote value for key ${key}:`, fetchError);
+        console.warn(`Error fetching remote value for key ${key}:`, fetchError);
         
         const fetchErrorAny = fetchError as any;
         const isNetworkErr = !fetchErrorAny.status || 
@@ -394,7 +396,12 @@ const executeSyncToSupabase = async (key: string, value: string): Promise<boolea
       }, { onConflict: 'key' });
       
     if (upsertError) {
-      console.error(`Error in fallback upsert for key ${key}:`, upsertError);
+      if (upsertError.code === '42P01' || (upsertError.message && upsertError.message.includes('relation "storage" does not exist'))) {
+        console.warn('Supabase storage table not found. Please run the SQL schema script.');
+        isStorageTableAvailable = false;
+        return false;
+      }
+      console.warn(`Error in fallback upsert for key ${key}:`, upsertError);
       return false;
     }
     
@@ -408,7 +415,7 @@ const executeSyncToSupabase = async (key: string, value: string): Promise<boolea
     }
     return true;
   } catch (e) {
-    console.error('Supabase sync failed:', e);
+    console.warn('Supabase sync failed:', e);
     return false;
   }
 };
@@ -453,7 +460,7 @@ export const pullFromSupabase = async (
     return false;
   }
   try {
-    if (!supabase || !import.meta.env.VITE_SUPABASE_URL) return;
+    if (!supabase || !import.meta.env.VITE_SUPABASE_URL || !isStorageTableAvailable) return;
     
     let allData: any[] = [];
     let from = 0;
@@ -480,7 +487,12 @@ export const pullFromSupabase = async (
             .maybeSingle();
 
           if (membersRes.error) {
-            console.error('Error fetching members data in pull:', membersRes.error);
+            if (membersRes.error.code === '42P01' || (membersRes.error.message && membersRes.error.message.includes('relation "storage" does not exist'))) {
+              console.warn('Supabase storage table not found. Please run the SQL schema script.');
+              isStorageTableAvailable = false;
+              return false;
+            }
+            console.warn('Error fetching members data in pull:', membersRes.error);
             const membersResErrorAny = membersRes.error as any;
             const isNetworkErr = !membersResErrorAny.status || 
                                  membersResErrorAny.status === 0 || 
@@ -538,7 +550,12 @@ export const pullFromSupabase = async (
                 .in('key', chunk);
                 
               if (chunkError) {
-                console.error('Error fetching history chunk in pull:', chunkError);
+                if (chunkError.code === '42P01' || (chunkError.message && chunkError.message.includes('relation "storage" does not exist'))) {
+                  console.warn('Supabase storage table not found. Please run the SQL schema script.');
+                  isStorageTableAvailable = false;
+                  return false;
+                }
+                console.warn('Error fetching history chunk in pull:', chunkError);
                 const chunkErrorAny = chunkError as any;
                 const isNetworkErr = !chunkErrorAny.status || 
                                      chunkErrorAny.status === 0 || 
@@ -558,7 +575,12 @@ export const pullFromSupabase = async (
               .like('key', `${prefix}microfox_history_%`);
               
             if (fallbackError) {
-              console.error('Error inside history fallback query:', fallbackError);
+              if (fallbackError.code === '42P01' || (fallbackError.message && fallbackError.message.includes('relation "storage" does not exist'))) {
+                console.warn('Supabase storage table not found. Please run the SQL schema script.');
+                isStorageTableAvailable = false;
+                return false;
+              }
+              console.warn('Error inside history fallback query:', fallbackError);
               const fallbackErrorAny = fallbackError as any;
               const isNetworkErr = !fallbackErrorAny.status || 
                                    fallbackErrorAny.status === 0 || 
@@ -593,12 +615,14 @@ export const pullFromSupabase = async (
           }
           sessionStorage.setItem('microfox_session_prioritized_pull_done', 'true');
         } catch (err) {
-          console.error('Error with prioritized fetch of members and history data:', err);
+          console.warn('Error with prioritized fetch of members and history data:', err);
         }
       }
     }
 
     while (hasMore && safetyIterations++ < 100) {
+      if (!isStorageTableAvailable) return false;
+      
       let query = supabase
         .from('storage')
         .select('key, value, updated_at')
@@ -616,7 +640,12 @@ export const pullFromSupabase = async (
       const { data, error } = await query;
 
       if (error) {
-        console.error('Error pulling from Supabase:', error);
+        if (error.code === '42P01' || (error.message && error.message.includes('relation "storage" does not exist'))) {
+          console.warn('Supabase storage table not found. Please run the SQL schema script.');
+          isStorageTableAvailable = false;
+          return false;
+        }
+        console.warn('Error pulling from Supabase:', error);
         const errorAny = error as any;
         const isNetworkErr = !errorAny.status || 
                              errorAny.status === 0 || 
@@ -624,7 +653,7 @@ export const pullFromSupabase = async (
         if (isNetworkErr) {
           return false;
         }
-        return;
+        return false;
       }
 
       if (data && data.length > 0) {
@@ -703,6 +732,6 @@ export const pullFromSupabase = async (
     }
     return false;
   } catch (e) {
-    console.error('Supabase pull failed:', e);
+    console.warn('Supabase pull failed:', e);
   }
 };

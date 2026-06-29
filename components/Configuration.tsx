@@ -110,6 +110,9 @@ const Configuration: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [activeSubTab, setActiveSubTab] = useState<'config' | 'list'>('config');
+  const [editingMf, setEditingMf] = useState<Microfinance | null>(null);
+
   const handleCreateMf = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMfForm.nom || !newMfForm.code) return;
@@ -165,20 +168,18 @@ const Configuration: React.FC = () => {
     
     // Mettre à jour la liste des microfinances pour correspondre à la configuration actuelle si elle existe déjà ou la garder à jour
     const savedMfList = localStorage.getItem('microfox_microfinances');
-    if (savedMfList) {
-      try {
-        const list: Microfinance[] = JSON.parse(savedMfList);
-        const index = list.findIndex(m => m.nom === mfConfig.nom || m.code === mfConfig.code);
-        if (index !== -1) {
-          list[index] = { ...mfConfig };
-        } else {
-          list.push({ ...mfConfig });
-        }
-        localStorage.setItem('microfox_microfinances', JSON.stringify(list));
-        setMicrofinances(list);
-      } catch (e) {
-        console.error("Error updating mf list:", e);
+    try {
+      const list: Microfinance[] = savedMfList ? JSON.parse(savedMfList) : [...microfinances];
+      const index = list.findIndex(m => m.nom === mfConfig.nom || m.code === mfConfig.code);
+      if (index !== -1) {
+        list[index] = { ...mfConfig };
+      } else {
+        list.push({ ...mfConfig });
       }
+      localStorage.setItem('microfox_microfinances', JSON.stringify(list));
+      setMicrofinances(list);
+    } catch (e) {
+      console.error("Error updating mf list:", e);
     }
 
     // Mettre également à jour les prix des livrets pour les composants qui en dépendent
@@ -444,7 +445,37 @@ const Configuration: React.FC = () => {
         <p className="text-gray-400 text-sm font-medium mt-1">Paramètres et maintenance de l'application</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="flex border-b border-gray-800 pb-4 mb-6">
+        <button
+          onClick={() => {
+            setActiveSubTab('config');
+            setEditingMf(null);
+          }}
+          className={`px-6 py-3 font-black text-sm uppercase tracking-wider transition-all rounded-xl mr-4 ${
+            activeSubTab === 'config'
+              ? 'bg-[#00c896] text-white shadow-lg'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Configuration Générale
+        </button>
+        <button
+          onClick={() => {
+            setActiveSubTab('list');
+            setEditingMf(null);
+          }}
+          className={`px-6 py-3 font-black text-sm uppercase tracking-wider transition-all rounded-xl ${
+            activeSubTab === 'list'
+              ? 'bg-[#00c896] text-white shadow-lg'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Liste des Microfinances
+        </button>
+      </div>
+
+      {activeSubTab === 'config' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Ajouter une Microfinance (Image 1) */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
           <h2 className="text-2xl font-black text-[#00c896] uppercase tracking-tight mb-8">AJOUTER UNE MICROFINANCE</h2>
@@ -1030,6 +1061,198 @@ const Configuration: React.FC = () => {
           </div>
         </div>
       </div>
+      ) : (
+        <div className="space-y-8">
+          {editingMf ? (
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+              <h2 className="text-2xl font-black text-[#121c32] uppercase tracking-tight mb-8">
+                Modifier la Microfinance
+              </h2>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!editingMf.nom || !editingMf.code) return;
+                
+                // Save edited MF
+                const updatedList = microfinances.map(m => m.code === editingMf.code ? editingMf : m);
+                setMicrofinances(updatedList);
+                localStorage.setItem('microfox_microfinances', JSON.stringify(updatedList));
+
+                // If currently active MF, update current config as well
+                if (mfConfig.code === editingMf.code) {
+                  const updatedConfig = { ...mfConfig, ...editingMf };
+                  setMfConfig(updatedConfig);
+                  localStorage.setItem('microfox_mf_config', JSON.stringify(updatedConfig));
+                  localStorage.setItem('microfox_current_mf', updatedConfig.nom);
+                }
+
+                setEditingMf(null);
+                alert("Microfinance modifiée avec succès !");
+                dispatchStorageEvent();
+              }} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-gray-400 uppercase tracking-widest">NOM DE L'INSTITUTION</label>
+                  <input 
+                    type="text" 
+                    value={editingMf.nom}
+                    onChange={e => setEditingMf({...editingMf, nom: e.target.value})}
+                    placeholder="Nom (Ex: COOPEC...)"
+                    className="w-full p-6 bg-[#1e293b] border-none rounded-3xl outline-none text-white text-xl font-bold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-gray-400 uppercase tracking-widest">CODE INSTITUTIONNEL (Non modifiable)</label>
+                  <input 
+                    type="text" 
+                    value={editingMf.code}
+                    disabled
+                    className="w-full p-6 bg-gray-100 border-none rounded-3xl outline-none text-gray-400 text-xl font-bold cursor-not-allowed"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-gray-400 uppercase tracking-widest">ADRESSE</label>
+                  <input 
+                    type="text" 
+                    value={editingMf.adresse || ''}
+                    onChange={e => setEditingMf({...editingMf, adresse: e.target.value})}
+                    placeholder="Adresse de l'institution"
+                    className="w-full p-6 bg-[#1e293b] border-none rounded-3xl outline-none text-white text-xl font-bold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-gray-400 uppercase tracking-widest">TÉLÉPHONE</label>
+                  <input 
+                    type="text" 
+                    value={editingMf.telephone || ''}
+                    onChange={e => setEditingMf({...editingMf, telephone: e.target.value})}
+                    placeholder="Téléphone de l'institution"
+                    className="w-full p-6 bg-[#1e293b] border-none rounded-3xl outline-none text-white text-xl font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PRIX PART SOCIALE</label>
+                    <input 
+                      type="number"
+                      value={editingMf.prixPartSociale || ''}
+                      onChange={e => setEditingMf({...editingMf, prixPartSociale: Number(e.target.value)})}
+                      className="w-full p-4 bg-[#1e293b] border-none rounded-2xl outline-none text-white text-lg font-bold"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ADHÉSION</label>
+                    <input 
+                      type="number"
+                      value={editingMf.prixAdhesion || ''}
+                      onChange={e => setEditingMf({...editingMf, prixAdhesion: Number(e.target.value)})}
+                      className="w-full p-4 bg-[#1e293b] border-none rounded-2xl outline-none text-white text-lg font-bold"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">LIVRET DE COMPTE</label>
+                    <input 
+                      type="number"
+                      value={editingMf.prixLivretCompte || ''}
+                      onChange={e => setEditingMf({...editingMf, prixLivretCompte: Number(e.target.value)})}
+                      className="w-full p-4 bg-[#1e293b] border-none rounded-2xl outline-none text-white text-lg font-bold"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">LIVRET TONTINE</label>
+                    <input 
+                      type="number"
+                      value={editingMf.prixLivretTontine || ''}
+                      onChange={e => setEditingMf({...editingMf, prixLivretTontine: Number(e.target.value)})}
+                      className="w-full p-4 bg-[#1e293b] border-none rounded-2xl outline-none text-white text-lg font-bold"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">FRAIS TENU DE COMPTE</label>
+                    <input 
+                      type="number"
+                      value={editingMf.fraisTenuCompte || ''}
+                      onChange={e => setEditingMf({...editingMf, fraisTenuCompte: Number(e.target.value)})}
+                      className="w-full p-4 bg-[#1e293b] border-none rounded-2xl outline-none text-white text-lg font-bold"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">TAUX RÉMUNÉRATION (%)</label>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={editingMf.tauxRemunerationEpargne || ''}
+                      onChange={e => setEditingMf({...editingMf, tauxRemunerationEpargne: Number(e.target.value)})}
+                      className="w-full p-4 bg-[#1e293b] border-none rounded-2xl outline-none text-white text-lg font-bold"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button type="submit" className="flex-1 bg-[#00c896] text-white py-6 rounded-3xl font-black text-xl uppercase tracking-widest shadow-lg hover:bg-[#00a87d] transition-all active:scale-95">
+                    ENREGISTRER
+                  </button>
+                  <button type="button" onClick={() => setEditingMf(null)} className="flex-1 bg-gray-200 text-gray-700 py-6 rounded-3xl font-black text-xl uppercase tracking-widest hover:bg-gray-300 transition-all active:scale-95">
+                    ANNULER
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+              <h2 className="text-2xl font-black text-[#121c32] uppercase tracking-tight mb-8">
+                LISTE DES MICROFINANCES CRÉÉES
+              </h2>
+              {microfinances.length > 0 ? (
+                <div className="space-y-4">
+                  {microfinances.map((mf, index) => (
+                    <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-gray-50 rounded-2xl border border-gray-100 gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-[#121c32]/5 flex items-center justify-center text-[#121c32]">
+                          <Building2 size={24} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-lg text-[#121c32]">{mf.nom}</span>
+                          <span className="text-xs text-gray-400 font-black uppercase tracking-widest">Code: {mf.code}</span>
+                          {mf.adresse && <span className="text-xs text-gray-600 font-medium mt-1">Adresse: {mf.adresse}</span>}
+                          {mf.telephone && <span className="text-xs text-gray-600 font-medium">Tél: {mf.telephone}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 self-end sm:self-center">
+                        <button 
+                          onClick={() => setEditingMf(mf)}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors text-xs font-black uppercase tracking-wider"
+                          title="Modifier"
+                        >
+                          <Settings size={16} />
+                          Modifier
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteMf(mf.code)}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors text-xs font-black uppercase tracking-wider"
+                          title="Supprimer"
+                        >
+                          <Trash2 size={16} />
+                          Supprimer
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400 font-bold">
+                  Aucune microfinance créée pour le moment.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
