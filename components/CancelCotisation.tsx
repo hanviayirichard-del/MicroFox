@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dispatchStorageEvent } from '../utils/events';
-import { RotateCcw, Search, Calendar, User, AlertCircle, CheckCircle, Trash2, Download, Printer } from 'lucide-react';
+import { RotateCcw, Search, Calendar, User, AlertCircle, CheckCircle, Trash2, Download, Printer, RefreshCw } from 'lucide-react';
 import { recordAuditLog } from '../utils/audit';
 
 interface TontineTransaction {
@@ -19,6 +19,7 @@ interface TontineTransaction {
   isValidated: boolean; // true if already deposited at the main desk
   zone?: string;
   dateSortTime?: number;
+  dateString?: string;
 }
 
 const safeParseDate = (dateStr: any): Date | null => {
@@ -63,7 +64,25 @@ const getLocalDateString = (dateInput: any): string => {
   if (!dateInput) return '';
   const str = String(dateInput).trim();
   
-  // Format standard DD/MM/YYYY hh:mm:ss or DD/MM/YYYY
+  // 1. If it's pure date in YYYY-MM-DD format (no time/T/:)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  // 2. Format ISO/standard YYYY-MM-DD ... (Extract directly from string to avoid timezone shifts)
+  if (str.includes('-')) {
+    const parts = str.split('T')[0].split(' ')[0].split('-');
+    if (parts.length === 3) {
+      const year = parts[0];
+      const month = parts[1].padStart(2, '0');
+      const day = parts[2].padStart(2, '0');
+      if (year.length === 4) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+
+  // 3. Format standard DD/MM/YYYY hh:mm:ss or DD/MM/YYYY
   if (str.includes('/')) {
     const parts = str.split(' ')[0].split('/');
     if (parts.length === 3) {
@@ -76,29 +95,13 @@ const getLocalDateString = (dateInput: any): string => {
     }
   }
   
-  // Format ISO/standard YYYY-MM-DD ...
-  if (str.includes('-')) {
-    const parts = str.split('T')[0].split('-');
-    if (parts.length === 3) {
-      const year = parts[0];
-      const month = parts[1].padStart(2, '0');
-      const day = parts[2].padStart(2, '0');
-      if (year.length === 4) {
-        return `${year}-${month}-${day}`;
-      }
-    }
-  }
-  
-  // Fallback to native properties format
+  // 4. Try parsing with native Date using UTC to avoid local timezone shifts
   try {
     const d = new Date(dateInput);
     if (!isNaN(d.getTime())) {
-      if (typeof dateInput === 'string' && dateInput.includes('T')) {
-        return d.toISOString().split('T')[0];
-      }
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     }
   } catch (e) {}
@@ -108,8 +111,20 @@ const getLocalDateString = (dateInput: any): string => {
 
 const CancelCotisation: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const [transactions, setTransactions] = useState<TontineTransaction[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -120,10 +135,93 @@ const CancelCotisation: React.FC = () => {
     const saved = localStorage.getItem('microfox_mf_config');
     return saved ? JSON.parse(saved) : { nom: 'MicroFox', adresse: '', telephone: '' };
   });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isFullySynced, setIsFullySynced] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkSync = () => {
+      const mfCode = localStorage.getItem('microfox_current_mf') || '';
+      const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+      
+      const pendingGlobal = localStorage.getItem('microfox_pending_sync') === 'true';
+      const pendingTenant = prefix ? localStorage.getItem(prefix + 'microfox_pending_sync') === 'true' : false;
+      const isPulling = localStorage.getItem('microfox_pull_in_progress') === 'true';
+      
+      let globalDirty: string[] = [];
+      try {
+        globalDirty = JSON.parse(localStorage.getItem('microfox_dirty_keys') || '[]');
+      } catch (e) {}
+      
+      let tenantDirty: string[] = [];
+      try {
+        tenantDirty = prefix ? JSON.parse(localStorage.getItem(prefix + 'microfox_dirty_keys') || '[]') : [];
+      } catch (e) {}
+      
+      const hasDirty = (Array.isArray(globalDirty) && globalDirty.length > 0) || 
+                       (Array.isArray(tenantDirty) && tenantDirty.length > 0);
+                       
+      setIsFullySynced(!(pendingGlobal || pendingTenant || hasDirty || isPulling));
+    };
+
+    checkSync();
+    const interval = setInterval(checkSync, 1000);
+    
+    window.addEventListener('microfox_pull_status_change', checkSync);
+    window.addEventListener('microfox_storage' as any, checkSync);
+    window.addEventListener('storage', checkSync);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('microfox_pull_status_change', checkSync);
+      window.removeEventListener('microfox_storage' as any, checkSync);
+      window.removeEventListener('storage', checkSync);
+    };
+  }, [isSyncing]);
+
+  const handleManualSync = () => {
+    setIsSyncing(true);
+    window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+    
+    let checkCount = 0;
+    const maxChecks = 100; // up to 10 seconds (100 * 100ms)
+    
+    const checkInterval = setInterval(() => {
+      checkCount++;
+      const isPulling = localStorage.getItem('microfox_pull_in_progress') === 'true';
+      const pendingGlobal = localStorage.getItem('microfox_pending_sync') === 'true';
+      const mfCode = localStorage.getItem('microfox_current_mf') || '';
+      const prefix = mfCode ? `mf_${mfCode.toLowerCase().replace(/\s+/g, '_')}_` : '';
+      const pendingTenant = prefix ? localStorage.getItem(prefix + 'microfox_pending_sync') === 'true' : false;
+      
+      let globalDirty: string[] = [];
+      try {
+        globalDirty = JSON.parse(localStorage.getItem('microfox_dirty_keys') || '[]');
+      } catch (e) {}
+      
+      let tenantDirty: string[] = [];
+      try {
+        tenantDirty = prefix ? JSON.parse(localStorage.getItem(prefix + 'microfox_dirty_keys') || '[]') : [];
+      } catch (e) {}
+      
+      const hasDirty = (Array.isArray(globalDirty) && globalDirty.length > 0) || 
+                       (Array.isArray(tenantDirty) && tenantDirty.length > 0);
+      
+      const stillSyncing = isPulling || pendingGlobal || pendingTenant || hasDirty;
+      
+      if ((!stillSyncing && checkCount > 5) || checkCount >= maxChecks) {
+        clearInterval(checkInterval);
+        loadTransactions();
+        setIsSyncing(false);
+      }
+    }, 100);
+  };
 
   const historyCacheRef = React.useRef<Record<string, { data: any[], raw: string | null }>>({});
 
   useEffect(() => {
+    // Request immediate background sync on mount to ensure fresh database state is loaded
+    window.dispatchEvent(new CustomEvent('request_supabase_sync'));
+
     const user = localStorage.getItem('microfox_current_user');
     if (user) setCurrentUser(JSON.parse(user));
     loadTransactions();
@@ -338,7 +436,8 @@ const CancelCotisation: React.FC = () => {
             recordedBy: tx.cashierName || 'N/A',
             isValidated: !!(isPoured || isZoneValidated),
             zone: m.zone,
-            dateSortTime: txTime
+            dateSortTime: txTime,
+            dateString: txDate
           });
         }
       });
@@ -557,12 +656,7 @@ const CancelCotisation: React.FC = () => {
   };
 
   const filteredTransactions = transactions.filter(tx => {
-    let txDateString = '';
-    try {
-      if (tx.date) {
-        txDateString = getLocalDateString(tx.date);
-      }
-    } catch (e) {}
+    const txDateString = tx.dateString || '';
     const matchesSearch = tx.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tx.clientCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (tx.tontineAccountNumber && tx.tontineAccountNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -826,6 +920,14 @@ const CancelCotisation: React.FC = () => {
 
         <div className="flex items-center gap-2 w-full sm:w-auto print:hidden">
           <button 
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-100 transition-all active:scale-95 shadow-sm disabled:opacity-55"
+          >
+            <RefreshCw size={16} className={isSyncing ? "animate-spin text-blue-700" : ""} />
+            {isSyncing ? "Sync..." : "Synchroniser"}
+          </button>
+          <button 
             onClick={handlePrint}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
           >
@@ -856,6 +958,22 @@ const CancelCotisation: React.FC = () => {
             <div className="bg-red-500 text-white p-4 rounded-xl flex items-center justify-center gap-3 shadow-sm animate-in fade-in duration-300">
               <AlertCircle size={20} />
               <span className="font-bold text-sm text-center">{errorMessage}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isFullySynced !== null && (
+        <div className="print:hidden">
+          {isFullySynced ? (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-bold text-sm">Tous les éléments sont synchronisés : tout s'affiche.</span>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="font-bold text-sm">Certains éléments ne sont pas encore prêts (synchronisation en cours ou en attente).</span>
             </div>
           )}
         </div>

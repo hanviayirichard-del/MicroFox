@@ -459,8 +459,15 @@ export const pullFromSupabase = async (
   if (typeof window !== 'undefined' && window.navigator && !window.navigator.onLine) {
     return false;
   }
+
+  if (typeof window !== 'undefined') {
+    (window as any).microfox_active_pulls = ((window as any).microfox_active_pulls || 0) + 1;
+    localStorage.setItem('microfox_pull_in_progress', 'true');
+    window.dispatchEvent(new CustomEvent('microfox_pull_status_change', { detail: { pulling: true } }));
+  }
+
   try {
-    if (!supabase || !import.meta.env.VITE_SUPABASE_URL || !isStorageTableAvailable) return;
+    if (!supabase || !import.meta.env.VITE_SUPABASE_URL || !isStorageTableAvailable) return false;
     
     let allData: any[] = [];
     let from = 0;
@@ -733,5 +740,14 @@ export const pullFromSupabase = async (
     return false;
   } catch (e) {
     console.warn('Supabase pull failed:', e);
+    return false;
+  } finally {
+    if (typeof window !== 'undefined') {
+      (window as any).microfox_active_pulls = Math.max(0, ((window as any).microfox_active_pulls || 1) - 1);
+      if ((window as any).microfox_active_pulls === 0) {
+        localStorage.setItem('microfox_pull_in_progress', 'false');
+      }
+      window.dispatchEvent(new CustomEvent('microfox_pull_status_change', { detail: { pulling: (window as any).microfox_active_pulls > 0 } }));
+    }
   }
 };
